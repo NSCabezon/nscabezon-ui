@@ -2,7 +2,7 @@
 import {
   useLabels,
   useUi
-} from "./chunk-WEN4A7U4.js";
+} from "./chunk-77F46GKN.js";
 
 // src/list/responsive-list.tsx
 import "react";
@@ -424,7 +424,7 @@ function ResponsiveList({
   hiddenColumns,
   onHiddenColumnsChange,
   onColumnsReset,
-  mobileColumnsMenu,
+  mobileColumnsMenu = true,
   stickyHeader,
   stickyHeaderTop,
   className,
@@ -1371,9 +1371,10 @@ function useListView(listKey, {
       hiddenColumns: hidden,
       onHiddenColumnsChange: setHidden,
       onColumnsReset: reset,
+      mobileColumnsMenu: !paginated,
       stickyHeader
     }),
-    [sort, setSort, widths, setWidths, hidden, setHidden, reset, stickyHeader]
+    [sort, setSort, widths, setWidths, hidden, setHidden, reset, paginated, stickyHeader]
   );
   const footerProps = useMemo2(
     () => ({
@@ -1403,6 +1404,44 @@ function useListColumns(listKey, columnKeys, { store } = {}) {
     onHiddenColumnsChange: setHidden,
     onColumnsReset: reset
   };
+}
+
+// src/prefs/useSupabaseListPrefsStore.ts
+import { useEffect as useEffect3, useMemo as useMemo3, useRef as useRef3, useState as useState3 } from "react";
+function useSupabaseListPrefsStore(client, { table, onError } = {}) {
+  const [userId, setUserId] = useState3(null);
+  useEffect3(() => {
+    let active = true;
+    let heardFromListener = false;
+    const { data } = client.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      heardFromListener = true;
+      setUserId(session?.user.id ?? null);
+    });
+    client.auth.getSession().then(({ data: { session } }) => {
+      if (active && !heardFromListener) setUserId(session?.user.id ?? null);
+    }).catch(() => {
+    });
+    return () => {
+      active = false;
+      data.subscription.unsubscribe();
+    };
+  }, [client]);
+  const onErrorRef = useRef3(onError);
+  useEffect3(() => {
+    onErrorRef.current = onError;
+  });
+  return useMemo3(
+    () => createSupabaseListPrefsStore(client, userId, {
+      table,
+      onError: (error) => {
+        const handler = onErrorRef.current;
+        if (handler) handler(error);
+        else defaultOnError(error);
+      }
+    }),
+    [client, userId, table]
+  );
 }
 
 export {
@@ -1435,5 +1474,6 @@ export {
   LIST_PREFS_WIDTHS_DEBOUNCE_MS,
   useListPrefs,
   useListView,
-  useListColumns
+  useListColumns,
+  useSupabaseListPrefsStore
 };

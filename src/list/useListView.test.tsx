@@ -111,6 +111,8 @@ describe('useListView', () => {
       stickyHeader: true,
       columnWidths: {},
       hiddenColumns: [],
+      // Paginado = con `ListFooter`, que ya pinta el menú de columnas en móvil.
+      mobileColumnsMenu: false,
     })
     expect(typeof latest.listProps.onSortChange).toBe('function')
     expect(typeof latest.listProps.onColumnWidthsChange).toBe('function')
@@ -209,7 +211,13 @@ describe('useListView (paginated: false)', () => {
         </QueryClientProvider>,
       )
     })
-    expect(view!.listProps).toMatchObject({ sort: null, stickyHeader: false, resizable: true })
+    expect(view!.listProps).toMatchObject({
+      sort: null,
+      stickyHeader: false,
+      resizable: true,
+      // Sin pie: el menú de columnas va encima de las tarjetas en móvil.
+      mobileColumnsMenu: true,
+    })
     expect('footerProps' in view!).toBe(false)
     expect('page' in view!).toBe(false)
   })

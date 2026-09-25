@@ -46,7 +46,8 @@ export type SupabaseListPrefsStoreOptions = {
  * Gesmoto y TusExámenes).
  *
  * Crea uno por usuario y memoízalo: `useMemo(() =>
- * createSupabaseListPrefsStore(supabase, userId), [userId])`.
+ * createSupabaseListPrefsStore(supabase, userId), [userId])`. En React lo
+ * normal es `useSupabaseListPrefsStore(supabase)`, que además sigue la sesión.
  */
 export function createSupabaseListPrefsStore(
   client: SupabaseLikeClient,
@@ -81,7 +82,8 @@ export function createSupabaseListPrefsStore(
   }
 }
 
-function defaultOnError(error: unknown) {
+/** @internal Por defecto, `console.warn` fuera de producción. */
+export function defaultOnError(error: unknown) {
   if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production') return
   console.warn('user_list_prefs upsert failed', error)
 }

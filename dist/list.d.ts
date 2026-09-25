@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { CSSProperties } from 'react';
-import { g as ListSort, b as Labels, d as ListPrefs, e as ListPrefsDefaults, f as ListPrefsStore } from './UiProvider-DY1tWBS9.js';
-export { D as DEFAULT_LIST_PAGE_SIZE, E as EMPTY_LIST_PREFS, L as LIST_PAGE_SIZES, a as LIST_PREFS_STORAGE_PREFIX, c as ListPageSize, S as SortDir, h as SupabaseLikeClient, i as SupabaseListPrefsStoreOptions, m as createSupabaseListPrefsStore, o as isListPageSize, p as listPrefsEqual, q as localOnlyListPrefsStore, r as normalizeListPrefs, s as resolveListDefaults } from './UiProvider-DY1tWBS9.js';
+import { g as ListSort, b as Labels, d as ListPrefs, e as ListPrefsDefaults, f as ListPrefsStore, h as SupabaseLikeClient, i as SupabaseListPrefsStoreOptions } from './UiProvider-0k8NWVBw.js';
+export { D as DEFAULT_LIST_PAGE_SIZE, E as EMPTY_LIST_PREFS, L as LIST_PAGE_SIZES, a as LIST_PREFS_STORAGE_PREFIX, c as ListPageSize, S as SortDir, m as createSupabaseListPrefsStore, o as isListPageSize, p as listPrefsEqual, q as localOnlyListPrefsStore, r as normalizeListPrefs, s as resolveListDefaults } from './UiProvider-0k8NWVBw.js';
 
 type ResponsiveColumn<T> = {
     key: string;
@@ -177,6 +177,7 @@ type ListViewListProps = {
     hiddenColumns: string[];
     onHiddenColumnsChange: (hidden: string[]) => void;
     onColumnsReset: () => void;
+    mobileColumnsMenu: boolean;
     stickyHeader: boolean;
 };
 type ListViewFooterProps = {
@@ -305,7 +306,10 @@ declare function ListFooter({ page, pageSize, total, onPageChange, onPageSizeCha
  * listado). Para listas que se pintan enteras y se ordenan en cliente.
  *
  *   const columnProps = useListColumns('students', columns.map((c) => c.key))
- *   <ResponsiveList columns={columns} {...columnProps} mobileColumnsMenu … />
+ *   <ResponsiveList columns={columns} {...columnProps} … />
+ *
+ * Sin `ListFooter`, el menú de columnas sale encima de las tarjetas en móvil
+ * (`mobileColumnsMenu`, activo por defecto).
  */
 declare function useListColumns(listKey: string, columnKeys: readonly string[], { store }?: {
     store?: ListPrefsStore;
@@ -359,4 +363,47 @@ type UseListPrefsResult = {
  */
 declare function useListPrefs(listKey: string, { columnKeys, defaults, store: storeProp }: UseListPrefsOptions): UseListPrefsResult;
 
-export { ColumnsMenu, type ColumnsMenuColumn, type ColumnsMenuProps, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_PAGE_SIZE, LIST_PREFS_WIDTHS_DEBOUNCE_MS, ListFooter, type ListFooterProps, ListPrefs, ListPrefsDefaults, ListPrefsStore, ListSort, type ListView, type ListViewDefaults, type ListViewFooterProps, type ListViewListProps, MIN_COLUMN_WIDTH, Pagination, type PaginationProps, type ResponsiveColumn, ResponsiveList, type ResponsiveListProps, TINTED_ROW_CLASS, TOUCH_TEXT_LINK, type UnpaginatedListView, type UseListPrefsOptions, type UseListPrefsResult, type UseListViewOptions, resolveColumnWidth, rowTone, useColumnResize, useListColumns, useListPrefs, useListView, usePagination, visibleColumnsOf };
+type SessionLike = {
+    user: {
+        id: string;
+    };
+} | null;
+/**
+ * Forma mínima del cliente de Supabase que usa `useSupabaseListPrefsStore`:
+ * `.from()` (el almacén) y `auth.getSession` / `auth.onAuthStateChange` (el
+ * usuario con sesión). Tipada a mano, igual que `SupabaseLikeClient`: el
+ * paquete no importa `@supabase/supabase-js` en tiempo de ejecución.
+ */
+type SupabaseLikeAuthClient = SupabaseLikeClient & {
+    auth: {
+        getSession: () => Promise<{
+            data: {
+                session: SessionLike;
+            };
+        }>;
+        onAuthStateChange: (callback: (event: string, session: SessionLike) => void) => {
+            data: {
+                subscription: {
+                    unsubscribe: () => void;
+                };
+            };
+        };
+    };
+};
+/**
+ * Almacén de Supabase para el usuario con sesión, listo para
+ * `UiProvider.listPrefsStore`:
+ *
+ *   const store = useSupabaseListPrefsStore(supabase)
+ *   <UiProvider listPrefsStore={store} …>
+ *
+ * Sigue al usuario él solo: lee la sesión al montar (`getSession`, local, sin
+ * red) y se suscribe a `onAuthStateChange` (login/logout en esta u otra
+ * pestaña). Sin sesión, `userId` es `null` (solo caché local). El almacén se
+ * memoiza por cliente + usuario + tabla: pasa un cliente ESTABLE (el
+ * singleton del navegador, o memoízalo). `onError` se lee de un ref: puede
+ * ser una función en línea.
+ */
+declare function useSupabaseListPrefsStore(client: SupabaseLikeAuthClient, { table, onError }?: SupabaseListPrefsStoreOptions): ListPrefsStore;
+
+export { ColumnsMenu, type ColumnsMenuColumn, type ColumnsMenuProps, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_PAGE_SIZE, LIST_PREFS_WIDTHS_DEBOUNCE_MS, ListFooter, type ListFooterProps, ListPrefs, ListPrefsDefaults, ListPrefsStore, ListSort, type ListView, type ListViewDefaults, type ListViewFooterProps, type ListViewListProps, MIN_COLUMN_WIDTH, Pagination, type PaginationProps, type ResponsiveColumn, ResponsiveList, type ResponsiveListProps, type SupabaseLikeAuthClient, SupabaseLikeClient, SupabaseListPrefsStoreOptions, TINTED_ROW_CLASS, TOUCH_TEXT_LINK, type UnpaginatedListView, type UseListPrefsOptions, type UseListPrefsResult, type UseListViewOptions, resolveColumnWidth, rowTone, useColumnResize, useListColumns, useListPrefs, useListView, usePagination, useSupabaseListPrefsStore, visibleColumnsOf };

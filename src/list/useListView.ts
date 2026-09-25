@@ -44,6 +44,11 @@ export type ListViewListProps = {
   hiddenColumns: string[]
   onHiddenColumnsChange: (hidden: string[]) => void
   onColumnsReset: () => void
+  // Menú de columnas encima de las tarjetas en móvil. `false` en modo paginado
+  // (el `ListFooter` ya lo pinta en móvil: saldría dos veces) y `true` con
+  // `paginated: false` (no hay pie). Si usas el modo paginado SIN `ListFooter`,
+  // sobrescríbelo tras el spread: `{...view.listProps} mobileColumnsMenu`.
+  mobileColumnsMenu: boolean
   stickyHeader: boolean
 }
 
@@ -132,9 +137,10 @@ export function useListView(
       hiddenColumns: hidden,
       onHiddenColumnsChange: setHidden,
       onColumnsReset: reset,
+      mobileColumnsMenu: !paginated,
       stickyHeader,
     }),
-    [sort, setSort, widths, setWidths, hidden, setHidden, reset, stickyHeader],
+    [sort, setSort, widths, setWidths, hidden, setHidden, reset, paginated, stickyHeader],
   )
 
   const footerProps = useMemo<ListViewFooterProps>(

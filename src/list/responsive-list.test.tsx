@@ -44,7 +44,9 @@ function click(el: Element) {
 }
 const table = () => container.querySelector('table')!
 const heads = () => Array.from(table().querySelectorAll('thead th'))
-const cards = () => Array.from(container.querySelectorAll('.\\@3xl\\:hidden > div'))
+const cards = () =>
+  Array.from(container.querySelectorAll('.\\@3xl\\:hidden > div:not([data-list-columns-menu])'))
+const mobileMenu = () => container.querySelector('[data-list-columns-menu]')
 
 beforeEach(() => {
   container = document.createElement('div')
@@ -108,6 +110,7 @@ describe('ResponsiveList (opt-in)', () => {
         hiddenColumns={['id']}
         onHiddenColumnsChange={() => {}}
         onColumnsReset={() => {}}
+        mobileColumnsMenu={false}
       />,
     )
     // Cabecera: las visibles (id oculta) + la del menú, que va la última.
@@ -130,7 +133,9 @@ describe('ResponsiveList (opt-in)', () => {
       expect(cells[cells.length - 1].textContent).toBe('')
     }
 
-    // Móvil (cards): ni menú ni rastro de la columna.
+    // Móvil (cards) con `mobileColumnsMenu={false}` (lista con ListFooter):
+    // ni menú ni rastro de la columna.
+    expect(mobileMenu()).toBeNull()
     for (const card of cards()) expect(card.querySelector('button')).toBeNull()
   })
 
@@ -542,10 +547,11 @@ describe('ResponsiveList (opt-in)', () => {
     expect(heads()[heads().length - 1].querySelector('.sr-only')!.textContent).toBe('Columnas')
   })
 
-  it('mobileColumnsMenu pinta el menú encima de las cards (y solo con los dos callbacks)', () => {
-    const menu = () => container.querySelector('[data-list-columns-menu]')
+  it('mobileColumnsMenu: por defecto pinta el menú encima de las cards (solo con los dos callbacks)', () => {
+    render(<ResponsiveList columns={columns} data={rows} rowKey={(r) => r.id} />)
+    expect(mobileMenu()).toBeNull()
     render(<ResponsiveList columns={columns} data={rows} rowKey={(r) => r.id} mobileColumnsMenu />)
-    expect(menu()).toBeNull()
+    expect(mobileMenu()).toBeNull()
     render(
       <ResponsiveList
         columns={columns}
@@ -554,12 +560,30 @@ describe('ResponsiveList (opt-in)', () => {
         hiddenColumns={[]}
         onHiddenColumnsChange={() => {}}
         onColumnsReset={() => {}}
-        mobileColumnsMenu
       />,
     )
-    expect(menu()).not.toBeNull()
-    expect(menu()!.closest('.\\@3xl\\:hidden')).not.toBeNull()
-    expect(menu()!.querySelector('button')).not.toBeNull()
+    expect(mobileMenu()).not.toBeNull()
+    expect(mobileMenu()!.closest('.\\@3xl\\:hidden')).not.toBeNull()
+    expect(mobileMenu()!.querySelector('button')).not.toBeNull()
+    // El menú no cuenta como tarjeta.
+    expect(cards()).toHaveLength(rows.length)
+  })
+
+  it('mobileColumnsMenu={false} quita el menú de móvil (lo pinta el ListFooter)', () => {
+    render(
+      <ResponsiveList
+        columns={columns}
+        data={rows}
+        rowKey={(r) => r.id}
+        hiddenColumns={[]}
+        onHiddenColumnsChange={() => {}}
+        onColumnsReset={() => {}}
+        mobileColumnsMenu={false}
+      />,
+    )
+    expect(mobileMenu()).toBeNull()
+    // El de escritorio (cabecera de la tabla) sigue ahí.
+    expect(heads()[heads().length - 1].querySelector('button')).not.toBeNull()
   })
 
   it('mobileHideWhen omite la fila label/valor de la card, no la celda de la tabla', () => {

@@ -1,6 +1,6 @@
 {
   "name": "@nscabezon/ui",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Componentes y hooks React compartidos entre Gesmoto y TusExámenes: ResponsiveList, preferencias de listado, paginación y aviso de versión nueva.",
   "type": "module",
@@ -10,7 +10,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "main": "./dist/index.js",
   "module": "./dist/index.js",

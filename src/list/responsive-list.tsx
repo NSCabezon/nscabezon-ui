@@ -124,12 +124,15 @@ export type ResponsiveListProps<T> = {
   // Menú de columnas incrustado (opt-in): con AMBOS callbacks, la tabla de
   // escritorio pinta una columna extra al final con el `ColumnsMenu` dentro.
   // Esa columna no se guarda, no ordena y no se puede ocultar a sí misma; en
-  // móvil no existe (no hay cabecera: el menú va al `ListFooter`) salvo que
-  // se pida con `mobileColumnsMenu`.
+  // móvil no hay cabecera: el menú va encima de las tarjetas (ver
+  // `mobileColumnsMenu`).
   onHiddenColumnsChange?: (hidden: string[]) => void
   onColumnsReset?: () => void
-  // Para listas SIN `ListFooter`: en móvil (cards) pinta el menú de columnas
-  // encima de las tarjetas, alineado a la derecha. Requiere los dos callbacks.
+  // En móvil (cards) pinta el menú de columnas encima de las tarjetas,
+  // alineado a la derecha. Requiere los dos callbacks de arriba. Por defecto
+  // SÍ (con los callbacks); pasa `false` cuando la lista va con `ListFooter`,
+  // que ya pinta el menú en móvil (`useListView` paginado lo hace solo en
+  // `listProps`).
   mobileColumnsMenu?: boolean
   // Pins the desktop table header (thead) at the top while the list scrolls. Intended
   // for a list rendered inside its own vertical scroll container (`overflow-y-auto`),
@@ -180,7 +183,7 @@ export function ResponsiveList<T>({
   hiddenColumns,
   onHiddenColumnsChange,
   onColumnsReset,
-  mobileColumnsMenu,
+  mobileColumnsMenu = true,
   stickyHeader,
   stickyHeaderTop,
   className,
@@ -484,9 +487,9 @@ export function ResponsiveList<T>({
 
       {/* Mobile: cards */}
       <div className="space-y-2 @3xl:hidden">
-        {/* Sin cabecera de tabla en móvil: con `mobileColumnsMenu` el menú de
-            columnas va encima de las tarjetas, a la derecha (listas sin
-            `ListFooter`). */}
+        {/* Sin cabecera de tabla en móvil: el menú de columnas va encima de
+            las tarjetas, a la derecha, salvo `mobileColumnsMenu={false}`
+            (listas con `ListFooter`, que ya lo pinta). */}
         {mobileColumnsMenu && columnsMenu && (
           <div className="flex justify-end" data-list-columns-menu>
             {columnsMenu}

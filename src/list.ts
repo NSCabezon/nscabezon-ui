@@ -42,6 +42,10 @@ export {
   type SupabaseListPrefsStoreOptions,
 } from './prefs/stores'
 export {
+  useSupabaseListPrefsStore,
+  type SupabaseLikeAuthClient,
+} from './prefs/useSupabaseListPrefsStore'
+export {
   DEFAULT_LIST_PAGE_SIZE,
   EMPTY_LIST_PREFS,
   LIST_PAGE_SIZES,

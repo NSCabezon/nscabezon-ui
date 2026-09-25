@@ -16,7 +16,7 @@ hay `prepare`: instalar no compila nada).
 | Listados | `ResponsiveList` (tabla en escritorio / tarjetas en móvil, orden servidor, anchos arrastrables, columnas ocultas, cabecera fija, filas teñidas, `rowHref`), `ColumnsMenu`, `useColumnResize`, `MIN_COLUMN_WIDTH`, `TOUCH_TEXT_LINK`, `rowTone`, `TINTED_ROW_CLASS`, `resolveColumnWidth`, `visibleColumnsOf`, `DEFAULT_ACTION_COLUMN_WIDTH` |
 | Paginación | `Pagination`, `usePagination`, `DEFAULT_PAGE_SIZE`, `ListFooter` |
 | Estado de listado | `useListView` (preferencias + paginación, `paginated: false` opcional), `useListColumns` (solo columnas), `useListPrefs` |
-| Preferencias | `ListPrefs`, `ListSort`, `normalizeListPrefs`, `listPrefsEqual`, `resolveListDefaults`, `LIST_PAGE_SIZES`, `DEFAULT_LIST_PAGE_SIZE`, `EMPTY_LIST_PREFS`, almacenes `createSupabaseListPrefsStore` y `localOnlyListPrefsStore` |
+| Preferencias | `ListPrefs`, `ListSort`, `normalizeListPrefs`, `listPrefsEqual`, `resolveListDefaults`, `LIST_PAGE_SIZES`, `DEFAULT_LIST_PAGE_SIZE`, `EMPTY_LIST_PREFS`, almacenes `useSupabaseListPrefsStore` (hook que sigue la sesión), `createSupabaseListPrefsStore` y `localOnlyListPrefsStore` |
 | Versión | `useVersionCheck`, `fetchVersionJson` |
 | Utilidades | `safeStorage`, `cn` |
 
@@ -37,14 +37,21 @@ apps definen.
 ## Instalación
 
 ```bash
-npm install "github:NSCabezon/nscabezon-ui#v0.1.0"
+npm install "git+https://github.com/NSCabezon/nscabezon-ui.git#v0.1.1"
 ```
 
 En `package.json` queda así:
 
 ```json
-"@nscabezon/ui": "github:NSCabezon/nscabezon-ui#v0.1.0"
+"@nscabezon/ui": "git+https://github.com/NSCabezon/nscabezon-ui.git#v0.1.1"
 ```
+
+Usa la URL `git+https://` (no `github:`): el repo es público y así la
+instalación no necesita credenciales. Ojo: si tienes una clave SSH de GitHub
+configurada, npm puede reescribir el `resolved` de `package-lock.json` a
+`git+ssh://git@github.com/…`. Déjalo en `git+https://github.com/…` (a mano si
+hace falta, conservando el `#<commit>`): con https, un CI anónimo (Cloudflare,
+GitHub Actions sin claves) instala igual; con `git+ssh` fallaría sin clave.
 
 Peer dependencies (las dos apps ya las tienen): `react` ^19, `react-dom` ^19,
 `radix-ui` ^1.5, `lucide-react` >=1, `@tanstack/react-query` ^5, `sonner` ^2 y,
@@ -82,12 +89,21 @@ Todo es opcional. Sin provider: los enlaces son `<a>`, la navegación es
 ```ts
 type UiProviderProps = {
   Link?: ComponentType<UiLinkProps>      // { href, className, children, onClick, …<a> }
-  navigate?: (href: string) => void
-  labels?: Partial<Labels>               // memoízalo si lo construyes en el render
+  navigate?: (href: string) => void      // puede ser una flecha en línea
+  labels?: Partial<Labels>               // puede ser un objeto en línea
   listPrefsStore?: ListPrefsStore        // almacén por defecto de useListPrefs
   children: ReactNode
 }
 ```
+
+El valor del contexto es estable: solo cambia cuando cambian `Link`,
+`listPrefsStore` o el **contenido** de `labels` (claves y textos). `navigate` y
+las etiquetas-función (`count`, `paginationRange`…) se exponen como delegados
+estables que llaman siempre a la última versión recibida, así que
+`navigate={(href) => router.push(href)}` o un `labels={{ … }}` literal no
+re-renderizan los listados en cada render de la app. (Si una etiqueta-función
+cambia de comportamiento sin que cambie ningún texto, los componentes
+memoizados no se enteran hasta su siguiente render.)
 
 Además hace falta un `QueryClientProvider` de TanStack Query por encima de los
 listados (`useListPrefs` usa `useQuery`).
@@ -98,13 +114,14 @@ listados (`useListPrefs` usa `useQuery`).
 'use client'
 import NextLink from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useMemo } from 'react'
-import { UiProvider, createSupabaseListPrefsStore } from '@nscabezon/ui'
+import { UiProvider, useSupabaseListPrefsStore } from '@nscabezon/ui'
 import { createClient } from '@/lib/supabase/client'
 
-export function Providers({ userId, children }: { userId: string | null; children: React.ReactNode }) {
+export function Providers({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const store = useMemo(() => createSupabaseListPrefsStore(createClient(), userId), [userId])
+  // createBrowserClient (@supabase/ssr) devuelve un singleton en el navegador:
+  // el cliente es estable. Si el tuyo no lo es, memoízalo.
+  const store = useSupabaseListPrefsStore(createClient())
   return (
     <UiProvider Link={NextLink} navigate={(href) => router.push(href)} listPrefsStore={store}>
       {children}
@@ -119,9 +136,8 @@ export function Providers({ userId, children }: { userId: string | null; childre
 import { Link as RouterLink, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { useMemo } from 'react'
-import { UiProvider, createSupabaseListPrefsStore, type Labels, type UiLinkProps } from '@nscabezon/ui'
+import { UiProvider, useSupabaseListPrefsStore, type Labels, type UiLinkProps } from '@nscabezon/ui'
 import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/features/auth/AuthContext'
 
 function AppLink({ href, ...props }: UiLinkProps) {
   return <RouterLink to={href} {...props} />
@@ -130,9 +146,7 @@ function AppLink({ href, ...props }: UiLinkProps) {
 export function AppUiProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
   const { t } = useTranslation('common')
-  const { session } = useAuth()
-  const userId = session?.user.id ?? null
-  const store = useMemo(() => createSupabaseListPrefsStore(supabase, userId), [userId])
+  const store = useSupabaseListPrefsStore(supabase) // sigue la sesión él solo
   const labels = useMemo<Partial<Labels>>(
     () => ({
       columnsMenu: t('columnsMenu.label'),
@@ -193,9 +207,17 @@ const view = useListView('orders', {
   pestaña nueva.
 - Sin paginación (lista entera, orden en cliente):
   `useListView(key, { columnKeys, defaults: {}, paginated: false })` o, solo
-  columnas, `useListColumns(key, columnKeys)`. Sin `ListFooter`, pasa
-  `mobileColumnsMenu` a `ResponsiveList` para que el menú de columnas salga
-  encima de las tarjetas en móvil.
+  columnas, `useListColumns(key, columnKeys)`.
+- Menú de columnas en móvil (`mobileColumnsMenu`): en móvil no hay cabecera
+  de tabla, así que el menú va encima de las tarjetas. Está **activo por
+  defecto** en cuanto la lista permite ocultar columnas
+  (`onHiddenColumnsChange` + `onColumnsReset`). Regla con `ListFooter`, que ya
+  pinta el menú en móvil: `useListView` **paginado** (el que devuelve
+  `footerProps`) pone `mobileColumnsMenu: false` en `listProps`, y con
+  `paginated: false` o `useListColumns` queda activo. Si montas el pie a mano,
+  pasa `mobileColumnsMenu={false}`; si usas `useListView` paginado sin
+  `ListFooter`, pásalo a `true` después del spread
+  (`{...view.listProps} mobileColumnsMenu`).
 - Regla de anchos con `resizable`: como mucho UNA columna (lo normal, la
   `primary`) sin `width`; una `action` con botón de texto necesita `width` o
   `header` (sin ellos cae a 56 px).
@@ -238,9 +260,19 @@ create table public.user_list_prefs (
 ```
 
 ```ts
+// Hook: sigue la sesión (getSession al montar + onAuthStateChange, con baja al
+// desmontar). userId null sin sesión. Memoizado por cliente + usuario + tabla.
+const store = useSupabaseListPrefsStore(supabase)
+// opciones: { table?: string; onError?: (e) => void }  (onError puede ir en línea)
+
+// Sin React, o si ya tienes el userId: la factoría de siempre.
 const store = useMemo(() => createSupabaseListPrefsStore(supabase, userId), [userId])
-// opciones: { table?: string; onError?: (e) => void }
 ```
+
+`useSupabaseListPrefsStore` pide un cliente con `.from()` y
+`auth.getSession` / `auth.onAuthStateChange` (tipado a mano,
+`SupabaseLikeAuthClient`: no importa `@supabase/supabase-js` ni necesita
+TanStack Query). Pásale un cliente estable.
 
 Un almacén propio solo tiene que cumplir:
 
@@ -286,8 +318,9 @@ npm run verify      # typecheck + test + build + dist/ sin cambios pendientes (g
 1. Cambios + tests.
 2. Sube la versión en `package.json` (semver: `0.1.1`, `0.2.0`…).
 3. `npm run build` y `npm run verify`.
-4. Commit **incluyendo `dist/`**: `git commit -am "release: vX.Y.Z"`.
-5. `git tag -a vX.Y.Z -m "vX.Y.Z"` y `git push origin main --tags`.
-6. En cada app: cambia el tag en `package.json`
-   (`"@nscabezon/ui": "github:NSCabezon/nscabezon-ui#vX.Y.Z"`) y
-   `npm install`.
+4. Entrada en `CHANGELOG.md`.
+5. Commit **incluyendo `dist/`**: `git commit -am "release: vX.Y.Z"`.
+6. `git tag -a vX.Y.Z -m "vX.Y.Z"` y `git push origin main --follow-tags`.
+7. En cada app: cambia el tag en `package.json`
+   (`"@nscabezon/ui": "git+https://github.com/NSCabezon/nscabezon-ui.git#vX.Y.Z"`),
+   `npm install` y comprueba que el `resolved` del lock sigue en `git+https`.

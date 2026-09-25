@@ -42,8 +42,8 @@ export const defaultLabels: Labels = {
   columnsMenu: 'Columnas',
   columnsReset: 'Restablecer columnas',
   paginationFirst: 'Primera página',
-  paginationPrev: 'Anterior',
-  paginationNext: 'Siguiente',
+  paginationPrev: 'Página anterior',
+  paginationNext: 'Página siguiente',
   paginationLast: 'Última página',
   paginationRange: (from, to, total) => `${from}–${to} de ${total}`,
   paginationRangeTruncated: (from, to, total) => `${from}–${to} de los primeros ${total}`,
@@ -100,20 +100,91 @@ export type UiProviderProps = {
   children?: React.ReactNode
 }
 
+type LabelKey = keyof Labels
+
+/**
+ * Igualdad «de forma» entre dos `labels` parciales: mismas claves, mismos
+ * textos, y en las claves-función basta con que ambas sean función (se llaman
+ * a través de un delegado que lee la última versión, ver `UiProvider`).
+ */
+function sameLabelShape(a: Partial<Labels> | undefined, b: Partial<Labels> | undefined): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  const ka = Object.keys(a) as LabelKey[]
+  const kb = Object.keys(b) as LabelKey[]
+  if (ka.length !== kb.length) return false
+  for (const k of ka) {
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return false
+    const va = a[k]
+    const vb = b[k]
+    if (typeof va === 'function' && typeof vb === 'function') continue
+    if (va !== vb) return false
+  }
+  return true
+}
+
 /**
  * Integra el paquete con la app: router (Link + navigate), textos y almacén
  * de preferencias de listado. Todo es opcional; sin provider se usan `<a>`,
  * `location.assign`, los textos en español y preferencias solo locales.
+ *
+ * Estabilidad: el valor del contexto solo cambia cuando cambian `Link`,
+ * `listPrefsStore` o el CONTENIDO de `labels` (claves y textos). Se pueden
+ * pasar `navigate={(href) => router.push(href)}` y un objeto `labels` literal
+ * sin memoizar: `navigate` y las etiquetas-función se exponen como delegados
+ * estables que llaman siempre a la última versión recibida.
  */
 export function UiProvider({ Link, navigate, labels, listPrefsStore, children }: UiProviderProps) {
+  // Últimas props recibidas. Se escriben durante el render (no en un efecto)
+  // porque las etiquetas-función se llaman al renderizar los hijos, en esta
+  // misma pasada.
+  const navigateRef = React.useRef(navigate)
+  navigateRef.current = navigate
+  const labelsRef = React.useRef(labels)
+  labelsRef.current = labels
+
+  const stableNavigate = React.useCallback((href: string) => {
+    ;(navigateRef.current ?? defaultNavigate)(href)
+  }, [])
+
+  // `labels` estable mientras su forma no cambie (ver `sameLabelShape`).
+  const [stableLabels, setStableLabels] = React.useState(labels)
+  let shapeLabels = stableLabels
+  if (!sameLabelShape(stableLabels, labels)) {
+    // Patrón «ajustar estado durante el render»: React repite el render con el
+    // valor nuevo sin pintar el intermedio.
+    shapeLabels = labels
+    setStableLabels(labels)
+  }
+
+  const resolvedLabels = React.useMemo<Labels>(() => {
+    if (!shapeLabels) return defaultLabels
+    const out: Record<string, unknown> = { ...defaultLabels }
+    for (const k of Object.keys(shapeLabels) as LabelKey[]) {
+      const v = shapeLabels[k]
+      if (v === undefined) continue
+      out[k] =
+        typeof v === 'function'
+          ? (...args: unknown[]) => {
+              const latest = labelsRef.current?.[k]
+              const fn = (typeof latest === 'function' ? latest : v) as (
+                ...a: unknown[]
+              ) => string
+              return fn(...args)
+            }
+          : v
+    }
+    return out as Labels
+  }, [shapeLabels])
+
   const value = React.useMemo<UiContextValue>(
     () => ({
       Link: Link ?? DefaultLink,
-      navigate: navigate ?? defaultNavigate,
-      labels: labels ? { ...defaultLabels, ...labels } : defaultLabels,
+      navigate: stableNavigate,
+      labels: resolvedLabels,
       listPrefsStore,
     }),
-    [Link, navigate, labels, listPrefsStore],
+    [Link, stableNavigate, resolvedLabels, listPrefsStore],
   )
   return <UiContext.Provider value={value}>{children}</UiContext.Provider>
 }

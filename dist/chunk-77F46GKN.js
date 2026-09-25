@@ -7,8 +7,8 @@ var defaultLabels = {
   columnsMenu: "Columnas",
   columnsReset: "Restablecer columnas",
   paginationFirst: "Primera p\xE1gina",
-  paginationPrev: "Anterior",
-  paginationNext: "Siguiente",
+  paginationPrev: "P\xE1gina anterior",
+  paginationNext: "P\xE1gina siguiente",
   paginationLast: "\xDAltima p\xE1gina",
   paginationRange: (from, to, total) => `${from}\u2013${to} de ${total}`,
   paginationRangeTruncated: (from, to, total) => `${from}\u2013${to} de los primeros ${total}`,
@@ -33,15 +33,58 @@ var defaultValue = {
   labels: defaultLabels
 };
 var UiContext = React.createContext(defaultValue);
+function sameLabelShape(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  for (const k of ka) {
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+    const va = a[k];
+    const vb = b[k];
+    if (typeof va === "function" && typeof vb === "function") continue;
+    if (va !== vb) return false;
+  }
+  return true;
+}
 function UiProvider({ Link, navigate, labels, listPrefsStore, children }) {
+  const navigateRef = React.useRef(navigate);
+  navigateRef.current = navigate;
+  const labelsRef = React.useRef(labels);
+  labelsRef.current = labels;
+  const stableNavigate = React.useCallback((href) => {
+    ;
+    (navigateRef.current ?? defaultNavigate)(href);
+  }, []);
+  const [stableLabels, setStableLabels] = React.useState(labels);
+  let shapeLabels = stableLabels;
+  if (!sameLabelShape(stableLabels, labels)) {
+    shapeLabels = labels;
+    setStableLabels(labels);
+  }
+  const resolvedLabels = React.useMemo(() => {
+    if (!shapeLabels) return defaultLabels;
+    const out = { ...defaultLabels };
+    for (const k of Object.keys(shapeLabels)) {
+      const v = shapeLabels[k];
+      if (v === void 0) continue;
+      out[k] = typeof v === "function" ? (...args) => {
+        const latest = labelsRef.current?.[k];
+        const fn = typeof latest === "function" ? latest : v;
+        return fn(...args);
+      } : v;
+    }
+    return out;
+  }, [shapeLabels]);
   const value = React.useMemo(
     () => ({
       Link: Link ?? DefaultLink,
-      navigate: navigate ?? defaultNavigate,
-      labels: labels ? { ...defaultLabels, ...labels } : defaultLabels,
+      navigate: stableNavigate,
+      labels: resolvedLabels,
       listPrefsStore
     }),
-    [Link, navigate, labels, listPrefsStore]
+    [Link, stableNavigate, resolvedLabels, listPrefsStore]
   );
   return /* @__PURE__ */ jsx(UiContext.Provider, { value, children });
 }

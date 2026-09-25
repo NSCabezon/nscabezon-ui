@@ -27,9 +27,10 @@ import {
   useListPrefs,
   useListView,
   usePagination,
+  useSupabaseListPrefsStore,
   visibleColumnsOf
-} from "./chunk-FUN3HHO4.js";
-import "./chunk-WEN4A7U4.js";
+} from "./chunk-JBEXW7ZQ.js";
+import "./chunk-77F46GKN.js";
 export {
   ColumnsMenu,
   DEFAULT_ACTION_COLUMN_WIDTH,
@@ -58,5 +59,6 @@ export {
   useListPrefs,
   useListView,
   usePagination,
+  useSupabaseListPrefsStore,
   visibleColumnsOf
 };

@@ -89,7 +89,8 @@ type SupabaseListPrefsStoreOptions = {
  * Gesmoto y TusExámenes).
  *
  * Crea uno por usuario y memoízalo: `useMemo(() =>
- * createSupabaseListPrefsStore(supabase, userId), [userId])`.
+ * createSupabaseListPrefsStore(supabase, userId), [userId])`. En React lo
+ * normal es `useSupabaseListPrefsStore(supabase)`, que además sigue la sesión.
  */
 declare function createSupabaseListPrefsStore(client: SupabaseLikeClient, userId: string | null | undefined, { table, onError }?: SupabaseListPrefsStoreOptions): ListPrefsStore;
 
@@ -156,6 +157,12 @@ type UiProviderProps = {
  * Integra el paquete con la app: router (Link + navigate), textos y almacén
  * de preferencias de listado. Todo es opcional; sin provider se usan `<a>`,
  * `location.assign`, los textos en español y preferencias solo locales.
+ *
+ * Estabilidad: el valor del contexto solo cambia cuando cambian `Link`,
+ * `listPrefsStore` o el CONTENIDO de `labels` (claves y textos). Se pueden
+ * pasar `navigate={(href) => router.push(href)}` y un objeto `labels` literal
+ * sin memoizar: `navigate` y las etiquetas-función se exponen como delegados
+ * estables que llaman siempre a la última versión recibida.
  */
 declare function UiProvider({ Link, navigate, labels, listPrefsStore, children }: UiProviderProps): React.JSX.Element;
 declare function useUi(): UiContextValue;

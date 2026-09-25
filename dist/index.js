@@ -29,20 +29,21 @@ import {
   useListPrefs,
   useListView,
   usePagination,
+  useSupabaseListPrefsStore,
   visibleColumnsOf
-} from "./chunk-FUN3HHO4.js";
+} from "./chunk-JBEXW7ZQ.js";
 import {
   VERSION_FOCUS_THROTTLE_MS,
   VERSION_POLL_INTERVAL_MS,
   fetchVersionJson,
   useVersionCheck
-} from "./chunk-6JVA2CMQ.js";
+} from "./chunk-BBJU4FAY.js";
 import {
   UiProvider,
   defaultLabels,
   useLabels,
   useUi
-} from "./chunk-WEN4A7U4.js";
+} from "./chunk-77F46GKN.js";
 export {
   ColumnsMenu,
   DEFAULT_ACTION_COLUMN_WIDTH,
@@ -79,6 +80,7 @@ export {
   useListPrefs,
   useListView,
   usePagination,
+  useSupabaseListPrefsStore,
   useUi,
   useVersionCheck,
   visibleColumnsOf

@@ -8,7 +8,10 @@ import type { ListPrefsStore } from '../prefs/stores'
  * listado). Para listas que se pintan enteras y se ordenan en cliente.
  *
  *   const columnProps = useListColumns('students', columns.map((c) => c.key))
- *   <ResponsiveList columns={columns} {...columnProps} mobileColumnsMenu … />
+ *   <ResponsiveList columns={columns} {...columnProps} … />
+ *
+ * Sin `ListFooter`, el menú de columnas sale encima de las tarjetas en móvil
+ * (`mobileColumnsMenu`, activo por defecto).
  */
 export function useListColumns(
   listKey: string,
