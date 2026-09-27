@@ -1,8 +1,8 @@
 {
   "name": "@nscabezon/ui",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
-  "description": "Componentes y hooks React compartidos entre Gesmoto y TusExámenes: ResponsiveList, preferencias de listado, paginación y aviso de versión nueva.",
+  "description": "Componentes y hooks React compartidos entre Gesmoto y TusExámenes: ResponsiveList, preferencias de listado, paginación, aviso de versión nueva y login social.",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -28,6 +28,10 @@
     "./version": {
       "types": "./dist/version.d.ts",
       "import": "./dist/version.js"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "import": "./dist/auth.js"
     },
     "./storage": {
       "types": "./dist/storage.d.ts",

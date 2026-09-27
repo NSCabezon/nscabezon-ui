@@ -19,7 +19,11 @@ var defaultLabels = {
   noResults: "Sin resultados",
   loading: "Cargando\u2026",
   versionMessage: "Hay una versi\xF3n nueva de la aplicaci\xF3n",
-  versionAction: "Actualizar"
+  versionAction: "Actualizar",
+  oauthDivider: "o contin\xFAa con",
+  oauthGoogle: "Continuar con Google",
+  oauthApple: "Continuar con Apple",
+  lastUsed: "\xDAltima vez"
 };
 function DefaultLink({ href, ...props }) {
   return /* @__PURE__ */ jsx("a", { href, ...props });

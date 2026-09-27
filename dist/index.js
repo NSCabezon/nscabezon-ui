@@ -14,7 +14,6 @@ import {
   ResponsiveList,
   TINTED_ROW_CLASS,
   TOUCH_TEXT_LINK,
-  cn,
   createSupabaseListPrefsStore,
   isListPageSize,
   listPrefsEqual,
@@ -23,7 +22,6 @@ import {
   resolveColumnWidth,
   resolveListDefaults,
   rowTone,
-  safeStorage,
   useColumnResize,
   useListColumns,
   useListPrefs,
@@ -31,30 +29,46 @@ import {
   usePagination,
   useSupabaseListPrefsStore,
   visibleColumnsOf
-} from "./chunk-JBEXW7ZQ.js";
+} from "./chunk-CLL4E2AX.js";
 import {
   VERSION_FOCUS_THROTTLE_MS,
   VERSION_POLL_INTERVAL_MS,
   fetchVersionJson,
   useVersionCheck
-} from "./chunk-BBJU4FAY.js";
+} from "./chunk-MAEMN6LP.js";
+import {
+  AppleIcon,
+  DEFAULT_LAST_AUTH_METHOD_KEY,
+  GoogleIcon,
+  OAuthButtons,
+  getLastAuthMethod,
+  setLastAuthMethod
+} from "./chunk-XZJ47BBC.js";
+import {
+  cn,
+  safeStorage
+} from "./chunk-6CXBNIIA.js";
 import {
   UiProvider,
   defaultLabels,
   useLabels,
   useUi
-} from "./chunk-77F46GKN.js";
+} from "./chunk-52PSSJC4.js";
 export {
+  AppleIcon,
   ColumnsMenu,
   DEFAULT_ACTION_COLUMN_WIDTH,
+  DEFAULT_LAST_AUTH_METHOD_KEY,
   DEFAULT_LIST_PAGE_SIZE,
   DEFAULT_PAGE_SIZE,
   EMPTY_LIST_PREFS,
+  GoogleIcon,
   LIST_PAGE_SIZES,
   LIST_PREFS_STORAGE_PREFIX,
   LIST_PREFS_WIDTHS_DEBOUNCE_MS,
   ListFooter,
   MIN_COLUMN_WIDTH,
+  OAuthButtons,
   Pagination,
   ResponsiveList,
   TINTED_ROW_CLASS,
@@ -66,6 +80,7 @@ export {
   createSupabaseListPrefsStore,
   defaultLabels,
   fetchVersionJson,
+  getLastAuthMethod,
   isListPageSize,
   listPrefsEqual,
   localOnlyListPrefsStore,
@@ -74,6 +89,7 @@ export {
   resolveListDefaults,
   rowTone,
   safeStorage,
+  setLastAuthMethod,
   useColumnResize,
   useLabels,
   useListColumns,

@@ -18,6 +18,7 @@ hay `prepare`: instalar no compila nada).
 | Estado de listado | `useListView` (preferencias + paginación, `paginated: false` opcional), `useListColumns` (solo columnas), `useListPrefs` |
 | Preferencias | `ListPrefs`, `ListSort`, `normalizeListPrefs`, `listPrefsEqual`, `resolveListDefaults`, `LIST_PAGE_SIZES`, `DEFAULT_LIST_PAGE_SIZE`, `EMPTY_LIST_PREFS`, almacenes `useSupabaseListPrefsStore` (hook que sigue la sesión), `createSupabaseListPrefsStore` y `localOnlyListPrefsStore` |
 | Versión | `useVersionCheck`, `fetchVersionJson` |
+| Auth | `OAuthButtons` (Continuar con Google / Apple), `GoogleIcon`, `AppleIcon`, `getLastAuthMethod`, `setLastAuthMethod`, `DEFAULT_LAST_AUTH_METHOD_KEY`, tipos `AuthMethod`, `OAuthProvider`, `OAuthSignInClient` |
 | Utilidades | `safeStorage`, `cn` |
 
 Subrutas:
@@ -25,8 +26,9 @@ Subrutas:
 - `@nscabezon/ui` — todo (módulo de cliente, `"use client"`).
 - `@nscabezon/ui/list` — listados y preferencias (cliente).
 - `@nscabezon/ui/version` — aviso de versión (cliente).
+- `@nscabezon/ui/auth` — login social con Supabase (cliente).
 - `@nscabezon/ui/storage` — solo funciones puras (`safeStorage`, `normalizeListPrefs`,
-  helpers de columnas, `cn`…), **sin** `"use client"`: se puede importar desde
+  helpers de columnas, `getLastAuthMethod`, `cn`…), **sin** `"use client"`: se puede importar desde
   un Server Component o un route handler.
 
 Los primitivos shadcn que usan los componentes (button, dropdown-menu, select,
@@ -37,13 +39,13 @@ apps definen.
 ## Instalación
 
 ```bash
-npm install "git+https://github.com/NSCabezon/nscabezon-ui.git#v0.1.1"
+npm install "git+https://github.com/NSCabezon/nscabezon-ui.git#v0.2.0"
 ```
 
 En `package.json` queda así:
 
 ```json
-"@nscabezon/ui": "git+https://github.com/NSCabezon/nscabezon-ui.git#v0.1.1"
+"@nscabezon/ui": "git+https://github.com/NSCabezon/nscabezon-ui.git#v0.2.0"
 ```
 
 Usa la URL `git+https://` (no `github:`): el repo es público y así la
@@ -299,6 +301,35 @@ por minuto). Avisa una vez por versión con un toast persistente de sonner
 (`top-center`) con acción «Actualizar» (`location.reload()`, o `onReload`).
 `fetchVersion`, `currentVersion` y los textos se leen de un ref: cambiar su
 identidad no reinicia el intervalo.
+
+## Login social
+
+```tsx
+'use client'
+import { OAuthButtons, getLastAuthMethod } from '@nscabezon/ui/auth'
+import { createClient } from '@/lib/supabase/client'
+
+<OAuthButtons
+  client={createClient()}
+  redirectTo={() => `${window.location.origin}/auth/callback`}
+  lastMethod={getLastAuthMethod()}
+/>
+```
+
+Pinta el separador «o continúa con» y un botón por proveedor (`providers`,
+por defecto Google y Apple). Al pulsar deshabilita los botones, guarda el
+proveedor con `setLastAuthMethod` (`rememberLastMethod`: `false` o
+`{ storageKey }` para cambiarlo), llama a `onBeforeRedirect` (p. ej. guardar
+un deep-link en `sessionStorage`) y a `client.auth.signInWithOAuth`. Si falla
+antes de redirigir, `onError` (por defecto `toast.error` de sonner) y los
+botones vuelven a estar activos. `redirectTo` acepta una función para leer
+`window` solo al hacer click (SSR). `providerOptions` añade `scopes` /
+`queryParams` por proveedor. Textos en `Labels`: `oauthDivider`,
+`oauthGoogle`, `oauthApple`, `lastUsed`.
+
+El callback (`/auth/callback`, intercambio del código por sesión), las rutas
+post-login y la configuración de los proveedores en Supabase (client IDs,
+allow-list de URLs de vuelta) son de cada app.
 
 ## Desarrollo
 

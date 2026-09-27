@@ -3,6 +3,23 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.2.0] - 2026-09-27
+
+### Añadido
+
+- Subruta `@nscabezon/ui/auth` (cliente, `"use client"`): `OAuthButtons`, los
+  botones «Continuar con Google / Apple» que vivían duplicados en las apps.
+  Recibe el cliente de Supabase tipado a mano (`OAuthSignInClient`, sin
+  importar `@supabase/supabase-js`), `redirectTo` (cadena o función evaluada
+  al click), `providers`, `lastMethod` (etiqueta «Última vez»),
+  `rememberLastMethod`, `onBeforeRedirect`, `onError` (por defecto
+  `toast.error` de sonner), `divider`, `providerOptions` y `labels`.
+- `GoogleIcon` y `AppleIcon`.
+- `getLastAuthMethod` / `setLastAuthMethod` (sobre `safeStorage`, clave
+  `ui.lastAuthMethod` configurable), tipos `AuthMethod` y `OAuthProvider`.
+  También en `@nscabezon/ui/storage`.
+- `Labels`: `oauthDivider`, `oauthGoogle`, `oauthApple`, `lastUsed`.
+
 ## [0.1.1] - 2026-09-25
 
 ### Añadido

@@ -128,6 +128,14 @@ type Labels = {
     versionMessage: string;
     /** Acción del toast de versión nueva (recarga la página). */
     versionAction: string;
+    /** Separador encima de los botones de login social («o continúa con»). */
+    oauthDivider: string;
+    /** Botón «Continuar con Google». */
+    oauthGoogle: string;
+    /** Botón «Continuar con Apple». */
+    oauthApple: string;
+    /** Etiqueta «Última vez» sobre el método de acceso usado la última vez. */
+    lastUsed: string;
 };
 declare const defaultLabels: Labels;
 /** Props mínimas que el paquete pasa al `Link` de la app. */

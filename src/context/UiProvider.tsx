@@ -36,6 +36,14 @@ export type Labels = {
   versionMessage: string
   /** Acción del toast de versión nueva (recarga la página). */
   versionAction: string
+  /** Separador encima de los botones de login social («o continúa con»). */
+  oauthDivider: string
+  /** Botón «Continuar con Google». */
+  oauthGoogle: string
+  /** Botón «Continuar con Apple». */
+  oauthApple: string
+  /** Etiqueta «Última vez» sobre el método de acceso usado la última vez. */
+  lastUsed: string
 }
 
 export const defaultLabels: Labels = {
@@ -56,6 +64,10 @@ export const defaultLabels: Labels = {
   loading: 'Cargando…',
   versionMessage: 'Hay una versión nueva de la aplicación',
   versionAction: 'Actualizar',
+  oauthDivider: 'o continúa con',
+  oauthGoogle: 'Continuar con Google',
+  oauthApple: 'Continuar con Apple',
+  lastUsed: 'Última vez',
 }
 
 /** Props mínimas que el paquete pasa al `Link` de la app. */

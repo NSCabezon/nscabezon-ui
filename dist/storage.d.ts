@@ -109,4 +109,13 @@ declare const TINTED_ROW_CLASS = "bg-(--row-tint) hover:bg-(--row-tint-hover) sh
  */
 declare function rowTone(color: string): CSSProperties;
 
-export { DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_LIST_PAGE_SIZE, EMPTY_LIST_PREFS, LIST_PAGE_SIZES, LIST_PREFS_STORAGE_PREFIX, type ListPageSize, type ListPrefs, type ListPrefsDefaults, type ListSort, type SortDir, TINTED_ROW_CLASS, cn, isListPageSize, listPrefsEqual, normalizeListPrefs, resolveColumnWidth, resolveListDefaults, rowTone, safeStorage, visibleColumnsOf };
+type OAuthProvider = 'google' | 'apple';
+type AuthMethod = 'email' | OAuthProvider;
+/** Clave de `localStorage` por defecto. Cada app puede pasar la suya. */
+declare const DEFAULT_LAST_AUTH_METHOD_KEY = "ui.lastAuthMethod";
+/** Último método usado, o `null` si no hay dato, no es válido o no hay storage. Nunca lanza. */
+declare function getLastAuthMethod(storageKey?: string): AuthMethod | null;
+/** Guarda el método. Si no hay storage (modo privado / bloqueado) se ignora: el hint es opcional. */
+declare function setLastAuthMethod(method: AuthMethod, storageKey?: string): void;
+
+export { type AuthMethod, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_LAST_AUTH_METHOD_KEY, DEFAULT_LIST_PAGE_SIZE, EMPTY_LIST_PREFS, LIST_PAGE_SIZES, LIST_PREFS_STORAGE_PREFIX, type ListPageSize, type ListPrefs, type ListPrefsDefaults, type ListSort, type OAuthProvider, type SortDir, TINTED_ROW_CLASS, cn, getLastAuthMethod, isListPageSize, listPrefsEqual, normalizeListPrefs, resolveColumnWidth, resolveListDefaults, rowTone, safeStorage, setLastAuthMethod, visibleColumnsOf };

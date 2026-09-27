@@ -117,14 +117,30 @@ function rowTone(color) {
     "--row-tint-hover": `color-mix(in oklab, ${color} ${TINT_HOVER}%, transparent)`
   };
 }
+
+// src/auth/lastAuthMethod.ts
+var DEFAULT_LAST_AUTH_METHOD_KEY = "ui.lastAuthMethod";
+var AUTH_METHODS = ["email", "google", "apple"];
+function isAuthMethod(value) {
+  return typeof value === "string" && AUTH_METHODS.includes(value);
+}
+function getLastAuthMethod(storageKey = DEFAULT_LAST_AUTH_METHOD_KEY) {
+  const value = safeStorage.getItem(storageKey);
+  return isAuthMethod(value) ? value : null;
+}
+function setLastAuthMethod(method, storageKey = DEFAULT_LAST_AUTH_METHOD_KEY) {
+  safeStorage.setItem(storageKey, method);
+}
 export {
   DEFAULT_ACTION_COLUMN_WIDTH,
+  DEFAULT_LAST_AUTH_METHOD_KEY,
   DEFAULT_LIST_PAGE_SIZE,
   EMPTY_LIST_PREFS,
   LIST_PAGE_SIZES,
   LIST_PREFS_STORAGE_PREFIX,
   TINTED_ROW_CLASS,
   cn,
+  getLastAuthMethod,
   isListPageSize,
   listPrefsEqual,
   normalizeListPrefs,
@@ -132,5 +148,6 @@ export {
   resolveListDefaults,
   rowTone,
   safeStorage,
+  setLastAuthMethod,
   visibleColumnsOf
 };

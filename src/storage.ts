@@ -23,3 +23,10 @@ export {
   visibleColumnsOf,
 } from './list/columnWidth'
 export { TINTED_ROW_CLASS, rowTone } from './list/rowTone'
+export {
+  DEFAULT_LAST_AUTH_METHOD_KEY,
+  getLastAuthMethod,
+  setLastAuthMethod,
+  type AuthMethod,
+  type OAuthProvider,
+} from './auth/lastAuthMethod'

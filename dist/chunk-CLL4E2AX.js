@@ -1,110 +1,34 @@
 "use client";
 import {
+  Button,
+  cn,
+  safeStorage
+} from "./chunk-6CXBNIIA.js";
+import {
   useLabels,
   useUi
-} from "./chunk-77F46GKN.js";
+} from "./chunk-52PSSJC4.js";
 
 // src/list/responsive-list.tsx
 import "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
-// src/lib/cn.ts
-import { clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
-function cn(...inputs) {
-  return twMerge(clsx(inputs));
-}
-
 // src/list/columns-menu.tsx
 import "react";
 import { Columns3 } from "lucide-react";
-
-// src/primitives/button.tsx
-import "react";
-import { Slot } from "radix-ui";
-
-// src/primitives/button-variants.ts
-import { cva } from "class-variance-authority";
-var TOUCH_TARGET = "pointer-coarse:min-h-11 pointer-coarse:min-w-11";
-var buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/80",
-        outline: "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
-        ghost: "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
-        // A11Y-3 (23/09): el texto va en --destructive-strong, no en --destructive:
-        // sobre su propio tinte rojo este se quedaba en 3,8–4,3:1. Lo vigila
-        // destructive-contrast.test.ts.
-        destructive: "bg-destructive/10 text-destructive-strong hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
-        link: "text-primary underline-offset-4 hover:underline"
-      },
-      // Área de toque en táctil (M22, auditoría 2026-09-18): los tamaños
-      // compactos (`xs`, `sm`, `icon`, `icon-xs`, `icon-sm`) miden 24-32 px y
-      // se usan en ~30 columnas `action` de listados, por debajo del 44×44 que
-      // docs/ui-patterns.md adopta (WCAG 2.5.5). En vez de tocar cada fichero,
-      // `pointer-coarse:` (`@media (pointer: coarse)`, Tailwind 4.1+) pone un
-      // suelo de 44 px SOLO donde se pulsa con el dedo: con ratón siguen
-      // compactos. `min-*` gana a `h-*`/`size-*` sin importar el orden. Quien
-      // de verdad no pueda crecer sobreescribe con `pointer-coarse:min-h-0`.
-      // TODOS los tamaños llevan el suelo (5 de docs/mobile-view-2026-09-20.md):
-      // `default` (32 px), `lg` e `icon-lg` (36 px) tampoco llegaban a 44 y son
-      // los ~500 botones por pantalla de barras de acción, paginación y
-      // segmentados; en táctil crecen 8-12 px, que es lo que exige la regla.
-      size: {
-        default: `h-8 gap-1.5 px-2.5 ${TOUCH_TARGET} has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2`,
-        xs: `h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs ${TOUCH_TARGET} in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3`,
-        sm: `h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] ${TOUCH_TARGET} in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5`,
-        lg: `h-9 gap-1.5 px-2.5 ${TOUCH_TARGET} has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2`,
-        icon: `size-8 ${TOUCH_TARGET}`,
-        "icon-xs": `size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3 ${TOUCH_TARGET}`,
-        "icon-sm": `size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg ${TOUCH_TARGET}`,
-        "icon-lg": `size-9 ${TOUCH_TARGET}`
-      }
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default"
-    }
-  }
-);
-
-// src/primitives/button.tsx
-import { jsx } from "react/jsx-runtime";
-function Button({
-  className,
-  variant = "default",
-  size = "default",
-  asChild = false,
-  ...props
-}) {
-  const Comp = asChild ? Slot.Root : "button";
-  return /* @__PURE__ */ jsx(
-    Comp,
-    {
-      "data-slot": "button",
-      "data-variant": variant,
-      "data-size": size,
-      className: cn(buttonVariants({ variant, size, className })),
-      ...props
-    }
-  );
-}
 
 // src/primitives/dropdown-menu.tsx
 import "react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 import { CheckIcon, ChevronRightIcon } from "lucide-react";
-import { jsx as jsx2, jsxs } from "react/jsx-runtime";
+import { jsx, jsxs } from "react/jsx-runtime";
 function DropdownMenu({ ...props }) {
-  return /* @__PURE__ */ jsx2(DropdownMenuPrimitive.Root, { "data-slot": "dropdown-menu", ...props });
+  return /* @__PURE__ */ jsx(DropdownMenuPrimitive.Root, { "data-slot": "dropdown-menu", ...props });
 }
 function DropdownMenuTrigger({
   ...props
 }) {
-  return /* @__PURE__ */ jsx2(DropdownMenuPrimitive.Trigger, { "data-slot": "dropdown-menu-trigger", ...props });
+  return /* @__PURE__ */ jsx(DropdownMenuPrimitive.Trigger, { "data-slot": "dropdown-menu-trigger", ...props });
 }
 function DropdownMenuContent({
   className,
@@ -113,7 +37,7 @@ function DropdownMenuContent({
   collisionPadding = 8,
   ...props
 }) {
-  return /* @__PURE__ */ jsx2(DropdownMenuPrimitive.Portal, { children: /* @__PURE__ */ jsx2(
+  return /* @__PURE__ */ jsx(DropdownMenuPrimitive.Portal, { children: /* @__PURE__ */ jsx(
     DropdownMenuPrimitive.Content,
     {
       "data-slot": "dropdown-menu-content",
@@ -134,7 +58,7 @@ function DropdownMenuItem({
   variant = "default",
   ...props
 }) {
-  return /* @__PURE__ */ jsx2(
+  return /* @__PURE__ */ jsx(
     DropdownMenuPrimitive.Item,
     {
       "data-slot": "dropdown-menu-item",
@@ -167,12 +91,12 @@ function DropdownMenuCheckboxItem({
       checked,
       ...props,
       children: [
-        /* @__PURE__ */ jsx2(
+        /* @__PURE__ */ jsx(
           "span",
           {
             className: "pointer-events-none absolute right-2 flex items-center justify-center",
             "data-slot": "dropdown-menu-checkbox-item-indicator",
-            children: /* @__PURE__ */ jsx2(DropdownMenuPrimitive.ItemIndicator, { children: /* @__PURE__ */ jsx2(CheckIcon, {}) })
+            children: /* @__PURE__ */ jsx(DropdownMenuPrimitive.ItemIndicator, { children: /* @__PURE__ */ jsx(CheckIcon, {}) })
           }
         ),
         children
@@ -184,7 +108,7 @@ function DropdownMenuSeparator({
   className,
   ...props
 }) {
-  return /* @__PURE__ */ jsx2(
+  return /* @__PURE__ */ jsx(
     DropdownMenuPrimitive.Separator,
     {
       "data-slot": "dropdown-menu-separator",
@@ -195,7 +119,7 @@ function DropdownMenuSeparator({
 }
 
 // src/list/columns-menu.tsx
-import { jsx as jsx3, jsxs as jsxs2 } from "react/jsx-runtime";
+import { jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
 function ColumnsMenu({
   columns,
   hidden,
@@ -206,7 +130,7 @@ function ColumnsMenu({
 }) {
   const labels = useLabels(labelsProp);
   return /* @__PURE__ */ jsxs2(DropdownMenu, { children: [
-    /* @__PURE__ */ jsx3(DropdownMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx3(
+    /* @__PURE__ */ jsx2(DropdownMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx2(
       Button,
       {
         variant: "ghost",
@@ -214,13 +138,13 @@ function ColumnsMenu({
         "aria-label": labels.columnsMenu,
         title: labels.columnsMenu,
         className,
-        children: /* @__PURE__ */ jsx3(Columns3, {})
+        children: /* @__PURE__ */ jsx2(Columns3, {})
       }
     ) }),
     /* @__PURE__ */ jsxs2(DropdownMenuContent, { align: "end", className: "w-56", children: [
       columns.filter((col) => col.header).map((col) => {
         const visible = !!col.primary || !hidden.includes(col.key);
-        return /* @__PURE__ */ jsx3(
+        return /* @__PURE__ */ jsx2(
           DropdownMenuCheckboxItem,
           {
             checked: visible,
@@ -235,27 +159,27 @@ function ColumnsMenu({
           col.key
         );
       }),
-      /* @__PURE__ */ jsx3(DropdownMenuSeparator, {}),
-      /* @__PURE__ */ jsx3(DropdownMenuItem, { onSelect: () => onReset(), children: labels.columnsReset })
+      /* @__PURE__ */ jsx2(DropdownMenuSeparator, {}),
+      /* @__PURE__ */ jsx2(DropdownMenuItem, { onSelect: () => onReset(), children: labels.columnsReset })
     ] })
   ] });
 }
 
 // src/list/useColumnResize.tsx
-import * as React4 from "react";
-import { jsx as jsx4 } from "react/jsx-runtime";
+import * as React3 from "react";
+import { jsx as jsx3 } from "react/jsx-runtime";
 var MIN_COLUMN_WIDTH = 64;
 function useColumnResize({
   columnWidths,
   onColumnWidthsChange
 }) {
-  const [drag, setDrag] = React4.useState(null);
-  const dragRef = React4.useRef(null);
+  const [drag, setDrag] = React3.useState(null);
+  const dragRef = React3.useRef(null);
   function widthOf(key) {
     return drag?.key === key ? drag.px : columnWidths?.[key];
   }
   function resizeHandle(columnKey) {
-    return /* @__PURE__ */ jsx4(
+    return /* @__PURE__ */ jsx3(
       "span",
       {
         role: "presentation",
@@ -324,18 +248,18 @@ function visibleColumnsOf(columns, hidden) {
 
 // src/primitives/table.tsx
 import "react";
-import { jsx as jsx5 } from "react/jsx-runtime";
+import { jsx as jsx4 } from "react/jsx-runtime";
 function Table({
   className,
   containerClassName,
   ...props
 }) {
-  return /* @__PURE__ */ jsx5(
+  return /* @__PURE__ */ jsx4(
     "div",
     {
       "data-slot": "table-container",
       className: cn("relative w-full", containerClassName ?? "overflow-x-auto"),
-      children: /* @__PURE__ */ jsx5(
+      children: /* @__PURE__ */ jsx4(
         "table",
         {
           "data-slot": "table",
@@ -347,10 +271,10 @@ function Table({
   );
 }
 function TableHeader({ className, ...props }) {
-  return /* @__PURE__ */ jsx5("thead", { "data-slot": "table-header", className: cn("[&_tr]:border-b", className), ...props });
+  return /* @__PURE__ */ jsx4("thead", { "data-slot": "table-header", className: cn("[&_tr]:border-b", className), ...props });
 }
 function TableBody({ className, ...props }) {
-  return /* @__PURE__ */ jsx5(
+  return /* @__PURE__ */ jsx4(
     "tbody",
     {
       "data-slot": "table-body",
@@ -360,7 +284,7 @@ function TableBody({ className, ...props }) {
   );
 }
 function TableRow({ className, ...props }) {
-  return /* @__PURE__ */ jsx5(
+  return /* @__PURE__ */ jsx4(
     "tr",
     {
       "data-slot": "table-row",
@@ -374,7 +298,7 @@ function TableRow({ className, ...props }) {
 }
 var TABLE_CELL_X = "px-4";
 function TableHead({ className, ...props }) {
-  return /* @__PURE__ */ jsx5(
+  return /* @__PURE__ */ jsx4(
     "th",
     {
       "data-slot": "table-head",
@@ -388,7 +312,7 @@ function TableHead({ className, ...props }) {
   );
 }
 function TableCell({ className, ...props }) {
-  return /* @__PURE__ */ jsx5(
+  return /* @__PURE__ */ jsx4(
     "td",
     {
       "data-slot": "table-cell",
@@ -403,7 +327,7 @@ function TableCell({ className, ...props }) {
 }
 
 // src/list/responsive-list.tsx
-import { jsx as jsx6, jsxs as jsxs3 } from "react/jsx-runtime";
+import { jsx as jsx5, jsxs as jsxs3 } from "react/jsx-runtime";
 var TOUCH_TEXT_LINK = "pointer-coarse:-my-3 pointer-coarse:min-h-11 pointer-coarse:py-3 pointer-coarse:-mx-3 pointer-coarse:min-w-11 pointer-coarse:px-3";
 function ResponsiveList({
   columns,
@@ -450,13 +374,13 @@ function ResponsiveList({
   }
   function renderCell(col, row, href) {
     if (!col.primary || col.noRowLink || !href) return col.cell(row);
-    return /* @__PURE__ */ jsx6(Link, { href, className: "min-w-0 rounded-sm", onClick: (e) => e.stopPropagation(), children: col.cell(row) });
+    return /* @__PURE__ */ jsx5(Link, { href, className: "min-w-0 rounded-sm", onClick: (e) => e.stopPropagation(), children: col.cell(row) });
   }
   function renderCardTitle(col, row, href) {
     if (!href || col.noRowLink) {
-      return /* @__PURE__ */ jsx6("div", { className: cn(col.noRowLink && href ? "min-w-0" : "truncate", "font-medium"), children: col.cell(row) });
+      return /* @__PURE__ */ jsx5("div", { className: cn(col.noRowLink && href ? "min-w-0" : "truncate", "font-medium"), children: col.cell(row) });
     }
-    return /* @__PURE__ */ jsx6(
+    return /* @__PURE__ */ jsx5(
       Link,
       {
         href,
@@ -478,7 +402,7 @@ function ResponsiveList({
         onClick: () => onSortChange({ key: col.key, dir: active && sort.dir === "asc" ? "desc" : "asc" }),
         children: [
           col.header,
-          /* @__PURE__ */ jsx6(
+          /* @__PURE__ */ jsx5(
             Icon,
             {
               "aria-hidden": true,
@@ -509,7 +433,7 @@ function ResponsiveList({
   const stickyHeadStyle = stickyHeader ? { top: (stickyHeaderTop ?? 0) - 1 } : void 0;
   const fixedCellClass = resizable ? "overflow-hidden text-ellipsis" : void 0;
   const lastVisibleKey = visibleColumns[visibleColumns.length - 1]?.key;
-  const columnsMenu = onHiddenColumnsChange && onColumnsReset ? /* @__PURE__ */ jsx6(
+  const columnsMenu = onHiddenColumnsChange && onColumnsReset ? /* @__PURE__ */ jsx5(
     ColumnsMenu,
     {
       columns,
@@ -529,7 +453,7 @@ function ResponsiveList({
     // Midiendo el contenedor, una lista metida en una tarjeta estrecha también
     // acierta — el caso de las sedes en Ajustes → Taller, con 302 px.
     /* @__PURE__ */ jsxs3("div", { className: cn("@container", className), children: [
-      /* @__PURE__ */ jsx6("div", { className: "hidden @3xl:block", children: /* @__PURE__ */ jsxs3(
+      /* @__PURE__ */ jsx5("div", { className: "hidden @3xl:block", children: /* @__PURE__ */ jsxs3(
         Table,
         {
           containerClassName: stickyHeader ? "overflow-visible" : void 0,
@@ -539,15 +463,15 @@ function ResponsiveList({
           ),
           children: [
             resizable && /* @__PURE__ */ jsxs3("colgroup", { children: [
-              leading && /* @__PURE__ */ jsx6("col", { style: { width: 40 } }),
+              leading && /* @__PURE__ */ jsx5("col", { style: { width: 40 } }),
               visibleColumns.map((col) => {
                 const width = colWidth(col);
-                return /* @__PURE__ */ jsx6("col", { style: width ? { width } : void 0 }, col.key);
+                return /* @__PURE__ */ jsx5("col", { style: width ? { width } : void 0 }, col.key);
               }),
-              columnsMenu && /* @__PURE__ */ jsx6("col", { style: { width: 44 } })
+              columnsMenu && /* @__PURE__ */ jsx5("col", { style: { width: 44 } })
             ] }),
-            /* @__PURE__ */ jsx6(TableHeader, { className: stickyHeader ? "[&_tr]:border-b-0" : void 0, children: /* @__PURE__ */ jsxs3(TableRow, { className: stickyHeader ? "hover:bg-transparent" : void 0, children: [
-              leading && /* @__PURE__ */ jsx6(TableHead, { className: cn("w-10", stickyHeadClass), style: stickyHeadStyle }),
+            /* @__PURE__ */ jsx5(TableHeader, { className: stickyHeader ? "[&_tr]:border-b-0" : void 0, children: /* @__PURE__ */ jsxs3(TableRow, { className: stickyHeader ? "hover:bg-transparent" : void 0, children: [
+              leading && /* @__PURE__ */ jsx5(TableHead, { className: cn("w-10", stickyHeadClass), style: stickyHeadStyle }),
               visibleColumns.map((col) => /* @__PURE__ */ jsxs3(
                 TableHead,
                 {
@@ -579,13 +503,13 @@ function ResponsiveList({
                   ),
                   style: menuHeadStyle,
                   children: [
-                    /* @__PURE__ */ jsx6("span", { className: "sr-only", children: labels.columnsMenu }),
+                    /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.columnsMenu }),
                     columnsMenu
                   ]
                 }
               )
             ] }) }),
-            /* @__PURE__ */ jsx6(TableBody, { children: data.map((row) => {
+            /* @__PURE__ */ jsx5(TableBody, { children: data.map((row) => {
               const href = rowHref?.(row);
               const style = rowStyle?.(row);
               return /* @__PURE__ */ jsxs3(
@@ -612,7 +536,7 @@ function ResponsiveList({
                     leading && // onAuxClick además de onClick: sin él, el click de rueda
                     // sobre el checkbox de selección abría el detalle en una
                     // pestaña nueva.
-                    /* @__PURE__ */ jsx6(
+                    /* @__PURE__ */ jsx5(
                       TableCell,
                       {
                         onClick: (e) => e.stopPropagation(),
@@ -620,7 +544,7 @@ function ResponsiveList({
                         children: leading(row)
                       }
                     ),
-                    visibleColumns.map((col) => /* @__PURE__ */ jsx6(
+                    visibleColumns.map((col) => /* @__PURE__ */ jsx5(
                       TableCell,
                       {
                         className: cn(
@@ -635,7 +559,7 @@ function ResponsiveList({
                       },
                       col.key
                     )),
-                    columnsMenu && /* @__PURE__ */ jsx6(TableCell, { className: "p-0" })
+                    columnsMenu && /* @__PURE__ */ jsx5(TableCell, { className: "p-0" })
                   ]
                 },
                 rowKey(row)
@@ -645,7 +569,7 @@ function ResponsiveList({
         }
       ) }),
       /* @__PURE__ */ jsxs3("div", { className: "space-y-2 @3xl:hidden", children: [
-        mobileColumnsMenu && columnsMenu && /* @__PURE__ */ jsx6("div", { className: "flex justify-end", "data-list-columns-menu": true, children: columnsMenu }),
+        mobileColumnsMenu && columnsMenu && /* @__PURE__ */ jsx5("div", { className: "flex justify-end", "data-list-columns-menu": true, children: columnsMenu }),
         data.map((row) => {
           const href = rowHref?.(row);
           const style = rowStyle?.(row);
@@ -676,7 +600,7 @@ function ResponsiveList({
               children: [
                 /* @__PURE__ */ jsxs3("div", { className: "flex flex-wrap items-start justify-between gap-2", children: [
                   /* @__PURE__ */ jsxs3("div", { className: "flex min-w-32 flex-1 items-center gap-2", "data-list-card-title": true, children: [
-                    leading && /* @__PURE__ */ jsx6(
+                    leading && /* @__PURE__ */ jsx5(
                       "span",
                       {
                         onClick: (e) => e.stopPropagation(),
@@ -693,16 +617,16 @@ function ResponsiveList({
                   // texto a 390px): envuelven en dos filas en vez de salirse, y
                   // `max-w-full` acota el bloque al ancho de la card para que
                   // ese `shrink-0` no lo deje asomar por el borde.
-                  /* @__PURE__ */ jsx6("div", { className: "flex max-w-full shrink-0 flex-wrap items-center gap-1", children: actions.map((col) => /* @__PURE__ */ jsx6("span", { children: col.cell(row) }, col.key)) })
+                  /* @__PURE__ */ jsx5("div", { className: "flex max-w-full shrink-0 flex-wrap items-center gap-1", children: actions.map((col) => /* @__PURE__ */ jsx5("span", { children: col.cell(row) }, col.key)) })
                 ] }),
-                body.length > 0 && /* @__PURE__ */ jsx6("dl", { className: "mt-2 space-y-1", children: body.filter((col) => !col.mobileHideWhen?.(row)).map((col) => /* @__PURE__ */ jsxs3(
+                body.length > 0 && /* @__PURE__ */ jsx5("dl", { className: "mt-2 space-y-1", children: body.filter((col) => !col.mobileHideWhen?.(row)).map((col) => /* @__PURE__ */ jsxs3(
                   "div",
                   {
                     className: cn(
                       col.mobileFullWidth ? "space-y-1" : "flex justify-between gap-3"
                     ),
                     children: [
-                      !col.mobileHideLabel && col.header && /* @__PURE__ */ jsx6(
+                      !col.mobileHideLabel && col.header && /* @__PURE__ */ jsx5(
                         "dt",
                         {
                           className: cn(
@@ -712,7 +636,7 @@ function ResponsiveList({
                           children: col.header
                         }
                       ),
-                      /* @__PURE__ */ jsx6(
+                      /* @__PURE__ */ jsx5(
                         "dd",
                         {
                           className: cn(
@@ -739,7 +663,7 @@ function ResponsiveList({
 // src/list/pagination.tsx
 import { useEffect } from "react";
 import { ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
-import { jsx as jsx7, jsxs as jsxs4 } from "react/jsx-runtime";
+import { jsx as jsx6, jsxs as jsxs4 } from "react/jsx-runtime";
 function Pagination({
   page,
   pageSize,
@@ -760,7 +684,7 @@ function Pagination({
   const from = (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, total);
   return /* @__PURE__ */ jsxs4("div", { className: cn("flex items-center justify-center gap-1 pt-2", className), children: [
-    /* @__PURE__ */ jsx7(
+    /* @__PURE__ */ jsx6(
       Button,
       {
         variant: "outline",
@@ -769,10 +693,10 @@ function Pagination({
         onClick: () => onPageChange(1),
         "aria-label": labels.paginationFirst,
         title: labels.paginationFirst,
-        children: /* @__PURE__ */ jsx7(ChevronsLeft, { className: "size-4" })
+        children: /* @__PURE__ */ jsx6(ChevronsLeft, { className: "size-4" })
       }
     ),
-    /* @__PURE__ */ jsx7(
+    /* @__PURE__ */ jsx6(
       Button,
       {
         variant: "outline",
@@ -781,11 +705,11 @@ function Pagination({
         onClick: () => onPageChange(page - 1),
         "aria-label": labels.paginationPrev,
         title: labels.paginationPrev,
-        children: /* @__PURE__ */ jsx7(ChevronLeft, { className: "size-4" })
+        children: /* @__PURE__ */ jsx6(ChevronLeft, { className: "size-4" })
       }
     ),
-    /* @__PURE__ */ jsx7("span", { className: "px-2 text-sm text-muted-foreground tabular-nums", children: truncated ? labels.paginationRangeTruncated(from, to, total) : labels.paginationRange(from, to, total) }),
-    /* @__PURE__ */ jsx7(
+    /* @__PURE__ */ jsx6("span", { className: "px-2 text-sm text-muted-foreground tabular-nums", children: truncated ? labels.paginationRangeTruncated(from, to, total) : labels.paginationRange(from, to, total) }),
+    /* @__PURE__ */ jsx6(
       Button,
       {
         variant: "outline",
@@ -794,10 +718,10 @@ function Pagination({
         onClick: () => onPageChange(page + 1),
         "aria-label": labels.paginationNext,
         title: labels.paginationNext,
-        children: /* @__PURE__ */ jsx7(ChevronRight, { className: "size-4" })
+        children: /* @__PURE__ */ jsx6(ChevronRight, { className: "size-4" })
       }
     ),
-    /* @__PURE__ */ jsx7(
+    /* @__PURE__ */ jsx6(
       Button,
       {
         variant: "outline",
@@ -806,7 +730,7 @@ function Pagination({
         onClick: () => onPageChange(lastPage),
         "aria-label": labels.paginationLast,
         title: labels.paginationLast,
-        children: /* @__PURE__ */ jsx7(ChevronsRight, { className: "size-4" })
+        children: /* @__PURE__ */ jsx6(ChevronsRight, { className: "size-4" })
       }
     )
   ] });
@@ -906,9 +830,9 @@ import { Loader2 } from "lucide-react";
 import "react";
 import { Select as SelectPrimitive } from "radix-ui";
 import { ChevronDownIcon, CheckIcon as CheckIcon2, ChevronUpIcon } from "lucide-react";
-import { jsx as jsx8, jsxs as jsxs5 } from "react/jsx-runtime";
+import { jsx as jsx7, jsxs as jsxs5 } from "react/jsx-runtime";
 function Select({ ...props }) {
-  return /* @__PURE__ */ jsx8(SelectPrimitive.Root, { "data-slot": "select", ...props });
+  return /* @__PURE__ */ jsx7(SelectPrimitive.Root, { "data-slot": "select", ...props });
 }
 function SelectTrigger({
   className,
@@ -928,7 +852,7 @@ function SelectTrigger({
       ...props,
       children: [
         children,
-        /* @__PURE__ */ jsx8(SelectPrimitive.Icon, { asChild: true, children: /* @__PURE__ */ jsx8(ChevronDownIcon, { className: "pointer-events-none size-4 text-muted-foreground" }) })
+        /* @__PURE__ */ jsx7(SelectPrimitive.Icon, { asChild: true, children: /* @__PURE__ */ jsx7(ChevronDownIcon, { className: "pointer-events-none size-4 text-muted-foreground" }) })
       ]
     }
   );
@@ -940,7 +864,7 @@ function SelectContent({
   align = "center",
   ...props
 }) {
-  return /* @__PURE__ */ jsx8(SelectPrimitive.Portal, { children: /* @__PURE__ */ jsxs5(
+  return /* @__PURE__ */ jsx7(SelectPrimitive.Portal, { children: /* @__PURE__ */ jsxs5(
     SelectPrimitive.Content,
     {
       "data-slot": "select-content",
@@ -954,8 +878,8 @@ function SelectContent({
       align,
       ...props,
       children: [
-        /* @__PURE__ */ jsx8(SelectScrollUpButton, {}),
-        /* @__PURE__ */ jsx8(
+        /* @__PURE__ */ jsx7(SelectScrollUpButton, {}),
+        /* @__PURE__ */ jsx7(
           SelectPrimitive.Viewport,
           {
             "data-position": position,
@@ -966,7 +890,7 @@ function SelectContent({
             children
           }
         ),
-        /* @__PURE__ */ jsx8(SelectScrollDownButton, {})
+        /* @__PURE__ */ jsx7(SelectScrollDownButton, {})
       ]
     }
   ) });
@@ -986,8 +910,8 @@ function SelectItem({
       ),
       ...props,
       children: [
-        /* @__PURE__ */ jsx8("span", { className: "pointer-events-none absolute right-2 flex size-4 items-center justify-center", children: /* @__PURE__ */ jsx8(SelectPrimitive.ItemIndicator, { children: /* @__PURE__ */ jsx8(CheckIcon2, { className: "pointer-events-none" }) }) }),
-        /* @__PURE__ */ jsx8(SelectPrimitive.ItemText, { children })
+        /* @__PURE__ */ jsx7("span", { className: "pointer-events-none absolute right-2 flex size-4 items-center justify-center", children: /* @__PURE__ */ jsx7(SelectPrimitive.ItemIndicator, { children: /* @__PURE__ */ jsx7(CheckIcon2, { className: "pointer-events-none" }) }) }),
+        /* @__PURE__ */ jsx7(SelectPrimitive.ItemText, { children })
       ]
     }
   );
@@ -996,7 +920,7 @@ function SelectScrollUpButton({
   className,
   ...props
 }) {
-  return /* @__PURE__ */ jsx8(
+  return /* @__PURE__ */ jsx7(
     SelectPrimitive.ScrollUpButton,
     {
       "data-slot": "select-scroll-up-button",
@@ -1005,7 +929,7 @@ function SelectScrollUpButton({
         className
       ),
       ...props,
-      children: /* @__PURE__ */ jsx8(ChevronUpIcon, {})
+      children: /* @__PURE__ */ jsx7(ChevronUpIcon, {})
     }
   );
 }
@@ -1013,7 +937,7 @@ function SelectScrollDownButton({
   className,
   ...props
 }) {
-  return /* @__PURE__ */ jsx8(
+  return /* @__PURE__ */ jsx7(
     SelectPrimitive.ScrollDownButton,
     {
       "data-slot": "select-scroll-down-button",
@@ -1022,13 +946,13 @@ function SelectScrollDownButton({
         className
       ),
       ...props,
-      children: /* @__PURE__ */ jsx8(ChevronDownIcon, {})
+      children: /* @__PURE__ */ jsx7(ChevronDownIcon, {})
     }
   );
 }
 
 // src/list/ListFooter.tsx
-import { Fragment, jsx as jsx9, jsxs as jsxs6 } from "react/jsx-runtime";
+import { Fragment, jsx as jsx8, jsxs as jsxs6 } from "react/jsx-runtime";
 function ListFooter({
   page,
   pageSize,
@@ -1052,7 +976,7 @@ function ListFooter({
   return (
     // El `@container` va aquí y el layout en el hijo: un elemento no puede
     // consultarse a sí mismo.
-    /* @__PURE__ */ jsx9("div", { className: cn("@container", className), children: /* @__PURE__ */ jsxs6(
+    /* @__PURE__ */ jsx8("div", { className: cn("@container", className), children: /* @__PURE__ */ jsxs6(
       "div",
       {
         className: cn(
@@ -1060,11 +984,11 @@ function ListFooter({
           "@2xl:grid @2xl:grid-cols-[1fr_auto_1fr]"
         ),
         children: [
-          /* @__PURE__ */ jsx9("span", { className: "hidden @2xl:block", "aria-hidden": "true" }),
-          /* @__PURE__ */ jsx9("span", { role: "status", className: "sr-only", children: status }),
+          /* @__PURE__ */ jsx8("span", { className: "hidden @2xl:block", "aria-hidden": "true" }),
+          /* @__PURE__ */ jsx8("span", { role: "status", className: "sr-only", children: status }),
           /* @__PURE__ */ jsxs6("div", { className: "flex items-center justify-center gap-2", children: [
-            showCountOnly && /* @__PURE__ */ jsx9("span", { className: "text-sm text-muted-foreground tabular-nums", children: truncated ? labels.countTruncated(total) : labels.count(total) }),
-            /* @__PURE__ */ jsx9(
+            showCountOnly && /* @__PURE__ */ jsx8("span", { className: "text-sm text-muted-foreground tabular-nums", children: truncated ? labels.countTruncated(total) : labels.count(total) }),
+            /* @__PURE__ */ jsx8(
               Pagination,
               {
                 page,
@@ -1076,20 +1000,20 @@ function ListFooter({
                 labels: labelsProp
               }
             ),
-            /* @__PURE__ */ jsx9(
+            /* @__PURE__ */ jsx8(
               "span",
               {
                 "aria-live": "polite",
                 className: "inline-flex size-4 shrink-0 items-center justify-center",
                 children: loading && /* @__PURE__ */ jsxs6(Fragment, { children: [
-                  /* @__PURE__ */ jsx9(Loader2, { className: "size-4 animate-spin text-muted-foreground" }),
-                  /* @__PURE__ */ jsx9("span", { className: "sr-only", children: labels.loading })
+                  /* @__PURE__ */ jsx8(Loader2, { className: "size-4 animate-spin text-muted-foreground" }),
+                  /* @__PURE__ */ jsx8("span", { className: "sr-only", children: labels.loading })
                 ] })
               }
             )
           ] }),
           /* @__PURE__ */ jsxs6("div", { className: "ml-auto flex items-center gap-2 @2xl:ml-0 @2xl:justify-self-end", children: [
-            /* @__PURE__ */ jsx9(
+            /* @__PURE__ */ jsx8(
               ColumnsMenu,
               {
                 className: isEmpty ? void 0 : "@3xl:hidden",
@@ -1102,10 +1026,10 @@ function ListFooter({
             ),
             !isEmpty && /* @__PURE__ */ jsxs6(Select, { value: String(pageSize), onValueChange: (v) => onPageSizeChange(Number(v)), children: [
               /* @__PURE__ */ jsxs6(SelectTrigger, { "aria-label": label, title: label, className: "tabular-nums", children: [
-                /* @__PURE__ */ jsx9("span", { className: "@md:hidden", children: pageSize }),
-                /* @__PURE__ */ jsx9("span", { className: "hidden @md:inline", children: labels.pageSizeValue(pageSize) })
+                /* @__PURE__ */ jsx8("span", { className: "@md:hidden", children: pageSize }),
+                /* @__PURE__ */ jsx8("span", { className: "hidden @md:inline", children: labels.pageSizeValue(pageSize) })
               ] }),
-              /* @__PURE__ */ jsx9(SelectContent, { align: "end", position: "popper", children: LIST_PAGE_SIZES.map((size) => /* @__PURE__ */ jsx9(SelectItem, { value: String(size), className: "tabular-nums", children: labels.pageSizeValue(size) }, size)) })
+              /* @__PURE__ */ jsx8(SelectContent, { align: "end", position: "popper", children: LIST_PAGE_SIZES.map((size) => /* @__PURE__ */ jsx8(SelectItem, { value: String(size), className: "tabular-nums", children: labels.pageSizeValue(size) }, size)) })
             ] })
           ] })
         ]
@@ -1120,29 +1044,6 @@ import { useMemo as useMemo2 } from "react";
 // src/prefs/useListPrefs.ts
 import { useCallback, useEffect as useEffect2, useMemo, useRef as useRef2, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-
-// src/lib/safeStorage.ts
-var safeStorage = {
-  getItem(key) {
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  },
-  setItem(key, value) {
-    try {
-      localStorage.setItem(key, value);
-    } catch {
-    }
-  },
-  removeItem(key) {
-    try {
-      localStorage.removeItem(key);
-    } catch {
-    }
-  }
-};
 
 // src/prefs/stores.ts
 var localOnlyListPrefsStore = Object.freeze({
@@ -1445,8 +1346,6 @@ function useSupabaseListPrefsStore(client, { table, onError } = {}) {
 }
 
 export {
-  safeStorage,
-  cn,
   ColumnsMenu,
   MIN_COLUMN_WIDTH,
   useColumnResize,

@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup'
 
 // Dos builds:
-// - Cliente (".", "./list", "./version"): hooks y componentes. Llevan el banner
+// - Cliente (".", "./list", "./version", "./auth"): hooks y componentes. Llevan el banner
 //   `"use client"` para que Next (App Router) los trate como módulos de cliente;
 //   en Vite es una cadena suelta sin efecto. `splitting` comparte los chunks
 //   entre entradas, así el estado de módulo (caché de preferencias, versión ya
@@ -28,6 +28,7 @@ export default defineConfig([
       index: 'src/index.ts',
       list: 'src/list.ts',
       version: 'src/version.ts',
+      auth: 'src/auth.ts',
     },
     format: ['esm'],
     target: 'es2022',
