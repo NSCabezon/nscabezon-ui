@@ -7,7 +7,7 @@ import {
 import {
   useLabels,
   useUi
-} from "./chunk-52PSSJC4.js";
+} from "./chunk-NU4QW2R5.js";
 
 // src/list/responsive-list.tsx
 import "react";
@@ -471,7 +471,7 @@ function ResponsiveList({
               columnsMenu && /* @__PURE__ */ jsx5("col", { style: { width: 44 } })
             ] }),
             /* @__PURE__ */ jsx5(TableHeader, { className: stickyHeader ? "[&_tr]:border-b-0" : void 0, children: /* @__PURE__ */ jsxs3(TableRow, { className: stickyHeader ? "hover:bg-transparent" : void 0, children: [
-              leading && /* @__PURE__ */ jsx5(TableHead, { className: cn("w-10", stickyHeadClass), style: stickyHeadStyle }),
+              leading && /* @__PURE__ */ jsx5(TableHead, { className: cn("w-10", stickyHeadClass), style: stickyHeadStyle, children: /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.selectColumn }) }),
               visibleColumns.map((col) => /* @__PURE__ */ jsxs3(
                 TableHead,
                 {
@@ -489,6 +489,7 @@ function ResponsiveList({
                   "aria-sort": ariaSort(col),
                   children: [
                     renderHead(col),
+                    col.action && !col.header && /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.actionsColumn }),
                     resizable && col.key !== lastVisibleKey && resizeHandle(col.key)
                   ]
                 },
@@ -1025,10 +1026,18 @@ function ListFooter({
               }
             ),
             !isEmpty && /* @__PURE__ */ jsxs6(Select, { value: String(pageSize), onValueChange: (v) => onPageSizeChange(Number(v)), children: [
-              /* @__PURE__ */ jsxs6(SelectTrigger, { "aria-label": label, title: label, className: "tabular-nums", children: [
-                /* @__PURE__ */ jsx8("span", { className: "@md:hidden", children: pageSize }),
-                /* @__PURE__ */ jsx8("span", { className: "hidden @md:inline", children: labels.pageSizeValue(pageSize) })
-              ] }),
+              /* @__PURE__ */ jsxs6(
+                SelectTrigger,
+                {
+                  "aria-label": label,
+                  title: label,
+                  className: "tabular-nums pointer-coarse:min-h-11 pointer-coarse:min-w-11",
+                  children: [
+                    /* @__PURE__ */ jsx8("span", { className: "@md:hidden", children: pageSize }),
+                    /* @__PURE__ */ jsx8("span", { className: "hidden @md:inline", children: labels.pageSizeValue(pageSize) })
+                  ]
+                }
+              ),
               /* @__PURE__ */ jsx8(SelectContent, { align: "end", position: "popper", children: LIST_PAGE_SIZES.map((size) => /* @__PURE__ */ jsx8(SelectItem, { value: String(size), className: "tabular-nums", children: labels.pageSizeValue(size) }, size)) })
             ] })
           ] })

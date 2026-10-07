@@ -29,13 +29,13 @@ import {
   usePagination,
   useSupabaseListPrefsStore,
   visibleColumnsOf
-} from "./chunk-CLL4E2AX.js";
+} from "./chunk-W5ATZ6E4.js";
 import {
   VERSION_FOCUS_THROTTLE_MS,
   VERSION_POLL_INTERVAL_MS,
   fetchVersionJson,
   useVersionCheck
-} from "./chunk-MAEMN6LP.js";
+} from "./chunk-Z4YMQYTU.js";
 import {
   AppleIcon,
   DEFAULT_LAST_AUTH_METHOD_KEY,
@@ -43,7 +43,7 @@ import {
   OAuthButtons,
   getLastAuthMethod,
   setLastAuthMethod
-} from "./chunk-XZJ47BBC.js";
+} from "./chunk-KZLM46S3.js";
 import {
   cn,
   safeStorage
@@ -53,7 +53,7 @@ import {
   defaultLabels,
   useLabels,
   useUi
-} from "./chunk-52PSSJC4.js";
+} from "./chunk-NU4QW2R5.js";
 export {
   AppleIcon,
   ColumnsMenu,

@@ -375,7 +375,9 @@ export function ResponsiveList<T>({
           <TableHeader className={stickyHeader ? '[&_tr]:border-b-0' : undefined}>
             <TableRow className={stickyHeader ? 'hover:bg-transparent' : undefined}>
               {leading && (
-                <TableHead className={cn('w-10', stickyHeadClass)} style={stickyHeadStyle} />
+                <TableHead className={cn('w-10', stickyHeadClass)} style={stickyHeadStyle}>
+                  <span className="sr-only">{labels.selectColumn}</span>
+                </TableHead>
               )}
               {visibleColumns.map((col) => (
                 <TableHead
@@ -394,6 +396,11 @@ export function ResponsiveList<T>({
                   aria-sort={ariaSort(col)}
                 >
                   {renderHead(col)}
+                  {/* Columna de acciones sin cabecera visible: un <th> vacío no
+                      tiene nombre accesible (axe empty-table-header). */}
+                  {col.action && !col.header && (
+                    <span className="sr-only">{labels.actionsColumn}</span>
+                  )}
                   {resizable && col.key !== lastVisibleKey && resizeHandle(col.key)}
                 </TableHead>
               ))}

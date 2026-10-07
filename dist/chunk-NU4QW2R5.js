@@ -23,7 +23,9 @@ var defaultLabels = {
   oauthDivider: "o contin\xFAa con",
   oauthGoogle: "Continuar con Google",
   oauthApple: "Continuar con Apple",
-  lastUsed: "\xDAltima vez"
+  lastUsed: "\xDAltima vez",
+  actionsColumn: "Acciones",
+  selectColumn: "Seleccionar"
 };
 function DefaultLink({ href, ...props }) {
   return /* @__PURE__ */ jsx("a", { href, ...props });

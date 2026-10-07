@@ -3,6 +3,20 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.2.1] - 2026-10-08
+
+### Corregido
+
+- A11Y-7: `ResponsiveList` ya no pinta `<th>` vacíos. La columna `leading`
+  lleva un `sr-only` con `labels.selectColumn` y las columnas `action` sin
+  `header` uno con `labels.actionsColumn`.
+- A11Y-7b: el selector «Filas por página» de `ListFooter` mide 44 px en
+  puntero táctil (`pointer-coarse:min-h-11 min-w-11`).
+
+### Añadido
+
+- `Labels`: `actionsColumn` («Acciones») y `selectColumn` («Seleccionar»).
+
 ## [0.2.0] - 2026-09-27
 
 ### Añadido

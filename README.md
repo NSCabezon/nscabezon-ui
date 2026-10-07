@@ -39,13 +39,13 @@ apps definen.
 ## Instalación
 
 ```bash
-npm install "git+https://github.com/NSCabezon/nscabezon-ui.git#v0.2.0"
+npm install "git+https://github.com/NSCabezon/nscabezon-ui.git#v0.2.1"
 ```
 
 En `package.json` queda así:
 
 ```json
-"@nscabezon/ui": "git+https://github.com/NSCabezon/nscabezon-ui.git#v0.2.0"
+"@nscabezon/ui": "git+https://github.com/NSCabezon/nscabezon-ui.git#v0.2.1"
 ```
 
 Usa la URL `git+https://` (no `github:`): el repo es público y así la

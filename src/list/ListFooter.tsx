@@ -182,7 +182,8 @@ export function ListFooter({
           />
           {!isEmpty && (
             <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
-              <SelectTrigger aria-label={label} title={label} className="tabular-nums">
+              <SelectTrigger aria-label={label} title={label}
+                className="tabular-nums pointer-coarse:min-h-11 pointer-coarse:min-w-11">
                 <span className="@md:hidden">{pageSize}</span>
                 <span className="hidden @md:inline">
                   {labels.pageSizeValue(pageSize)}

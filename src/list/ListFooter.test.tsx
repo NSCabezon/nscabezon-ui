@@ -238,6 +238,15 @@ describe('ListFooter (auditoría 06/09)', () => {
   })
 })
 
+describe('ListFooter (táctil)', () => {
+  it('A11Y-7b: el selector de filas por página mide 44 px en puntero táctil', () => {
+    renderFooter({ total: 100, pageSize: 25, page: 1 })
+    const cls = pageSizeTrigger().className
+    expect(cls).toContain('pointer-coarse:min-h-11')
+    expect(cls).toContain('pointer-coarse:min-w-11')
+  })
+})
+
 describe('ListFooter (textos)', () => {
   it('los textos salen del UiProvider y la prop `labels` gana', () => {
     act(() => {

@@ -1,4 +1,4 @@
-import { b as Labels } from './UiProvider-DVsGVgni.js';
+import { b as Labels } from './UiProvider-CmLmG6Bj.js';
 import 'react';
 
 declare const VERSION_POLL_INTERVAL_MS: number;

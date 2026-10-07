@@ -44,6 +44,10 @@ export type Labels = {
   oauthApple: string
   /** Etiqueta «Última vez» sobre el método de acceso usado la última vez. */
   lastUsed: string
+  /** Nombre accesible (sr-only) de la cabecera de una columna `action` sin `header`. */
+  actionsColumn: string
+  /** Nombre accesible (sr-only) de la cabecera de la columna `leading` (selección). */
+  selectColumn: string
 }
 
 export const defaultLabels: Labels = {
@@ -68,6 +72,8 @@ export const defaultLabels: Labels = {
   oauthGoogle: 'Continuar con Google',
   oauthApple: 'Continuar con Apple',
   lastUsed: 'Última vez',
+  actionsColumn: 'Acciones',
+  selectColumn: 'Seleccionar',
 }
 
 /** Props mínimas que el paquete pasa al `Link` de la app. */

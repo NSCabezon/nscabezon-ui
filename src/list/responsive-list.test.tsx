@@ -533,6 +533,42 @@ describe('ResponsiveList (opt-in)', () => {
     expect(menuHead().querySelector('.sr-only')!.textContent).toBe('Spalten')
   })
 
+  it('A11Y-7: las cabeceras de acciones y de selección llevan nombre sr-only', () => {
+    render(
+      <ResponsiveList
+        columns={[
+          { key: 'name', header: 'Nombre', primary: true, cell: (r) => r.id },
+          { key: 'act', header: '', cell: () => <span>x</span>, action: true },
+        ]}
+        data={rows}
+        rowKey={(r) => r.id}
+        leading={() => <input type="checkbox" aria-label="fila" />}
+      />,
+    )
+    const hs = heads()
+    expect(hs[0].querySelector('.sr-only')!.textContent).toBe('Seleccionar')
+    expect(hs[2].querySelector('.sr-only')!.textContent).toBe('Acciones')
+    for (const h of hs) expect(h.textContent!.trim()).not.toBe('')
+  })
+
+  it('A11Y-7: los nombres de esas cabeceras se pueden traducir con `labels`', () => {
+    render(
+      <ResponsiveList
+        columns={[
+          { key: 'name', header: 'Name', primary: true, cell: (r) => r.id },
+          { key: 'act', header: '', cell: () => <span>x</span>, action: true },
+        ]}
+        data={rows}
+        rowKey={(r) => r.id}
+        leading={() => <input type="checkbox" aria-label="row" />}
+        labels={{ actionsColumn: 'Actions', selectColumn: 'Select' }}
+      />,
+    )
+    const hs = heads()
+    expect(hs[0].textContent).toBe('Select')
+    expect(hs[2].textContent).toBe('Actions')
+  })
+
   it('por defecto los textos son en español', () => {
     render(
       <ResponsiveList
