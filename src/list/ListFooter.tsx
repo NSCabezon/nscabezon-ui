@@ -171,7 +171,7 @@ export function ListFooter({
           {showCountOnly && (
             <span
               data-list-count=""
-              className="inline-block text-center text-sm text-muted-foreground tabular-nums"
+              className="my-[2pt] inline-block text-center text-sm text-muted-foreground tabular-nums"
               style={{ minWidth: stableCountMinWidth(status, 6) }}
             >
               {status}
