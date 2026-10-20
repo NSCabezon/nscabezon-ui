@@ -162,35 +162,45 @@ describe('useColumnResize', () => {
     expect(classes).not.toMatch(/(^|\s|:)opacity-0/)
   })
 
-  // v0.5.0: una tabla a mano entra en el modo de columna flexible pasando
-  // `columns` y marcando sus <th> con `data-column-width-key`.
-  describe('con `columns` (columna flexible)', () => {
-    const W: Record<string, number> = { desc: 300, qty: 80, price: 100 }
-    function FlexHarness({ onChange }: { onChange: (w: Record<string, number>) => void }) {
-      const { colWidth, resizeHandle, flexKey } = useColumnResize({
-        columnWidths: {},
+  // v0.9.0: con `columns` (tabla a mano o ResponsiveList) el modelo es «como
+  // Excel + relleno»: arrastrar cambia SOLO esa columna.
+  describe('con `columns` (como Excel + relleno)', () => {
+    type Col = { key: string; width?: number; fill?: boolean; flex?: boolean; minWidth?: number }
+    function ExcelHarness({
+      columns,
+      widths = {},
+      onChange,
+      measured = {},
+    }: {
+      columns: Col[]
+      widths?: Record<string, number>
+      onChange: (w: Record<string, number>) => void
+      measured?: Record<string, number>
+    }) {
+      const { colWidth, resizeHandle, fillKey, flexKey, tableStyle } = useColumnResize({
+        columnWidths: widths,
         onColumnWidthsChange: onChange,
-        columns: [{ key: 'desc' }, { key: 'qty', width: 80 }, { key: 'price', width: 100 }],
+        columns,
       })
       return (
-        <table>
+        <table data-testid="t" style={tableStyle()}>
           <colgroup>
-            {['desc', 'qty', 'price'].map((k) => (
-              <col key={k} data-testid={`col-${k}`} style={{ width: colWidth(k) }} />
+            {columns.map((c) => (
+              <col key={c.key} data-testid={`col-${c.key}`} style={{ width: colWidth(c.key) }} />
             ))}
           </colgroup>
           <thead>
-            <tr data-flex={flexKey}>
-              {['desc', 'qty', 'price'].map((k) => (
+            <tr data-fill={fillKey} data-flex={flexKey}>
+              {columns.map((c) => (
                 <th
-                  key={k}
-                  data-column-width-key={k}
+                  key={c.key}
+                  data-column-width-key={c.key}
                   ref={(el) => {
-                    if (el) el.getBoundingClientRect = () => ({ width: W[k] }) as DOMRect
+                    if (el) el.getBoundingClientRect = () => ({ width: measured[c.key] ?? 0 }) as DOMRect
                   }}
                 >
-                  {k}
-                  {resizeHandle(k)}
+                  {c.key}
+                  {resizeHandle(c.key)}
                 </th>
               ))}
             </tr>
@@ -200,38 +210,111 @@ describe('useColumnResize', () => {
     }
     const colW = (k: string) =>
       (container.querySelector(`[data-testid="col-${k}"]`) as HTMLElement).style.width
+    const tableEl = () => container.querySelector('[data-testid="t"]') as HTMLElement
+    function dragKey(i: number, dx: number, { release = true } = {}) {
+      const h = container.querySelectorAll('th')[i].querySelector('span')!
+      act(() => {
+        h.dispatchEvent(new FakePointerEvent('pointerdown', { button: 0, clientX: 0 }))
+      })
+      act(() => {
+        h.dispatchEvent(new FakePointerEvent('pointermove', { clientX: dx }))
+      })
+      if (release) {
+        act(() => {
+          h.dispatchEvent(new FakePointerEvent('pointerup', { clientX: dx }))
+        })
+      }
+    }
 
-    it('la flexible (primera sin `width`) va sin ancho; arrastrar qty solo la mueve a ella', () => {
-      const onChange = vi.fn()
-      act(() => root.render(<FlexHarness onChange={onChange} />))
-      expect(container.querySelector('tr')!.getAttribute('data-flex')).toBe('desc')
-      expect(colW('desc')).toBe('')
-      const qty = container.querySelectorAll('th')[1].querySelector('span')!
-      act(() => {
-        qty.dispatchEvent(new FakePointerEvent('pointerdown', { button: 0, clientX: 0 }))
-      })
-      act(() => {
-        qty.dispatchEvent(new FakePointerEvent('pointermove', { clientX: 40 }))
-      })
-      expect([colW('desc'), colW('qty'), colW('price')]).toEqual(['', '120px', '100px'])
-      act(() => {
-        qty.dispatchEvent(new FakePointerEvent('pointerup', { clientX: 40 }))
-      })
-      expect(onChange).toHaveBeenCalledWith({ qty: 120 })
+    const cols: Col[] = [
+      { key: 'client' },
+      { key: 'desc', fill: true },
+      { key: 'date', width: 120 },
+    ]
+
+    it('todas con ancho salvo la de relleno; la tabla: 100 % con la suma de mínimo', () => {
+      act(() => root.render(<ExcelHarness columns={cols} onChange={vi.fn()} />))
+      expect([colW('client'), colW('desc'), colW('date')]).toEqual(['160px', '', '120px'])
+      // 160 (client, por defecto) + 160 (base del relleno) + 120.
+      expect(tableEl().style.width).toBe('100%')
+      expect(tableEl().style.minWidth).toBe('440px')
     })
 
-    it('la flexible SIN columna libre compensa con su vecina de la derecha', () => {
+    it('arrastrar la fecha cambia SOLO la fecha, aunque el relleno esté al mínimo', () => {
       const onChange = vi.fn()
-      act(() => root.render(<FlexHarness onChange={onChange} />))
-      const desc = container.querySelectorAll('th')[0].querySelector('span')!
+      act(() =>
+        root.render(
+          <ExcelHarness columns={cols} onChange={onChange} measured={{ client: 160, desc: 64, date: 120 }} />,
+        ),
+      )
+      dragKey(2, 300, { release: false })
+      expect([colW('client'), colW('desc'), colW('date')]).toEqual(['160px', '', '420px'])
+      expect(tableEl().style.minWidth).toBe('740px')
       act(() => {
-        desc.dispatchEvent(new FakePointerEvent('pointerdown', { button: 0, clientX: 0 }))
+        container
+          .querySelectorAll('th')[2]
+          .querySelector('span')!
+          .dispatchEvent(new FakePointerEvent('pointerup', { clientX: 300 }))
       })
-      act(() => {
-        desc.dispatchEvent(new FakePointerEvent('pointerup', { clientX: -50 }))
-      })
-      // desc 300 → 250 (sigue sin guardarse); qty, la vecina, 80 → 130.
-      expect(onChange).toHaveBeenCalledWith({ qty: 130 })
+      // Solo se guarda la arrastrada: nada de fijar otras en px.
+      expect(onChange).toHaveBeenCalledWith({ date: 420 })
+    })
+
+    it('arrastrar el relleno parte de su ancho pintado y guarda su base', () => {
+      const onChange = vi.fn()
+      act(() =>
+        root.render(<ExcelHarness columns={cols} onChange={onChange} measured={{ desc: 500 }} />),
+      )
+      dragKey(1, 40)
+      expect(onChange).toHaveBeenCalledWith({ desc: 540 })
+    })
+
+    it('sin relleno: la tabla mide la suma exacta (hueco a la derecha)', () => {
+      act(() =>
+        root.render(
+          <ExcelHarness columns={[{ key: 'a', width: 100 }, { key: 'b' }]} onChange={vi.fn()} />,
+        ),
+      )
+      expect([colW('a'), colW('b')]).toEqual(['100px', '160px'])
+      expect(tableEl().style.width).toBe('260px')
+      expect(tableEl().style.minWidth).toBe('')
+    })
+
+    it('`flex` sigue funcionando como alias de `fill`', () => {
+      act(() =>
+        root.render(
+          <ExcelHarness columns={[{ key: 'a', width: 100 }, { key: 'b', flex: true }]} onChange={vi.fn()} />,
+        ),
+      )
+      const tr = container.querySelector('tr')!
+      expect(tr.getAttribute('data-fill')).toBe('b')
+      expect(tr.getAttribute('data-flex')).toBe('b')
+      expect(colW('b')).toBe('')
+    })
+
+    it('`minWidth`: un ancho guardado por debajo se pinta al suelo y el arrastre no baja de él', () => {
+      const onChange = vi.fn()
+      const c: Col[] = [{ key: 'desc', fill: true }, { key: 'date', width: 135, minWidth: 131 }, { key: 'st', width: 200 }]
+      act(() => root.render(<ExcelHarness columns={c} widths={{ date: 105 }} onChange={onChange} />))
+      expect(colW('date')).toBe('131px')
+      dragKey(1, -80)
+      expect(onChange).toHaveBeenCalledWith({ date: 131 })
+    })
+
+    it('sin `minWidth`, el suelo es 64 y prefs viejas raras se respetan por encima', () => {
+      const onChange = vi.fn()
+      act(() =>
+        root.render(
+          <ExcelHarness
+            columns={[{ key: 'a', width: 100 }, { key: 'b', width: 100 }, { key: 'c' }]}
+            widths={{ a: 10, b: 777 }}
+            onChange={onChange}
+          />,
+        ),
+      )
+      expect([colW('a'), colW('b'), colW('c')]).toEqual([`${MIN_COLUMN_WIDTH}px`, '777px', '160px'])
+      dragKey(0, -500)
+      expect(onChange).toHaveBeenCalledWith({ a: MIN_COLUMN_WIDTH, b: 777 })
     })
   })
 })

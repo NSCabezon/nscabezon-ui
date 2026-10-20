@@ -19,10 +19,13 @@ export {
 } from './prefs/listPrefs'
 export {
   DEFAULT_ACTION_COLUMN_WIDTH,
-  FLEX_MIN_COLUMN_WIDTH,
-  flexAbsorberKey,
+  DEFAULT_COLUMN_WIDTH,
+  MIN_COLUMN_WIDTH,
+  columnFloor,
+  isFillColumn,
   resolveColumnWidth,
-  resolveFlexColumnKey,
+  resolveFillColumnKey,
+  tableSizing,
   visibleColumnsOf,
   type SizedColumn,
 } from './list/columnWidth'

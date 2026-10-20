@@ -13,7 +13,7 @@ hay `prepare`: instalar no compila nada).
 | Área | Exportaciones |
 | --- | --- |
 | Integración | `UiProvider`, `useUi`, `useLabels`, `defaultLabels`, tipos `Labels`, `UiLinkProps` |
-| Listados | `ResponsiveList` (tabla en escritorio / tarjetas en móvil, orden servidor, anchos arrastrables, columnas ocultas, cabecera fija, filas teñidas, `rowHref`, modo compacto, columnas reordenables), `ColumnsMenu`, `useListCompact`, `orderColumns`, `moveColumn`, `useColumnResize`, `MIN_COLUMN_WIDTH`, `TOUCH_TEXT_LINK`, `rowTone`, `TINTED_ROW_CLASS`, `resolveColumnWidth`, `visibleColumnsOf`, `DEFAULT_ACTION_COLUMN_WIDTH`, `resolveFlexColumnKey`, `flexAbsorberKey`, `FLEX_MIN_COLUMN_WIDTH`, `COLUMN_WIDTH_KEY_ATTR` |
+| Listados | `ResponsiveList` (tabla en escritorio / tarjetas en móvil, orden servidor, anchos arrastrables, columnas ocultas, cabecera fija, filas teñidas, `rowHref`, modo compacto, columnas reordenables), `ColumnsMenu`, `useListCompact`, `orderColumns`, `moveColumn`, `useColumnResize`, `MIN_COLUMN_WIDTH`, `TOUCH_TEXT_LINK`, `rowTone`, `TINTED_ROW_CLASS`, `resolveColumnWidth`, `visibleColumnsOf`, `DEFAULT_ACTION_COLUMN_WIDTH`, `DEFAULT_COLUMN_WIDTH`, `columnFloor`, `isFillColumn`, `resolveFillColumnKey`, `tableSizing`, `COLUMN_WIDTH_KEY_ATTR` |
 | Paginación | `Pagination`, `usePagination`, `DEFAULT_PAGE_SIZE`, `ListFooter` |
 | Estado de listado | `useListView` (preferencias + paginación, `paginated: false` y `compactable` opcionales), `useListColumns` (solo columnas), `useListPrefs` |
 | Preferencias | `ListPrefs`, `ListSort`, `normalizeListPrefs`, `listPrefsEqual`, `resolveListDefaults`, `LIST_PAGE_SIZES`, `DEFAULT_LIST_PAGE_SIZE`, `EMPTY_LIST_PREFS`, almacenes `useSupabaseListPrefsStore` (hook que sigue la sesión), `createSupabaseListPrefsStore` y `localOnlyListPrefsStore` |
@@ -280,32 +280,49 @@ const view = useListView('orders', {
     `ch`): pasar de 9 a 10 resultados o de página no mueve los botones; solo
     el texto se recentra dentro de su caja. Se prefirió a alinearlo a la
     izquierda para no cambiar la composición del pie.
-- Regla de anchos con `resizable`: la tabla llena siempre el ancho (sin
-  scroll lateral) y el espacio que sobra o falta lo absorbe UNA columna, la
-  **flexible**. Al arrastrar el borde de una columna solo cambian ella y la
-  flexible; las demás no se mueven (las que iban sin ancho se fijan en px al
-  empezar el arrastre y se guardan así). Al cambiar el ancho de la ventana
-  solo cambia la flexible: nunca se guarda en px (un ancho guardado para ella
-  se ignora y se limpia).
-  - Cuál es (`resolveFlexColumnKey`, entre las columnas visibles): la marcada
-    con `flex: true`; si ninguna, la `primary` si no tiene `width`; si no, la
-    primera columna no-`action` sin `width`. Si todas tienen `width`, no hay
-    flexible y arrastrar cambia solo la arrastrada (table-fixed reparte, como
-    antes de v0.5.0).
-  - Mínimo: la flexible no baja de su `minWidth` (por defecto
-    `FLEX_MIN_COLUMN_WIDTH`, 96 px); llegado ahí, la arrastrada deja de
-    crecer. Las demás, de `MIN_COLUMN_WIDTH` (64 px).
-  - Arrastrar la propia flexible (`flexAbsorberKey`): compensa la última
-    columna no-`action` sin `width`; si no hay, su vecina de la derecha. Al
-    soltar se guarda la que compensó y la flexible vuelve a ir sin ancho.
-  - Lo normal: `width` en todas las columnas de datos salvo la de texto
-    principal. Una `action` con botón de texto necesita `width` o `header`
-    (sin ellos cae a 56 px). Doble clic en el asa y «Restablecer columnas»
-    devuelven los anchos de serie.
+- Regla de anchos con `resizable` (v0.9.0, «como Excel + relleno»):
+  - Arrastrar el borde de una columna cambia **solo esa columna**. Ninguna
+    otra se mueve ni encoge, y el único tope es el suelo de la propia columna.
+  - Todas las columnas tienen ancho efectivo (`resolveColumnWidth`): el
+    guardado en `columnWidths`, si no su `width`, si no
+    `DEFAULT_COLUMN_WIDTH` (160 px; las `action` sin cabecera,
+    `DEFAULT_ACTION_COLUMN_WIDTH`, 56 px).
+  - La tabla mide **máx(ancho del contenedor, suma de anchos)**. Si la suma
+    no cabe, scroll horizontal (el contenedor de la tabla, o el contenedor de
+    scroll del consumidor con `stickyHeader`).
+  - Columna de **relleno**: una por tabla, marcada con `fill: true` (si hay
+    varias, la primera). Si sobra sitio, se estira para ocuparlo; nunca baja
+    de su ancho base (su `width`/guardado/160), que es el que cuenta en la
+    suma y el que se guarda si la arrastras. **Sin ninguna marcada no hay
+    relleno**: queda hueco a la derecha. No se elige sola: márcala en la
+    columna de texto principal (descripción, cliente…), nunca en un Nº.
+    `flex: true` (v0.5.0) sigue valiendo como alias deprecado.
+  - Suelo (`columnFloor`): `minWidth` de la columna o `MIN_COLUMN_WIDTH`
+    (64 px; menos si su propio ancho por defecto es menor, p. ej. un icono).
+    Un ancho guardado por debajo se pinta al suelo.
+  - Al estrechar la ventana no cambia nada salvo que el relleno pierde su
+    estiramiento; si no cabe, scroll. Doble clic en el asa y «Restablecer
+    columnas» devuelven los anchos de serie. La última columna no lleva asa.
+  - Técnica (`tableSizing`): `table-fixed` + `<colgroup>` con el ancho de
+    cada columna en px. Con relleno, su `<col>` va **sin** ancho y la tabla
+    lleva `width: 100%; min-width: <suma>px`: table-fixed da al relleno todo
+    lo que sobra (tabla − resto), que nunca es menor que su base porque la
+    tabla no baja de la suma. Sin relleno, `width: <suma>px` exacta (con
+    `100%`, table-fixed repartiría el sobrante entre todas).
   - Tabla a mano: `useColumnResize({ columnWidths, onColumnWidthsChange,
-    columns })` con las columnas visibles en orden, `colWidth(key)` en cada
-    `<col>` y `data-column-width-key={key}` en cada `<th>` (de ahí se miden).
-    Sin `columns`, el hook se comporta como antes.
+    columns })` con las columnas visibles en orden; `colWidth(key)` en cada
+    `<col>`, `tableStyle(extraPx)` en la `<table>` (con `table-fixed`) y
+    `data-column-width-key={key}` en cada `<th>`. Devuelve también
+    `fillKey` y `totalWidth`. Sin `columns`, el hook se comporta como antes
+    (cambia la arrastrada, sin estilo de tabla).
+- Fondo de la cabecera y del botón del menú de columnas (v0.9.0): el botón no
+  tiene color propio (`bg-inherit`, igual que `<th>`, `<tr>` y `<thead>`), así
+  que toma el fondo real de su cabecera: el `bg-*` de `headClassName`, el de
+  la tarjeta… y si la cabecera es transparente, él también. La cabecera fija
+  (`stickyHeader`) sí es opaca: `var(--list-head-bg)` si la fijas (en el
+  `className` de la lista o un ancestro, p. ej.
+  `[--list-head-bg:var(--color-muted)]`); si no, `--color-card` dentro de un
+  `.bg-card` (automático); si no, `--color-background`.
 
 ## Preferencias de listado
 

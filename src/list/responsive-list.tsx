@@ -54,23 +54,24 @@ export type ResponsiveColumn<T> = {
   headClassName?: string
   // Extra classes for the desktop <td>.
   cellClassName?: string
-  // Ancho por defecto (px) en el <colgroup> de `resizable` mientras el usuario
-  // no haya arrastrado esta columna (`columnWidths` siempre gana). Las
-  // columnas `action` SIN cabecera (icono suelto) lo ignoran: ver
-  // `DEFAULT_ACTION_COLUMN_WIDTH`; una `action` con cabecera es un botón con
-  // texto y necesita su propio `width` (o se queda sin <col> width y comparte
-  // el sobrante). Para que una columna absorba el espacio sobrante de
-  // table-fixed, no le pongas `width` — ver la nota junto al <colgroup>.
+  // Ancho (px) de la columna en `resizable` mientras el usuario no la haya
+  // arrastrado (`columnWidths` siempre gana). Sin `width`: las `action` SIN
+  // cabecera (icono suelto) caen a `DEFAULT_ACTION_COLUMN_WIDTH` (56) y el
+  // resto a `DEFAULT_COLUMN_WIDTH` (160). En la de relleno (`fill`) es su
+  // ancho BASE: el que tiene si la tabla no cabe.
   width?: number
-  // Columna flexible de `resizable` (v0.5.0): la única que gana o pierde ancho
-  // cuando el usuario arrastra otra columna o cambia el ancho de la ventana;
-  // las demás no se mueven. Sin ninguna marcada: la `primary` si no tiene
-  // `width`; si no, la primera columna no-`action` sin `width` (ver
-  // `resolveFlexColumnKey`). La flexible nunca lleva <col> width (su `width`,
-  // si lo tiene, se ignora) ni se guarda en `columnWidths`.
+  // Columna de relleno de `resizable` (v0.9.0), UNA por tabla (si hay varias
+  // marcadas, la primera): si las columnas no llenan el contenedor, ella se
+  // estira para ocupar el hueco (solo crece, nunca baja de su ancho base). Sin
+  // ninguna marcada no hay relleno: queda hueco a la derecha. No se elige
+  // sola: márcala en la columna de texto principal (descripción, cliente…),
+  // nunca en un Nº.
+  fill?: boolean
+  // @deprecated v0.9.0: alias de `fill` (era la «columna flexible» de v0.5.0).
   flex?: boolean
-  // Mínimo (px) de la columna FLEXIBLE al arrastrar otra: llegado ahí, la
-  // arrastrada deja de crecer. Por defecto `FLEX_MIN_COLUMN_WIDTH` (96).
+  // Suelo (px) de la columna en `resizable` (por defecto 64, o su propio
+  // ancho si es menor): ni el arrastre ni un ancho guardado en `columnWidths`
+  // la pintan por debajo (una fecha guardada a 105 px que cortaba «19/10/2…»).
   minWidth?: number
 }
 
@@ -125,10 +126,12 @@ export type ResponsiveListProps<T> = {
   // Anchos de columna (opt-in). Con `resizable` la tabla pasa a `table-fixed`
   // con un <colgroup> y cada <th> menos el último lleva un asa de arrastre en
   // su borde derecho. `columnWidths` es el mapa persistido (px por `key`);
-  // `onColumnWidthsChange` recibe el mapa completo al soltar (mínimo 64px) y
-  // sin esa clave al hacer doble click en el asa. Desde v0.5.0 la diferencia
-  // de un arrastre la absorbe solo la columna flexible (ver `flex`), que nunca
-  // entra en el mapa.
+  // `onColumnWidthsChange` recibe el mapa completo al soltar (con el suelo de
+  // la columna, ver `minWidth`) y sin esa clave al hacer doble click en el
+  // asa. Modelo «como Excel + relleno» (v0.9.0): arrastrar cambia SOLO esa
+  // columna; la tabla mide máx(contenedor, suma de anchos) y, si la suma no
+  // cabe, el contenedor hace scroll horizontal; el hueco, si sobra, lo ocupa
+  // la columna `fill` (o queda a la derecha si no hay).
   resizable?: boolean
   columnWidths?: Record<string, number>
   onColumnWidthsChange?: (widths: Record<string, number>) => void
@@ -187,6 +190,30 @@ export type ResponsiveListProps<T> = {
   // Textos propios (menú de columnas); ganan al `UiProvider`.
   labels?: Partial<Labels>
 }
+
+// Fondo de la cabecera (v0.9.0). El botón del menú de columnas iba con
+// `bg-background` fijo y salía de otro color en cuanto la cabecera no era el
+// fondo de la página (una tarjeta `bg-card`, una cabecera teñida, el modo
+// oscuro de un panel…). Ahora:
+// - El botón NO tiene color propio: `bg-inherit` desde su <th>, y <th>, <tr>
+//   y <thead> también heredan (`HEAD_INHERIT`). El fondo que pinta es el
+//   real de la fila de cabecera: el que el consumidor ponga en `headClassName`,
+//   en el <tr>/<thead> o en la propia lista; si la cabecera es transparente
+//   sobre la página, el botón también (sin caja de color). Va también sobre
+//   un `:hover` del <tr> de cabecera.
+// - La cabecera FIJA (`stickyHeader`) sí necesita fondo opaco (el contenido
+//   pasa por debajo al hacer scroll): `HEAD_BG`, una variable con respaldo:
+//   1. `--list-head-bg`, si el consumidor la fija (en el `className` de la
+//      lista o en un ancestro), p.ej. `[--list-head-bg:var(--color-muted)]`;
+//   2. `--list-auto-head-bg`, que la lista pone a `--color-card` cuando está
+//      dentro de un `.bg-card` (`AUTO_HEAD_BG`, en su raíz);
+//   3. `--color-background`, el de siempre (sigue al modo oscuro).
+//   El botón la hereda de su <th> como cualquier otro fondo.
+// Un `headClassName` con su propio `bg-*` gana a los dos (va después en `cn`).
+const HEAD_INHERIT = 'bg-inherit'
+const HEAD_BG =
+  'bg-[color:var(--list-head-bg,var(--list-auto-head-bg,var(--color-background)))]'
+const AUTO_HEAD_BG = '[.bg-card_&]:[--list-auto-head-bg:var(--color-card)]'
 
 // Área de toque de 44 px (WCAG 2.5.5) para un ENLACE DE TEXTO que es el título
 // de una tarjeta o fila —el nombre del cliente, la matrícula— sin cambiar la
@@ -338,11 +365,10 @@ export function ResponsiveList<T>({
 
   const orderedColumns = orderColumns(columns, columnOrder)
   const visibleColumns = visibleColumnsOf(orderedColumns, hiddenColumns)
-  // Redimensión de columnas (asa + ancho en vivo del arrastre + columna
-  // flexible): el hook se exporta aparte para tablas hechas a mano (ver
-  // useColumnResize). Recibe las columnas VISIBLES en su orden: la flexible y
-  // la que la compensa se eligen entre ellas.
-  const { colWidth, resizeHandle } = useColumnResize({
+  // Redimensión de columnas (asa + ancho en vivo del arrastre + relleno): el
+  // hook se exporta aparte para tablas hechas a mano (ver useColumnResize).
+  // Recibe las columnas VISIBLES en su orden: la suma y el relleno salen de ellas.
+  const { colWidth, tableStyle, resizeHandle } = useColumnResize({
     columnWidths,
     onColumnWidthsChange,
     columns: visibleColumns,
@@ -359,7 +385,7 @@ export function ResponsiveList<T>({
   // 1-2px por el que asoma el contenido al scrollear). En modo sticky la tabla
   // pasa a border-separate y los separadores se pintan en las celdas (th/td),
   // que sí se mueven con el sticky.
-  const stickyHeadClass = stickyHeader ? 'sticky z-10 border-b bg-background' : undefined
+  const stickyHeadClass = stickyHeader ? cn('sticky z-10 border-b', HEAD_BG) : undefined
   // top -1px: Chrome redondea posiciones fraccionales al scrollear y deja un
   // hilo de 1px entre el borde del contenedor y la celda sticky por el que
   // asoma el contenido; solapar 1px hacia arriba lo tapa (el contenedor clipa
@@ -501,7 +527,7 @@ export function ResponsiveList<T>({
     // Midiendo el contenedor, una lista metida en una tarjeta estrecha también
     // acierta — el caso de las sedes en Ajustes → Taller, con 302 px.
     <ListCompactProvider value={compact}>
-      <div className={cn('@container', className)}>
+      <div className={cn('@container', AUTO_HEAD_BG, className)}>
         {/* Desktop: table */}
         <div className={cn('hidden @3xl:block', menuOutsideScroll && 'relative')}>
           <Table
@@ -518,29 +544,32 @@ export function ResponsiveList<T>({
                 'border-separate border-spacing-0 [&_tbody_td]:border-b [&_tbody_tr:last-child_td]:border-b-0',
               resizable && 'table-fixed',
             )}
+            // Modelo «como Excel + relleno» (ver `tableSizing`): con columna
+            // `fill`, width 100% + min-width = suma (la <col> del relleno va
+            // sin ancho y table-fixed le da el sobrante, que nunca es menor
+            // que su base); sin relleno, width = suma exacta (hueco a la
+            // derecha). Si la suma supera el contenedor, scroll horizontal.
+            style={resizable ? tableStyle(leading ? 40 : 0) : undefined}
           >
             {resizable && (
               <colgroup>
                 {leading && <col style={{ width: 40 }} />}
-                {/* Regla para quien defina `columns`: la columna flexible (`flex`,
-                    o por defecto la `primary` sin `width`) va sin <col> width y
-                    es la que absorbe el espacio sobrante de table-fixed. Pon
-                    `width` al resto de columnas de datos (las que no lo tengan
-                    se fijan en px al primer arrastre); las `action` sin
-                    cabecera (icono suelto) no lo necesitan, ya caen a
-                    DEFAULT_ACTION_COLUMN_WIDTH — pero una `action` CON cabecera
-                    (botón con texto, p.ej. «Presupuesto de venta») SÍ necesita
-                    su `width` explícito o se recorta. */}
+                {/* Todas las <col> llevan su ancho efectivo (guardado, `width` o
+                    160 por defecto; las `action` sin cabecera, 56) salvo la de
+                    relleno (`fill`), que va sin ancho y se queda el sobrante.
+                    Una `action` CON cabecera (botón con texto, p.ej.
+                    «Presupuesto de venta») necesita su `width` explícito si
+                    160 no le basta. */}
                 {visibleColumns.map((col) => {
                   const width = colWidth(col.key)
                   return <col key={col.key} style={width ? { width } : undefined} />
                 })}
               </colgroup>
             )}
-            <TableHeader className={stickyHeader ? '[&_tr]:border-b-0' : undefined}>
-              <TableRow className={stickyHeader ? 'hover:bg-transparent' : undefined}>
+            <TableHeader className={cn(HEAD_INHERIT, stickyHeader && '[&_tr]:border-b-0')}>
+              <TableRow className={cn(HEAD_INHERIT, stickyHeader && 'hover:bg-transparent')}>
                 {leading && (
-                  <TableHead className={cn('w-10', stickyHeadClass)} style={stickyHeadStyle}>
+                  <TableHead className={cn('w-10', HEAD_INHERIT, stickyHeadClass)} style={stickyHeadStyle}>
                     <span className="sr-only">{labels.selectColumn}</span>
                   </TableHead>
                 )}
@@ -560,13 +589,14 @@ export function ResponsiveList<T>({
                         // dos, tailwind-merge se queda con la última y sticky es
                         // también contenedor del asa absoluta (y del indicador).
                         (resizable || draggable) && !staticHead && 'relative',
+                        HEAD_INHERIT,
                         fixedCellClass,
                         col.sortable && onSortChange && 'group',
                         draggable && 'cursor-grab active:cursor-grabbing',
                         dragKey === col.key && 'opacity-50',
+                        stickyHeadClass,
                         col.headClassName,
                         compactHeadClass,
-                        stickyHeadClass,
                         isLast && lastHeadPad && 'pr-10',
                         staticHead &&
                           side &&
@@ -604,7 +634,10 @@ export function ResponsiveList<T>({
                       {isLast && columnsMenu && (
                         <div
                           data-list-columns-menu-head
-                          className="absolute top-0 right-0 z-20 flex h-10 cursor-auto items-center bg-background px-1"
+                          className={cn(
+                            'absolute top-0 right-0 z-20 flex h-10 cursor-auto items-center px-1',
+                            HEAD_INHERIT,
+                          )}
                           // Ni origen ni destino de un arrastre de columnas.
                           onDragOver={(e) => e.stopPropagation()}
                           onDrop={(e) => e.stopPropagation()}

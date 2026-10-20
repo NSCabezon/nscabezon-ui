@@ -8,13 +8,16 @@ export {
 } from './list/responsive-list'
 export { ColumnsMenu, type ColumnsMenuColumn, type ColumnsMenuProps } from './list/columns-menu'
 export { useListCompact } from './list/listCompact'
-export { COLUMN_WIDTH_KEY_ATTR, MIN_COLUMN_WIDTH, useColumnResize } from './list/useColumnResize'
+export { COLUMN_WIDTH_KEY_ATTR, useColumnResize } from './list/useColumnResize'
 export {
   DEFAULT_ACTION_COLUMN_WIDTH,
-  FLEX_MIN_COLUMN_WIDTH,
-  flexAbsorberKey,
+  DEFAULT_COLUMN_WIDTH,
+  MIN_COLUMN_WIDTH,
+  columnFloor,
+  isFillColumn,
   resolveColumnWidth,
-  resolveFlexColumnKey,
+  resolveFillColumnKey,
+  tableSizing,
   visibleColumnsOf,
   type SizedColumn,
 } from './list/columnWidth'

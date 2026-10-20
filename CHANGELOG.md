@@ -3,6 +3,68 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.9.0] - 2026-10-20
+
+Nuevo modelo de anchos de `resizable`: **«como Excel + relleno»**. El de
+v0.5.0 («solo cambia la arrastrada y la flexible absorbe para mantener el
+100 %») se rompía: con dos columnas sin `width`, con la flexible en su mínimo
+(no podías ensanchar otra) y con anchos guardados del modelo anterior. Incluye
+lo que iba a ser 0.8.1 (suelo `minWidth` en cualquier columna), que no se
+publica por separado.
+
+> **Consumidores: marcad `fill: true` en la columna de texto principal de
+> cada listado `resizable`** (descripción, cliente, nombre…). **Nunca en el
+> Nº** ni en importes/fechas. Sin ninguna marcada no hay relleno y queda hueco
+> a la derecha; la `primary` ya no se elige sola. Revisad también las
+> columnas sin `width`: ahora miden 160 px por defecto (antes repartían el
+> sobrante); dadles `width` si 160 no les va.
+
+### Cambiado
+
+- Arrastrar el borde de una columna cambia **solo esa columna**: ninguna
+  otra se mueve ni encoge, y no hay tope por «otra columna en su mínimo».
+- La tabla mide máx(contenedor, suma de anchos): si la suma no cabe, scroll
+  horizontal (también con `stickyHeader`, en el contenedor de scroll del
+  consumidor; el botón del menú sigue anclado a la última cabecera).
+- Todas las columnas tienen ancho efectivo: guardado, `width` o
+  `DEFAULT_COLUMN_WIDTH` (160 px; las `action` sin cabecera, 56).
+  `resolveColumnWidth` devuelve siempre un número.
+- Técnica: `<col>` con ancho en px en todas salvo la de relleno; la tabla,
+  `width: 100%; min-width: <suma>` con relleno o `width: <suma>` sin él
+  (`tableSizing`).
+- `useColumnResize`: con `columns`, el arrastre solo guarda la arrastrada
+  (ya no fija en px las columnas sin ancho ni guarda la «que compensa»).
+  Devuelve `fillKey`, `totalWidth` y `tableStyle(extraPx)`.
+- Botón del menú de columnas (v0.6.0): sin `bg-background` fijo. Hereda
+  (`bg-inherit`, igual que `<th>`, `<tr>` y `<thead>`) el fondo real de su
+  cabecera: tarjeta `bg-card`, `headClassName` con `bg-*`, modo oscuro…; si la
+  cabecera es transparente, el botón también. La cabecera fija
+  (`stickyHeader`) usa `var(--list-head-bg)` → `--color-card` dentro de un
+  `.bg-card` (automático) → `--color-background`. Un `bg-*` en
+  `headClassName` gana ahora también a la cabecera fija.
+
+### Añadido
+
+- `fill?: boolean` en `ResponsiveColumn` / `SizedColumn`: la columna de
+  relleno (una por tabla; si hay varias, la primera).
+- `minWidth` vale para **cualquier** columna (antes solo para la flexible):
+  suelo del arrastre y del ancho pintado, también del guardado en
+  `columnWidths` (una fecha guardada a 105 px cortaba «19/10/2…»). Sin
+  `minWidth`, suelo de 64 px (o el propio ancho por defecto si es menor).
+- Exports: `DEFAULT_COLUMN_WIDTH`, `columnFloor`, `isFillColumn`,
+  `resolveFillColumnKey`, `tableSizing`; `MIN_COLUMN_WIDTH` también desde
+  `@nscabezon/ui/storage`.
+
+### Deprecado
+
+- `flex` en las columnas: alias de `fill` (misma semántica nueva: relleno,
+  no «absorbe al arrastrar»). `flexKey` del hook: alias de `fillKey`.
+
+### Eliminado
+
+- `resolveFlexColumnKey`, `flexAbsorberKey` y `FLEX_MIN_COLUMN_WIDTH` (la
+  lógica de absorber ya no existe).
+
 ## [0.8.0] - 2026-10-20
 
 Los listados «bailaban»: las preferencias del servidor (anchos, orden de

@@ -464,41 +464,33 @@ import * as React4 from "react";
 
 // src/list/columnWidth.ts
 var DEFAULT_ACTION_COLUMN_WIDTH = 56;
+var DEFAULT_COLUMN_WIDTH = 160;
+var MIN_COLUMN_WIDTH = 64;
+function isFillColumn(col) {
+  return !!(col.fill ?? col.flex);
+}
+function resolveFillColumnKey(columns) {
+  return columns.find(isFillColumn)?.key;
+}
+function defaultWidthOf(col) {
+  return col.width ?? (col.action && !col.header ? DEFAULT_ACTION_COLUMN_WIDTH : DEFAULT_COLUMN_WIDTH);
+}
+function columnFloor(col) {
+  return col.minWidth ?? Math.min(MIN_COLUMN_WIDTH, defaultWidthOf(col));
+}
 function resolveColumnWidth(col, stored) {
-  return stored ?? col.width ?? (col.action && !col.header ? DEFAULT_ACTION_COLUMN_WIDTH : void 0);
+  return Math.max(stored ?? defaultWidthOf(col), columnFloor(col));
+}
+function tableSizing(totalWidth, hasFill) {
+  return hasFill ? { width: "100%", minWidth: totalWidth } : { width: totalWidth };
 }
 function visibleColumnsOf(columns, hidden) {
   return hidden?.length ? columns.filter((c) => c.primary || !hidden.includes(c.key)) : columns;
 }
-var FLEX_MIN_COLUMN_WIDTH = 96;
-function resolveFlexColumnKey(columns) {
-  const marked = columns.find((c) => c.flex);
-  if (marked) return marked.key;
-  const primary = columns.find((c) => c.primary);
-  if (primary && primary.width == null && !primary.action) return primary.key;
-  return columns.find((c) => !c.action && c.width == null)?.key;
-}
-function flexAbsorberKey(columns, flexKey) {
-  const free = columns.filter((c) => c.key !== flexKey && !c.action && c.width == null);
-  if (free.length) return free[free.length - 1].key;
-  const i = columns.findIndex((c) => c.key === flexKey);
-  return i >= 0 ? columns[i + 1]?.key : void 0;
-}
 
 // src/list/useColumnResize.tsx
 import { jsx as jsx3 } from "react/jsx-runtime";
-var MIN_COLUMN_WIDTH = 64;
 var COLUMN_WIDTH_KEY_ATTR = "data-column-width-key";
-function measureRow(th) {
-  const out = {};
-  for (const cell of Array.from(th?.parentElement?.children ?? [])) {
-    const key = cell.getAttribute(COLUMN_WIDTH_KEY_ATTR);
-    if (!key) continue;
-    const w = cell.getBoundingClientRect().width;
-    if (w > 0) out[key] = w;
-  }
-  return out;
-}
 function useColumnResize({
   columnWidths,
   onColumnWidthsChange,
@@ -506,33 +498,30 @@ function useColumnResize({
 }) {
   const [drag, setDrag] = React4.useState(null);
   const dragRef = React4.useRef(null);
-  const flexKey = columns ? resolveFlexColumnKey(columns) : void 0;
-  const flexCol = flexKey ? columns?.find((c) => c.key === flexKey) : void 0;
-  const flexMin = flexCol?.minWidth ?? FLEX_MIN_COLUMN_WIDTH;
-  const absorberKey = columns && flexKey ? flexAbsorberKey(columns, flexKey) : void 0;
+  const fillKey = columns ? resolveFillColumnKey(columns) : void 0;
+  const colOf = (key) => columns?.find((c) => c.key === key);
   function baseWidth(key) {
-    if (key === flexKey) return void 0;
-    const col = columns?.find((c) => c.key === key);
+    const col = colOf(key);
     return col ? resolveColumnWidth(col, columnWidths?.[key]) : columnWidths?.[key];
   }
   function widthOf(key) {
-    return drag?.widths[key] ?? columnWidths?.[key];
+    return drag?.key === key ? drag.width : columnWidths?.[key];
+  }
+  function liveWidth(key) {
+    return drag?.key === key ? drag.width : baseWidth(key);
   }
   function colWidth(key) {
-    if (drag) {
-      if (key in drag.widths) return drag.widths[key];
-      if (key === drag.autoKey) return void 0;
-    }
-    return baseWidth(key);
+    if (key === fillKey) return void 0;
+    return liveWidth(key);
+  }
+  const totalWidth = columns ? columns.reduce((sum, c) => sum + (liveWidth(c.key) ?? 0), 0) : void 0;
+  function tableStyle(extra = 0) {
+    return totalWidth == null ? void 0 : tableSizing(totalWidth + extra, !!fillKey);
   }
   function clamp(d, clientX) {
-    return Math.round(Math.max(d.min, Math.min(d.max, d.startW + clientX - d.startX)));
-  }
-  function liveWidths(d, px) {
-    return { ...d.pinned, [d.key]: px };
+    return Math.round(Math.max(d.min, d.startW + clientX - d.startX));
   }
   function resizeHandle(columnKey) {
-    if (flexKey && columnKey === flexKey && !absorberKey) return null;
     return /* @__PURE__ */ jsx3(
       "span",
       {
@@ -542,43 +531,28 @@ function useColumnResize({
         onPointerDown: (e) => {
           if (e.button !== 0) return;
           const th = e.currentTarget.parentElement;
-          const measured = flexKey ? measureRow(th) : {};
-          const isFlex = !!flexKey && columnKey === flexKey;
-          const startW = (isFlex ? measured[columnKey] : columnWidths?.[columnKey] ?? measured[columnKey]) ?? th?.getBoundingClientRect().width ?? 0;
+          const measured = () => th?.getBoundingClientRect().width || void 0;
+          const col = colOf(columnKey);
+          let startW;
+          if (!col) startW = columnWidths?.[columnKey] ?? measured() ?? 0;
+          else if (columnKey === fillKey) {
+            startW = Math.max(measured() ?? 0, baseWidth(columnKey));
+          } else startW = baseWidth(columnKey);
           const d = {
             key: columnKey,
             startX: e.clientX,
             startW,
-            min: isFlex ? flexMin : MIN_COLUMN_WIDTH,
-            max: Infinity,
-            pinned: {}
+            min: col ? columnFloor(col) : MIN_COLUMN_WIDTH
           };
-          if (flexKey && columns) {
-            const partnerKey = isFlex ? absorberKey : flexKey;
-            const partnerStart = measured[partnerKey] ?? (isFlex ? baseWidth(partnerKey) : void 0);
-            const partnerMin = isFlex ? MIN_COLUMN_WIDTH : flexMin;
-            d.partner = { key: partnerKey, startW: partnerStart };
-            if (partnerStart != null) d.max = startW + Math.max(0, partnerStart - partnerMin);
-            for (const c of columns) {
-              if (c.key === columnKey || c.key === flexKey || c.key === partnerKey) continue;
-              if (baseWidth(c.key) == null && measured[c.key] != null) {
-                d.pinned[c.key] = Math.round(measured[c.key]);
-              }
-            }
-          }
           e.currentTarget.setPointerCapture(e.pointerId);
           dragRef.current = d;
-          setDrag({
-            key: columnKey,
-            widths: liveWidths(d, clamp(d, e.clientX)),
-            autoKey: d.partner?.key
-          });
+          setDrag({ key: columnKey, width: clamp(d, e.clientX) });
           e.preventDefault();
         },
         onPointerMove: (e) => {
           const d = dragRef.current;
           if (!d) return;
-          setDrag({ key: d.key, widths: liveWidths(d, clamp(d, e.clientX)), autoKey: d.partner?.key });
+          setDrag({ key: d.key, width: clamp(d, e.clientX) });
         },
         onPointerUp: (e) => {
           const d = dragRef.current;
@@ -586,20 +560,7 @@ function useColumnResize({
           const px = clamp(d, e.clientX);
           dragRef.current = null;
           setDrag(null);
-          if (!flexKey) {
-            onColumnWidthsChange?.({ ...columnWidths, [d.key]: px });
-            return;
-          }
-          const next = { ...columnWidths, ...d.pinned };
-          delete next[flexKey];
-          if (d.key !== flexKey) next[d.key] = px;
-          else if (d.partner?.startW != null) {
-            next[d.partner.key] = Math.max(
-              MIN_COLUMN_WIDTH,
-              Math.round(d.partner.startW - (px - d.startW))
-            );
-          }
-          onColumnWidthsChange?.(next);
+          onColumnWidthsChange?.({ ...columnWidths, [d.key]: px });
         },
         onPointerCancel: () => {
           dragRef.current = null;
@@ -614,7 +575,16 @@ function useColumnResize({
       }
     );
   }
-  return { widthOf, colWidth, flexKey, resizeHandle };
+  return {
+    widthOf,
+    colWidth,
+    fillKey,
+    /** @deprecated v0.9.0: usa `fillKey`. */
+    flexKey: fillKey,
+    totalWidth,
+    tableStyle,
+    resizeHandle
+  };
 }
 
 // src/list/rowTone.ts
@@ -711,6 +681,9 @@ function TableCell({ className, ...props }) {
 
 // src/list/responsive-list.tsx
 import { jsx as jsx5, jsxs as jsxs3 } from "react/jsx-runtime";
+var HEAD_INHERIT = "bg-inherit";
+var HEAD_BG = "bg-[color:var(--list-head-bg,var(--list-auto-head-bg,var(--color-background)))]";
+var AUTO_HEAD_BG = "[.bg-card_&]:[--list-auto-head-bg:var(--color-card)]";
 var TOUCH_TEXT_LINK = "pointer-coarse:-my-3 pointer-coarse:min-h-11 pointer-coarse:py-3 pointer-coarse:-mx-3 pointer-coarse:min-w-11 pointer-coarse:px-3";
 function ResponsiveList({
   columns,
@@ -812,7 +785,7 @@ function ResponsiveList({
   }
   const orderedColumns = orderColumns(columns, columnOrder);
   const visibleColumns = visibleColumnsOf(orderedColumns, hiddenColumns);
-  const { colWidth, resizeHandle } = useColumnResize({
+  const { colWidth, tableStyle, resizeHandle } = useColumnResize({
     columnWidths,
     onColumnWidthsChange,
     columns: visibleColumns
@@ -821,7 +794,7 @@ function ResponsiveList({
   const primary = mobileColumns.find((c) => c.primary);
   const actions = mobileColumns.filter((c) => c.action);
   const body = mobileColumns.filter((c) => !c.primary && !c.action);
-  const stickyHeadClass = stickyHeader ? "sticky z-10 border-b bg-background" : void 0;
+  const stickyHeadClass = stickyHeader ? cn("sticky z-10 border-b", HEAD_BG) : void 0;
   const stickyHeadStyle = stickyHeader ? { top: (stickyHeaderTop ?? 0) - 1 } : void 0;
   const fixedCellClass = resizable ? "overflow-hidden text-ellipsis" : void 0;
   const lastVisibleKey = visibleColumns[visibleColumns.length - 1]?.key;
@@ -921,7 +894,7 @@ function ResponsiveList({
     // siempre la columna de acciones, tras un scroll horizontal que nadie ve.
     // Midiendo el contenedor, una lista metida en una tarjeta estrecha también
     // acierta — el caso de las sedes en Ajustes → Taller, con 302 px.
-    /* @__PURE__ */ jsx5(ListCompactProvider, { value: compact, children: /* @__PURE__ */ jsxs3("div", { className: cn("@container", className), children: [
+    /* @__PURE__ */ jsx5(ListCompactProvider, { value: compact, children: /* @__PURE__ */ jsxs3("div", { className: cn("@container", AUTO_HEAD_BG, className), children: [
       /* @__PURE__ */ jsx5("div", { className: cn("hidden @3xl:block", menuOutsideScroll && "relative"), children: /* @__PURE__ */ jsxs3(
         Table,
         {
@@ -931,6 +904,7 @@ function ResponsiveList({
             stickyHeader && "border-separate border-spacing-0 [&_tbody_td]:border-b [&_tbody_tr:last-child_td]:border-b-0",
             resizable && "table-fixed"
           ),
+          style: resizable ? tableStyle(leading ? 40 : 0) : void 0,
           children: [
             resizable && /* @__PURE__ */ jsxs3("colgroup", { children: [
               leading && /* @__PURE__ */ jsx5("col", { style: { width: 40 } }),
@@ -939,8 +913,8 @@ function ResponsiveList({
                 return /* @__PURE__ */ jsx5("col", { style: width ? { width } : void 0 }, col.key);
               })
             ] }),
-            /* @__PURE__ */ jsx5(TableHeader, { className: stickyHeader ? "[&_tr]:border-b-0" : void 0, children: /* @__PURE__ */ jsxs3(TableRow, { className: stickyHeader ? "hover:bg-transparent" : void 0, children: [
-              leading && /* @__PURE__ */ jsx5(TableHead, { className: cn("w-10", stickyHeadClass), style: stickyHeadStyle, children: /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.selectColumn }) }),
+            /* @__PURE__ */ jsx5(TableHeader, { className: cn(HEAD_INHERIT, stickyHeader && "[&_tr]:border-b-0"), children: /* @__PURE__ */ jsxs3(TableRow, { className: cn(HEAD_INHERIT, stickyHeader && "hover:bg-transparent"), children: [
+              leading && /* @__PURE__ */ jsx5(TableHead, { className: cn("w-10", HEAD_INHERIT, stickyHeadClass), style: stickyHeadStyle, children: /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.selectColumn }) }),
               visibleColumns.map((col) => {
                 const draggable = reorderable && !col.action;
                 const side = draggable ? dropSide(col.key) : null;
@@ -954,13 +928,14 @@ function ResponsiveList({
                       // dos, tailwind-merge se queda con la última y sticky es
                       // también contenedor del asa absoluta (y del indicador).
                       (resizable || draggable) && !staticHead && "relative",
+                      HEAD_INHERIT,
                       fixedCellClass,
                       col.sortable && onSortChange && "group",
                       draggable && "cursor-grab active:cursor-grabbing",
                       dragKey === col.key && "opacity-50",
+                      stickyHeadClass,
                       col.headClassName,
                       compactHeadClass,
-                      stickyHeadClass,
                       isLast && lastHeadPad && "pr-10",
                       staticHead && side && (side === "before" ? "shadow-[inset_2px_0_0_var(--color-primary)]" : "shadow-[inset_-2px_0_0_var(--color-primary)]")
                     ),
@@ -990,7 +965,10 @@ function ResponsiveList({
                         "div",
                         {
                           "data-list-columns-menu-head": true,
-                          className: "absolute top-0 right-0 z-20 flex h-10 cursor-auto items-center bg-background px-1",
+                          className: cn(
+                            "absolute top-0 right-0 z-20 flex h-10 cursor-auto items-center px-1",
+                            HEAD_INHERIT
+                          ),
                           onDragOver: (e) => e.stopPropagation(),
                           onDrop: (e) => e.stopPropagation(),
                           children: columnsMenu
@@ -1923,12 +1901,14 @@ export {
   ColumnsMenu,
   useListCompact,
   DEFAULT_ACTION_COLUMN_WIDTH,
-  resolveColumnWidth,
-  visibleColumnsOf,
-  FLEX_MIN_COLUMN_WIDTH,
-  resolveFlexColumnKey,
-  flexAbsorberKey,
+  DEFAULT_COLUMN_WIDTH,
   MIN_COLUMN_WIDTH,
+  isFillColumn,
+  resolveFillColumnKey,
+  columnFloor,
+  resolveColumnWidth,
+  tableSizing,
+  visibleColumnsOf,
   COLUMN_WIDTH_KEY_ATTR,
   useColumnResize,
   TINTED_ROW_CLASS,

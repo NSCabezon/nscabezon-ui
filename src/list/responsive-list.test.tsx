@@ -122,7 +122,9 @@ describe('ResponsiveList (opt-in)', () => {
     expect(menu).not.toBeNull()
     expect(menu.className).toContain('absolute')
     expect(menu.className).toContain('right-0')
-    expect(menu.className).toContain('bg-background')
+    // v0.9.0: sin color propio, hereda el de su cabecera.
+    expect(menu.className).toContain('bg-inherit')
+    expect(menu.className).not.toContain('bg-background')
     expect(menu.querySelector('button')!.getAttribute('aria-label')).toBe('Columnas')
     expect(table().querySelectorAll('[data-list-columns-menu-head]')).toHaveLength(1)
     // Solo la última cabecera reserva el hueco del botón; ninguna celda.
@@ -402,7 +404,8 @@ describe('ResponsiveList (opt-in)', () => {
     const cols = Array.from(table().querySelectorAll('colgroup > col'))
     expect(cols).toHaveLength(3)
     expect(cols[1].getAttribute('style')).toContain('120px')
-    expect(cols[0].hasAttribute('style')).toBe(false)
+    // v0.9.0: sin `width` ni guardado, el ancho por defecto (sin relleno marcado).
+    expect(cols[0].getAttribute('style')).toContain('160px')
     const handles = heads().map((th) => th.querySelector('.cursor-col-resize'))
     expect(handles.map(Boolean)).toEqual([true, true, false])
   })
@@ -476,7 +479,7 @@ describe('ResponsiveList (opt-in)', () => {
     expect(head.children[1].textContent).toBe('OK')
   })
 
-  it('resizable: una columna action sin cabecera cae al ancho compacto por defecto, una CON cabecera no, y la primary sin `width` absorbe el sobrante', () => {
+  it('resizable: una columna action sin cabecera cae al ancho compacto por defecto, una CON cabecera y la primary sin `width` toman el por defecto', () => {
     const withAction: ResponsiveColumn<Row>[] = [
       ...columns,
       { key: 'remove', header: '', cell: () => null, action: true },
@@ -496,14 +499,14 @@ describe('ResponsiveList (opt-in)', () => {
     )
     const cols = Array.from(table().querySelectorAll('colgroup > col'))
     expect(cols).toHaveLength(5)
-    // `name` es primary y no lleva `width`: sigue sin <col> width, absorbe el sobrante.
-    expect(cols[0].hasAttribute('style')).toBe(false)
+    // v0.9.0: `name` es primary sin `width` pero NO es relleno sin `fill`: 160 px.
+    expect(cols[0].getAttribute('style')).toContain('160px')
     // `remove` es action SIN cabecera y sin ancho propio: ancho compacto por defecto.
     expect(cols[3].getAttribute('style')).toContain('56px')
-    // `quote` es action CON cabecera (botón con texto): sin `width` propio se
-    // queda sin <col> width, igual que cualquier columna de datos — 56px la
+    // `quote` es action CON cabecera (botón con texto): sin `width` propio
+    // toma el ancho por defecto de cualquier columna de datos — 56px la
     // habría recortado (ver BikesListPage: «Presupuesto de venta» → «enta»).
-    expect(cols[4].hasAttribute('style')).toBe(false)
+    expect(cols[4].getAttribute('style')).toContain('160px')
   })
 
   it('rowHref usa el Link y el navigate del UiProvider', () => {
@@ -1076,22 +1079,27 @@ describe('ResponsiveList (orden de columnas)', () => {
     expect(onColumnOrderChange).toHaveBeenCalledWith(['name', 'id', 'total'])
   })
 })
-
-// v0.5.0 · Columna flexible: al arrastrar el borde de una columna solo cambian
-// ella y la flexible (por defecto la `primary` sin `width`); el resto se queda
-// con el ancho que tenía. jsdom no hace layout: se mide con un
+// v0.9.0 · Modelo «como Excel + relleno»: arrastrar el borde cambia SOLO esa
+// columna; la tabla mide máx(contenedor, suma) y la columna `fill` (si la hay)
+// se estira para ocupar el hueco. jsdom no hace layout: se mide con un
 // getBoundingClientRect falso por `data-column-width-key`, y lo que se
-// comprueba es el <colgroup> (lo que manda en table-fixed) y lo que se guarda.
-describe('ResponsiveList (columna flexible)', () => {
-  type FlexRow = { id: number }
-  const flexColumns: ResponsiveColumn<FlexRow>[] = [
-    { key: 'name', header: 'Nombre', cell: () => 'n', primary: true },
-    { key: 'ref', header: 'Ref', cell: () => 'r', width: 100 },
+// comprueba es el <colgroup> y el estilo de la <table> (lo que manda en
+// table-fixed) y lo que se guarda.
+describe('ResponsiveList (como Excel + relleno)', () => {
+  type ORow = { id: number }
+  // Como el listado de Órdenes de Gesmoto: Nº estrecho (nunca relleno),
+  // cliente sin `width`, descripción de relleno, Apertura, estado y menú.
+  const oColumns: ResponsiveColumn<ORow>[] = [
+    { key: 'num', header: 'Nº', cell: () => '1', primary: true, width: 90 },
     { key: 'client', header: 'Cliente', cell: () => 'c' },
-    { key: 'total', header: 'Total', cell: () => 't', width: 90 },
+    { key: 'desc', header: 'Descripción', cell: () => 'd', fill: true },
+    { key: 'opened', header: 'Apertura', cell: () => '19/10/2026', width: 120 },
+    { key: 'status', header: 'Estado', cell: () => 's', width: 130 },
     { key: 'menu', header: '', cell: () => '⋯', action: true },
   ]
-  const flexRows: FlexRow[] = [{ id: 1 }]
+  // 90 + 160 + 160 + 120 + 130 + 56
+  const SUM = 716
+  const oRows: ORow[] = [{ id: 1 }]
   let measured: Record<string, number>
   const originalRect = HTMLElement.prototype.getBoundingClientRect
   const originalCapture = Element.prototype.setPointerCapture
@@ -1100,7 +1108,8 @@ describe('ResponsiveList (columna flexible)', () => {
     pointerId = 1
   }
   beforeEach(() => {
-    measured = { name: 400, ref: 100, client: 200, total: 90, menu: 56 }
+    // El relleno «al mínimo»: el hueco que le queda es ya su suelo.
+    measured = { num: 90, client: 160, desc: 64, opened: 120, status: 130, menu: 56 }
     HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
       const key = this.getAttribute('data-column-width-key')
       return { width: key ? (measured[key] ?? 0) : 0 } as DOMRect
@@ -1112,12 +1121,12 @@ describe('ResponsiveList (columna flexible)', () => {
     Element.prototype.setPointerCapture = originalCapture
   })
 
-  function renderFlex(props: Partial<React.ComponentProps<typeof ResponsiveList<FlexRow>>> = {}) {
+  function renderO(props: Partial<React.ComponentProps<typeof ResponsiveList<ORow>>> = {}) {
     const onColumnWidthsChange = vi.fn<(w: Record<string, number>) => void>()
     render(
       <ResponsiveList
-        columns={flexColumns}
-        data={flexRows}
+        columns={oColumns}
+        data={oRows}
         rowKey={(r) => r.id}
         resizable
         onColumnWidthsChange={onColumnWidthsChange}
@@ -1126,12 +1135,13 @@ describe('ResponsiveList (columna flexible)', () => {
     )
     return onColumnWidthsChange
   }
-  /** Ancho de cada <col> por clave de columna (null = sin ancho: absorbe). */
+  /** Ancho de cada <col> por clave de columna (null = sin ancho: el relleno). */
   function colWidths(): Record<string, string | null> {
     const keys = heads().map((th) => th.getAttribute('data-column-width-key')!)
     const cols = Array.from(table().querySelectorAll('colgroup > col'))
     return Object.fromEntries(keys.map((k, i) => [k, (cols[i] as HTMLElement).style.width || null]))
   }
+  const tableStyle = () => ({ width: table().style.width, minWidth: table().style.minWidth })
   function handleOf(key: string) {
     return heads()
       .find((th) => th.getAttribute('data-column-width-key') === key)!
@@ -1151,125 +1161,192 @@ describe('ResponsiveList (columna flexible)', () => {
       })
     }
   }
+  const BASE = {
+    num: '90px',
+    client: '160px',
+    desc: null,
+    opened: '120px',
+    status: '130px',
+    menu: '56px',
+  }
 
-  it('por defecto la flexible es la primary sin `width`: única sin <col> width junto a las autos', () => {
-    renderFlex()
-    expect(colWidths()).toEqual({
-      name: null,
-      ref: '100px',
-      client: null,
-      total: '90px',
-      menu: '56px',
-    })
+  it('todas con ancho salvo el relleno; la tabla: 100 % con la suma de mínimo', () => {
+    renderO()
+    expect(colWidths()).toEqual(BASE)
+    expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM}px` })
   })
 
-  it('arrastrar Ref cambia solo Ref y la flexible; el resto se queda igual (las autos, fijadas en px)', () => {
-    const onChange = renderFlex()
-    dragHandle('ref', 50, { release: false })
-    expect(colWidths()).toEqual({
-      name: null, // absorbe: 400 → 350
-      ref: '150px',
-      client: '200px', // estaba «auto»: se fija en lo que medía
-      total: '90px',
-      menu: '56px',
-    })
+  it('arrastrar Apertura cambia SOLO Apertura aunque el relleno esté al mínimo; la tabla crece (scroll)', () => {
+    const onChange = renderO()
+    dragHandle('opened', 200, { release: false })
+    expect(colWidths()).toEqual({ ...BASE, opened: '320px' })
+    // Suma > contenedor: la tabla mide la suma y el contenedor hace scroll.
+    expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM + 200}px` })
     act(() => {
-      handleOf('ref').dispatchEvent(new FakePointerEvent('pointerup', { bubbles: true, clientX: 50 }))
+      handleOf('opened').dispatchEvent(
+        new FakePointerEvent('pointerup', { bubbles: true, clientX: 200 }),
+      )
     })
-    // Se guarda Ref y la auto fijada; la flexible NUNCA se guarda en px.
-    expect(onChange).toHaveBeenCalledWith({ ref: 150, client: 200 })
+    expect(onChange).toHaveBeenCalledWith({ opened: 320 })
   })
 
-  it('tras guardar, solo la flexible queda sin ancho: es la única que cambia con la ventana', () => {
-    renderFlex({ columnWidths: { ref: 150, client: 200 } })
-    const before = colWidths()
-    expect(before).toEqual({ name: null, ref: '150px', client: '200px', total: '90px', menu: '56px' })
-    // Ventana más estrecha: la tabla mide menos, nada del <colgroup> depende de eso.
-    measured = { ...measured, name: 150 }
-    renderFlex({ columnWidths: { ref: 150, client: 200 } })
-    expect(colWidths()).toEqual(before)
+  it('suma < contenedor: el relleno se estira (sin <col> width) y el resto queda idéntico', () => {
+    renderO({ columnWidths: { opened: 100 } })
+    // 100 % del contenedor con la suma de mínimo: lo que sobre es del relleno.
+    expect(colWidths()).toEqual({ ...BASE, opened: '100px' })
+    expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM - 20}px` })
   })
 
-  it('tope: la flexible no baja de su mínimo (96 px por defecto); la arrastrada deja de crecer', () => {
-    const onChange = renderFlex()
-    dragHandle('ref', 1000)
-    // name medía 400 → puede ceder 400 - 96 = 304.
-    expect(onChange).toHaveBeenCalledWith({ ref: 100 + 304, client: 200 })
+  it('sin relleno marcado: ninguna se estira, la tabla mide la suma (hueco a la derecha)', () => {
+    renderO({ columns: oColumns.map((c) => (c.key === 'desc' ? { ...c, fill: undefined } : c)) })
+    expect(colWidths()).toEqual({ ...BASE, desc: '160px' })
+    expect(tableStyle()).toEqual({ width: `${SUM}px`, minWidth: '' })
   })
 
-  it('tope con `minWidth` propio de la flexible', () => {
-    const onChange = renderFlex({
-      columns: flexColumns.map((c) => (c.key === 'name' ? { ...c, minWidth: 300 } : c)),
+  it('la primary NO es relleno por defecto (el Nº nunca debería serlo)', () => {
+    renderO({
+      columns: oColumns.map((c) =>
+        c.key === 'desc' ? { ...c, fill: undefined } : c.key === 'num' ? { ...c, width: undefined } : c,
+      ),
     })
-    dragHandle('ref', 1000)
-    expect(onChange).toHaveBeenCalledWith({ ref: 200, client: 200 })
+    expect(colWidths().num).toBe('160px')
+    expect(tableStyle().width).toBe(`${SUM + 70}px`)
   })
 
-  it('arrastrar la flexible: cambia ella y compensa la última no-action sin `width`', () => {
-    const onChange = renderFlex()
-    dragHandle('name', 50, { release: false })
-    expect(colWidths()).toEqual({
-      name: '450px',
-      ref: '100px',
-      client: null, // compensa: 200 → 150
-      total: '90px',
-      menu: '56px',
+  it('`flex: true` (v0.5.0) es alias de `fill`', () => {
+    renderO({
+      columns: oColumns.map((c) =>
+        c.key === 'desc' ? { ...c, fill: undefined, flex: true } : c,
+      ),
     })
+    expect(colWidths()).toEqual(BASE)
+    expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM}px` })
+  })
+
+  it('arrastrar el relleno parte de su ancho pintado y guarda su base', () => {
+    measured.desc = 500
+    const onChange = renderO()
+    dragHandle('desc', -100)
+    expect(onChange).toHaveBeenCalledWith({ desc: 400 })
+  })
+
+  it('suelo `minWidth`: ni un guardado viejo ni el arrastre bajan de él', () => {
+    const onChange = renderO({
+      columns: oColumns.map((c) => (c.key === 'opened' ? { ...c, minWidth: 110 } : c)),
+      columnWidths: { opened: 30 },
+    })
+    expect(colWidths().opened).toBe('110px')
+    dragHandle('opened', -50)
+    expect(onChange).toHaveBeenCalledWith({ opened: 110 })
+  })
+
+  it('prefs viejas con anchos raros se respetan (con suelo 64), también la base guardada del relleno', () => {
+    renderO({ columnWidths: { client: 999, status: 5, desc: 300 } })
+    expect(colWidths()).toEqual({ ...BASE, client: '999px', status: '64px' })
+    expect(tableStyle().minWidth).toBe(`${90 + 999 + 300 + 120 + 64 + 56}px`)
+  })
+
+  it('doble clic borra el ancho guardado de la columna', () => {
+    const onChange = renderO({ columnWidths: { opened: 150, client: 200 } })
     act(() => {
-      handleOf('name').dispatchEvent(new FakePointerEvent('pointerup', { bubbles: true, clientX: 50 }))
-    })
-    // La flexible vuelve a ir sin ancho (ocupa lo que sobra = 450); se guarda la que compensó.
-    expect(onChange).toHaveBeenCalledWith({ client: 150 })
-    expect(colWidths().name).toBeNull()
-  })
-
-  it('un ancho guardado para la flexible (prefs antiguas) se ignora y se limpia al guardar', () => {
-    const onChange = renderFlex({ columnWidths: { name: 300 } })
-    expect(colWidths().name).toBeNull()
-    dragHandle('ref', 10)
-    expect(onChange).toHaveBeenCalledWith({ ref: 110, client: 200 })
-  })
-
-  it('`flex: true` elige otra columna; la primary sin `width` pasa a fijarse al arrastrar', () => {
-    const onChange = renderFlex({
-      columns: flexColumns.map((c) => (c.key === 'client' ? { ...c, flex: true } : c)),
-    })
-    dragHandle('ref', 20)
-    expect(onChange).toHaveBeenCalledWith({ ref: 120, name: 400 })
-  })
-
-  it('primary con `width`: la flexible es la primera sin `width`', () => {
-    const onChange = renderFlex({
-      columns: flexColumns.map((c) => (c.key === 'name' ? { ...c, width: 300 } : c)),
-    })
-    expect(colWidths()).toMatchObject({ name: '300px', client: null })
-    dragHandle('ref', 20)
-    expect(onChange).toHaveBeenCalledWith({ ref: 120 })
-  })
-
-  it('doble clic sigue borrando el ancho guardado de la columna', () => {
-    const onChange = renderFlex({ columnWidths: { ref: 150, client: 200 } })
-    act(() => {
-      handleOf('ref').dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+      handleOf('opened').dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
     })
     expect(onChange).toHaveBeenCalledWith({ client: 200 })
   })
 
-  it('con orden de columnas y modo compacto: la flexible se sigue eligiendo y absorbe', () => {
-    const onChange = renderFlex({
-      columnOrder: ['ref', 'client', 'name', 'total', 'menu'],
+  it('con orden de columnas y modo compacto: arrastrar sigue cambiando solo la arrastrada', () => {
+    const onChange = renderO({
+      columnOrder: ['client', 'num', 'opened', 'desc', 'status', 'menu'],
       onColumnOrderChange: () => {},
       compact: true,
     })
     expect(heads().map((th) => th.getAttribute('data-column-width-key'))).toEqual([
-      'ref',
       'client',
-      'name',
-      'total',
+      'num',
+      'opened',
+      'desc',
+      'status',
       'menu',
     ])
-    dragHandle('ref', 30)
-    expect(onChange).toHaveBeenCalledWith({ ref: 130, client: 200 })
+    dragHandle('num', 30)
+    expect(onChange).toHaveBeenCalledWith({ num: 120 })
+    expect(table().getAttribute('data-compact')).toBe('')
+  })
+
+  it('con selección (`leading`), su columna de 40 px entra en la suma', () => {
+    renderO({ leading: () => <input type="checkbox" /> })
+    expect(table().querySelectorAll('colgroup > col')).toHaveLength(oColumns.length + 1)
+    expect(tableStyle().minWidth).toBe(`${SUM + 40}px`)
+  })
+
+  it('cabecera fija + menú: la tabla sigue midiendo la suma y el botón va en la última <th> sticky', () => {
+    renderO({
+      stickyHeader: true,
+      hiddenColumns: [],
+      onHiddenColumnsChange: () => {},
+      onColumnsReset: () => {},
+      mobileColumnsMenu: false,
+    })
+    expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM}px` })
+    const last = heads()[heads().length - 1]
+    expect(last.className).toContain('sticky')
+    const menu = last.querySelector('[data-list-columns-menu-head]')!
+    expect(menu.className).toContain('bg-inherit')
+  })
+})
+
+// v0.9.0 · El botón del menú de columnas no impone color: hereda el fondo
+// real de su cabecera (tarjeta, cabecera teñida, transparente, modo oscuro).
+describe('ResponsiveList (fondo del botón del menú de columnas)', () => {
+  const menuProps = {
+    hiddenColumns: [] as string[],
+    onHiddenColumnsChange: () => {},
+    onColumnsReset: () => {},
+    mobileColumnsMenu: false,
+  }
+  const menuEl = () => table().querySelector('[data-list-columns-menu-head]') as HTMLElement
+  const bgClasses = (el: Element) => el.className.split(/\s+/).filter((c) => /^bg-/.test(c))
+
+  it('dentro de una tarjeta `bg-card`: el botón no lleva `bg-background` fijo', () => {
+    render(
+      <div className="bg-card">
+        <ResponsiveList columns={columns} data={rows} rowKey={(r) => r.id} {...menuProps} />
+      </div>,
+    )
+    expect(menuEl().className).not.toContain('bg-background')
+    expect(bgClasses(menuEl())).toEqual(['bg-inherit'])
+  })
+
+  it('cabecera con `bg-muted`: el botón hereda, no impone otro color', () => {
+    const tinted = columns.map((c) => ({ ...c, headClassName: 'bg-muted' }))
+    render(<ResponsiveList columns={tinted} data={rows} rowKey={(r) => r.id} {...menuProps} />)
+    const th = menuEl().closest('th')!
+    // El fondo del consumidor gana en la <th> y el botón lo hereda.
+    expect(bgClasses(th)).toEqual(['bg-muted'])
+    expect(bgClasses(menuEl())).toEqual(['bg-inherit'])
+  })
+
+  it('cabecera transparente: toda la cadena hereda y el botón no tiene fondo propio', () => {
+    render(<ResponsiveList columns={columns} data={rows} rowKey={(r) => r.id} {...menuProps} />)
+    const th = menuEl().closest('th')!
+    expect(bgClasses(menuEl())).toEqual(['bg-inherit'])
+    expect(bgClasses(th)).toEqual(['bg-inherit'])
+    expect(bgClasses(th.closest('tr')!)).toEqual(['bg-inherit'])
+    expect(bgClasses(th.closest('thead')!)).toEqual(['bg-inherit'])
+  })
+
+  it('cabecera fija: la <th> lleva el fondo opaco por variable (tarjeta o `--list-head-bg`) y el botón lo hereda', () => {
+    render(
+      <ResponsiveList columns={columns} data={rows} rowKey={(r) => r.id} stickyHeader {...menuProps} />,
+    )
+    const th = menuEl().closest('th')!
+    expect(th.className).toContain('var(--list-head-bg')
+    expect(th.className).not.toMatch(/(^|\s)bg-background(\s|$)/)
+    expect(bgClasses(menuEl())).toEqual(['bg-inherit'])
+    // La raíz pasa a `--color-card` sola dentro de un `.bg-card`.
+    expect(container.querySelector('.\\@container')!.className).toContain(
+      '[.bg-card_&]:[--list-auto-head-bg:var(--color-card)]',
+    )
   })
 })
 

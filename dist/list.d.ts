@@ -18,6 +18,7 @@ type ResponsiveColumn<T> = {
     headClassName?: string;
     cellClassName?: string;
     width?: number;
+    fill?: boolean;
     flex?: boolean;
     minWidth?: number;
 };
@@ -103,20 +104,73 @@ declare function useListCompact(): boolean;
 
 declare const DEFAULT_ACTION_COLUMN_WIDTH = 56;
 /**
- * Ancho a aplicar en el <colgroup> de un ResponsiveList `resizable`: lo
- * guardado/arrastrado gana siempre; si no hay nada guardado, el `width` de la
- * columna; las `action` sin ninguno de los dos y SIN cabecera (icono suelto)
- * caen al ancho compacto por defecto. Una `action` CON cabecera es la
- * convención de un botón con texto: sin `width` propio se queda sin <col>
- * width y comparte el sobrante de table-fixed como cualquier otra columna.
- * `undefined` = "sin <col> width": la señal con la que table-fixed reparte el
- * sobrante en esa columna.
+ * Ancho por defecto (px) de una columna de un listado `resizable` que no trae
+ * `width` ni ancho guardado (v0.9.0). Desde el modelo «como Excel» TODAS las
+ * columnas tienen ancho efectivo; la de relleno usa este como base y se estira
+ * encima.
  */
-declare function resolveColumnWidth(col: {
+declare const DEFAULT_COLUMN_WIDTH = 160;
+/** Suelo por defecto (px) de una columna redimensionable, si no trae `minWidth`. */
+declare const MIN_COLUMN_WIDTH = 64;
+/** Lo que las reglas de anchos necesitan saber de cada columna. */
+type SizedColumn = {
+    key: string;
     width?: number;
     action?: boolean;
     header?: unknown;
-}, stored: number | undefined): number | undefined;
+    primary?: boolean;
+    /** Columna de relleno (v0.9.0): se estira para ocupar el hueco que sobre. */
+    fill?: boolean;
+    /** @deprecated v0.9.0: alias de `fill`. */
+    flex?: boolean;
+    minWidth?: number;
+};
+/** ¿Es la columna de relleno? `fill`, o el alias deprecado `flex` (v0.5.0). */
+declare function isFillColumn(col: {
+    fill?: boolean;
+    flex?: boolean;
+}): boolean;
+/**
+ * Columna de relleno de un listado `resizable`: la PRIMERA marcada con `fill`
+ * (o `flex`) entre las visibles. Sin ninguna marcada, `undefined`: NO hay
+ * relleno y, si las columnas no llegan al ancho del contenedor, queda hueco a
+ * la derecha. Nunca se elige sola (ni la `primary`): la decide el consumidor.
+ */
+declare function resolveFillColumnKey(columns: SizedColumn[]): string | undefined;
+/**
+ * Suelo de una columna: su `minWidth` si lo trae; si no, `MIN_COLUMN_WIDTH`
+ * (64), salvo que su propio ancho por defecto sea menor (un icono de 40 o 56
+ * px no se infla a 64 por defecto).
+ */
+declare function columnFloor(col: Omit<SizedColumn, 'key'>): number;
+/**
+ * Ancho efectivo (px) de una columna de un ResponsiveList `resizable`: lo
+ * guardado/arrastrado gana; si no hay, su `width`; si tampoco, el ancho
+ * compacto de una `action` SIN cabecera (icono suelto) o `DEFAULT_COLUMN_WIDTH`.
+ * Nunca baja de `columnFloor`: un ancho guardado por debajo del suelo (p. ej.
+ * una fecha guardada a 105 px que corta «19/10/2…») se pinta al suelo.
+ *
+ * En la columna de relleno es su ancho BASE: el que tiene cuando la tabla no
+ * cabe; si sobra sitio, se estira por encima (ver `tableSizing`).
+ */
+declare function resolveColumnWidth(col: Omit<SizedColumn, 'key'>, stored: number | undefined): number;
+/**
+ * Estilo de la `<table>` (table-fixed) para el modelo «como Excel + relleno»:
+ * - Con columna de relleno: `width: 100%` y `min-width: suma`. La `<col>` del
+ *   relleno va SIN ancho, así que table-fixed le da todo lo que sobre
+ *   (tabla − resto de columnas); como la tabla nunca baja de la suma, ese
+ *   sobrante nunca es menor que su base. Resultado: ancho = máx(contenedor,
+ *   suma), el relleno solo crece y el resto no se mueve.
+ * - Sin relleno: `width: suma` exacta. Con `width: 100%` table-fixed
+ *   repartiría el sobrante entre TODAS las columnas; con la suma, queda hueco
+ *   a la derecha.
+ * Si la suma supera el contenedor, la tabla lo desborda y el contenedor de
+ * scroll la desplaza a lo ancho.
+ */
+declare function tableSizing(totalWidth: number, hasFill: boolean): {
+    width: string | number;
+    minWidth?: number;
+};
 /**
  * Columnas visibles: las ocultas por el usuario fuera, salvo la `primary`,
  * que nunca se oculta. Sin ocultas devuelve el mismo array.
@@ -125,43 +179,7 @@ declare function visibleColumnsOf<C extends {
     key: string;
     primary?: boolean;
 }>(columns: C[], hidden: string[] | undefined): C[];
-/** Ancho mínimo por defecto de la columna flexible, en px (ver `minWidth`). */
-declare const FLEX_MIN_COLUMN_WIDTH = 96;
-/** Lo que las reglas de la columna flexible necesitan saber de cada columna. */
-type SizedColumn = {
-    key: string;
-    width?: number;
-    action?: boolean;
-    header?: unknown;
-    primary?: boolean;
-    flex?: boolean;
-    minWidth?: number;
-};
-/**
- * Columna flexible de un listado `resizable`: la ÚNICA que gana o pierde
- * ancho cuando se arrastra otra o cambia el ancho de la ventana. Regla, sobre
- * las columnas VISIBLES y en orden:
- * 1. la primera marcada con `flex: true`;
- * 2. si ninguna, la `primary` si no tiene `width` ni es `action`;
- * 3. si no, la primera columna no-`action` sin `width`;
- * 4. si tampoco hay, ninguna (`undefined`): arrastrar cambia solo la columna
- *    arrastrada y table-fixed reparte la diferencia como antes de v0.5.0.
- */
-declare function resolveFlexColumnKey(columns: SizedColumn[]): string | undefined;
-/**
- * Columna que compensa cuando se arrastra la PROPIA flexible: la última
- * columna no-`action` sin `width` (distinta de la flexible) y, si no hay, la
- * vecina de la derecha de la flexible (sea cual sea). `undefined` = la
- * flexible no tiene asa (es la última y no hay con quién compensar).
- *
- * Por qué la última sin `width` y no la vecina sin más: una columna sin
- * `width` es una de texto que el consumidor dejó crecer; las que traen `width`
- * (importes, fechas, estados) tienen el ancho pensado para su contenido.
- */
-declare function flexAbsorberKey(columns: SizedColumn[], flexKey: string): string | undefined;
 
-/** Ancho mínimo de una columna arrastrable, en px. */
-declare const MIN_COLUMN_WIDTH = 64;
 /** Atributo que marca cada `<th>` medible con la clave de su columna. */
 declare const COLUMN_WIDTH_KEY_ATTR = "data-column-width-key";
 /**
@@ -173,31 +191,38 @@ declare const COLUMN_WIDTH_KEY_ATTR = "data-column-width-key";
  * `useListPrefs` (`setWidths`).
  *
  * Mecánica: pointer events CON captura, así el arrastre sigue aunque el puntero
- * salga de la celda. El ancho inicial, si no hay uno guardado, se mide del
- * propio `<th>`. Mientras se arrastra el ancho vive en el estado local (`drag`)
- * y solo se persiste al soltar: un arrastre son decenas de eventos.
+ * salga de la celda. Mientras se arrastra el ancho vive en el estado local
+ * (`drag`) y solo se persiste al soltar: un arrastre son decenas de eventos.
  *
- * Columna flexible (v0.5.0, con `columns`): la tabla llena siempre el ancho y
- * la diferencia de un arrastre la gana o la pierde SOLO la columna flexible
- * (ver `resolveFlexColumnKey`); las demás se quedan como estaban (las que iban
- * sin ancho se fijan en px al empezar, medidas de los `<th>` con
- * `data-column-width-key`). La flexible nunca se guarda en px: queda sin
- * ancho y es la única que cambia con el tamaño de la ventana. No baja de su
- * `minWidth` (o `FLEX_MIN_COLUMN_WIDTH`): llegado ahí, la arrastrada deja de
- * crecer. Arrastrar la propia flexible lo compensa `flexAbsorberKey`. Sin
- * `columns` (tablas a mano antiguas) o sin columna flexible, el comportamiento
- * es el de antes: cambia la arrastrada y table-fixed reparte.
+ * Modelo «como Excel + relleno» (v0.9.0, con `columns`):
+ * - Arrastrar el borde cambia SOLO esa columna; ninguna otra se mueve ni
+ *   encoge, y no hay más tope que el suelo de la propia columna
+ *   (`columnFloor`: su `minWidth` o 64 px).
+ * - Todas las columnas tienen ancho efectivo (`resolveColumnWidth`): guardado,
+ *   `width` o `DEFAULT_COLUMN_WIDTH`. `totalWidth` es su suma.
+ * - La de relleno (`fill: true`, alias `flex`) tiene un ancho BASE como las
+ *   demás (cuenta en la suma y se guarda al arrastrarla) y se estira encima
+ *   si sobra sitio: su `<col>` va sin ancho (`colWidth` → `undefined`) y la
+ *   tabla lleva `tableStyle` (`tableSizing`). Sin relleno, hueco a la derecha.
+ *   Al arrastrar la de relleno se parte de su ancho PINTADO (medido del
+ *   `<th>`, estiramiento incluido), para que el asa siga al puntero.
+ * Sin `columns` (tablas a mano antiguas): cambia la arrastrada, partiendo del
+ * ancho guardado o, si no hay, del medido; suelo `MIN_COLUMN_WIDTH`.
  */
 declare function useColumnResize({ columnWidths, onColumnWidthsChange, columns, }: {
     columnWidths?: Record<string, number>;
     onColumnWidthsChange?: (widths: Record<string, number>) => void;
-    /** Columnas VISIBLES, en orden: activa el modo de columna flexible. */
+    /** Columnas VISIBLES, en orden: activa el modelo «como Excel + relleno». */
     columns?: SizedColumn[];
 }): {
     widthOf: (key: string) => number | undefined;
     colWidth: (key: string) => number | undefined;
+    fillKey: string | undefined;
+    /** @deprecated v0.9.0: usa `fillKey`. */
     flexKey: string | undefined;
-    resizeHandle: (columnKey: string) => React.JSX.Element | null;
+    totalWidth: number | undefined;
+    tableStyle: (extra?: number) => React.CSSProperties | undefined;
+    resizeHandle: (columnKey: string) => React.JSX.Element;
 };
 
 type OrderableColumn = {
@@ -569,4 +594,4 @@ type SupabaseLikeAuthClient = SupabaseLikeClient & {
  */
 declare function useSupabaseListPrefsStore(client: SupabaseLikeAuthClient, { table, onError }?: SupabaseListPrefsStoreOptions): ListPrefsStore;
 
-export { COLUMN_WIDTH_KEY_ATTR, ColumnsMenu, type ColumnsMenuColumn, type ColumnsMenuProps, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_PAGE_SIZE, FLEX_MIN_COLUMN_WIDTH, LIST_PREFS_WIDTHS_DEBOUNCE_MS, ListFooter, type ListFooterProps, ListPrefs, ListPrefsDefaults, ListPrefsStore, ListSort, type ListView, type ListViewDefaults, type ListViewFooterProps, type ListViewListProps, MIN_COLUMN_WIDTH, Pagination, type PaginationProps, type ResponsiveColumn, ResponsiveList, type ResponsiveListProps, type SizedColumn, type SupabaseLikeAuthClient, SupabaseLikeClient, SupabaseListPrefsStoreOptions, TINTED_ROW_CLASS, TOUCH_TEXT_LINK, type UnpaginatedListView, type UseListPrefsOptions, type UseListPrefsResult, type UseListViewOptions, flexAbsorberKey, listPrefsStorageKey, moveColumn, orderColumns, resolveColumnWidth, resolveFlexColumnKey, rowTone, useColumnResize, useListColumns, useListCompact, useListPrefs, useListView, usePagination, useSupabaseListPrefsStore, visibleColumnsOf };
+export { COLUMN_WIDTH_KEY_ATTR, ColumnsMenu, type ColumnsMenuColumn, type ColumnsMenuProps, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, DEFAULT_PAGE_SIZE, LIST_PREFS_WIDTHS_DEBOUNCE_MS, ListFooter, type ListFooterProps, ListPrefs, ListPrefsDefaults, ListPrefsStore, ListSort, type ListView, type ListViewDefaults, type ListViewFooterProps, type ListViewListProps, MIN_COLUMN_WIDTH, Pagination, type PaginationProps, type ResponsiveColumn, ResponsiveList, type ResponsiveListProps, type SizedColumn, type SupabaseLikeAuthClient, SupabaseLikeClient, SupabaseListPrefsStoreOptions, TINTED_ROW_CLASS, TOUCH_TEXT_LINK, type UnpaginatedListView, type UseListPrefsOptions, type UseListPrefsResult, type UseListViewOptions, columnFloor, isFillColumn, listPrefsStorageKey, moveColumn, orderColumns, resolveColumnWidth, resolveFillColumnKey, rowTone, tableSizing, useColumnResize, useListColumns, useListCompact, useListPrefs, useListView, usePagination, useSupabaseListPrefsStore, visibleColumnsOf };

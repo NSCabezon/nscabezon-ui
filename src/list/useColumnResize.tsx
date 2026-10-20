@@ -1,25 +1,24 @@
 import * as React from 'react'
 
 import {
-  FLEX_MIN_COLUMN_WIDTH,
-  flexAbsorberKey,
+  MIN_COLUMN_WIDTH,
+  columnFloor,
   resolveColumnWidth,
-  resolveFlexColumnKey,
+  resolveFillColumnKey,
+  tableSizing,
   type SizedColumn,
 } from './columnWidth'
 
-/** Ancho mínimo de una columna arrastrable, en px. */
-export const MIN_COLUMN_WIDTH = 64
+// Reexportado aquí por compatibilidad: vivía en este módulo hasta v0.8.
+export { MIN_COLUMN_WIDTH }
 
 /** Atributo que marca cada `<th>` medible con la clave de su columna. */
 export const COLUMN_WIDTH_KEY_ATTR = 'data-column-width-key'
 
 type DragState = {
   key: string
-  /** Anchos en vivo (px) mientras dura el arrastre. */
-  widths: Record<string, number>
-  /** Columna que va sin ancho durante el arrastre (la que compensa). */
-  autoKey?: string
+  /** Ancho en vivo (px) de la columna arrastrada. */
+  width: number
 }
 
 type DragRef = {
@@ -27,22 +26,6 @@ type DragRef = {
   startX: number
   startW: number
   min: number
-  max: number
-  /** Columnas `auto` (sin ancho) fijadas en px al empezar, para que no se muevan. */
-  pinned: Record<string, number>
-  partner?: { key: string; startW: number | undefined }
-}
-
-/** Anchos medidos de las celdas hermanas marcadas con `data-column-width-key`. */
-function measureRow(th: Element | null): Record<string, number> {
-  const out: Record<string, number> = {}
-  for (const cell of Array.from(th?.parentElement?.children ?? [])) {
-    const key = cell.getAttribute(COLUMN_WIDTH_KEY_ATTR)
-    if (!key) continue
-    const w = cell.getBoundingClientRect().width
-    if (w > 0) out[key] = w
-  }
-  return out
 }
 
 /**
@@ -54,20 +37,23 @@ function measureRow(th: Element | null): Record<string, number> {
  * `useListPrefs` (`setWidths`).
  *
  * Mecánica: pointer events CON captura, así el arrastre sigue aunque el puntero
- * salga de la celda. El ancho inicial, si no hay uno guardado, se mide del
- * propio `<th>`. Mientras se arrastra el ancho vive en el estado local (`drag`)
- * y solo se persiste al soltar: un arrastre son decenas de eventos.
+ * salga de la celda. Mientras se arrastra el ancho vive en el estado local
+ * (`drag`) y solo se persiste al soltar: un arrastre son decenas de eventos.
  *
- * Columna flexible (v0.5.0, con `columns`): la tabla llena siempre el ancho y
- * la diferencia de un arrastre la gana o la pierde SOLO la columna flexible
- * (ver `resolveFlexColumnKey`); las demás se quedan como estaban (las que iban
- * sin ancho se fijan en px al empezar, medidas de los `<th>` con
- * `data-column-width-key`). La flexible nunca se guarda en px: queda sin
- * ancho y es la única que cambia con el tamaño de la ventana. No baja de su
- * `minWidth` (o `FLEX_MIN_COLUMN_WIDTH`): llegado ahí, la arrastrada deja de
- * crecer. Arrastrar la propia flexible lo compensa `flexAbsorberKey`. Sin
- * `columns` (tablas a mano antiguas) o sin columna flexible, el comportamiento
- * es el de antes: cambia la arrastrada y table-fixed reparte.
+ * Modelo «como Excel + relleno» (v0.9.0, con `columns`):
+ * - Arrastrar el borde cambia SOLO esa columna; ninguna otra se mueve ni
+ *   encoge, y no hay más tope que el suelo de la propia columna
+ *   (`columnFloor`: su `minWidth` o 64 px).
+ * - Todas las columnas tienen ancho efectivo (`resolveColumnWidth`): guardado,
+ *   `width` o `DEFAULT_COLUMN_WIDTH`. `totalWidth` es su suma.
+ * - La de relleno (`fill: true`, alias `flex`) tiene un ancho BASE como las
+ *   demás (cuenta en la suma y se guarda al arrastrarla) y se estira encima
+ *   si sobra sitio: su `<col>` va sin ancho (`colWidth` → `undefined`) y la
+ *   tabla lleva `tableStyle` (`tableSizing`). Sin relleno, hueco a la derecha.
+ *   Al arrastrar la de relleno se parte de su ancho PINTADO (medido del
+ *   `<th>`, estiramiento incluido), para que el asa siga al puntero.
+ * Sin `columns` (tablas a mano antiguas): cambia la arrastrada, partiendo del
+ * ancho guardado o, si no hay, del medido; suelo `MIN_COLUMN_WIDTH`.
  */
 export function useColumnResize({
   columnWidths,
@@ -76,55 +62,60 @@ export function useColumnResize({
 }: {
   columnWidths?: Record<string, number>
   onColumnWidthsChange?: (widths: Record<string, number>) => void
-  /** Columnas VISIBLES, en orden: activa el modo de columna flexible. */
+  /** Columnas VISIBLES, en orden: activa el modelo «como Excel + relleno». */
   columns?: SizedColumn[]
 }) {
   const [drag, setDrag] = React.useState<DragState | null>(null)
   const dragRef = React.useRef<DragRef | null>(null)
 
-  const flexKey = columns ? resolveFlexColumnKey(columns) : undefined
-  const flexCol = flexKey ? columns?.find((c) => c.key === flexKey) : undefined
-  const flexMin = flexCol?.minWidth ?? FLEX_MIN_COLUMN_WIDTH
-  const absorberKey = columns && flexKey ? flexAbsorberKey(columns, flexKey) : undefined
+  const fillKey = columns ? resolveFillColumnKey(columns) : undefined
+  const colOf = (key: string) => columns?.find((c) => c.key === key)
 
-  /** Ancho sin arrastre: guardado > `width` > compacto de `action`; la flexible, ninguno. */
+  /** Ancho efectivo sin arrastre (con `columns`): guardado/`width`/defecto, con suelo. */
   function baseWidth(key: string): number | undefined {
-    if (key === flexKey) return undefined
-    const col = columns?.find((c) => c.key === key)
+    const col = colOf(key)
     return col ? resolveColumnWidth(col, columnWidths?.[key]) : columnWidths?.[key]
   }
 
   /** Ancho vigente de una columna: el del arrastre en curso, o el guardado. */
   function widthOf(key: string): number | undefined {
-    return drag?.widths[key] ?? columnWidths?.[key]
+    return drag?.key === key ? drag.width : columnWidths?.[key]
   }
 
   /**
-   * Ancho resuelto para el `<col>` (con `columns`): el del arrastre en curso,
-   * o `resolveColumnWidth`; la flexible (y la que compensa mientras se arrastra
-   * la flexible) va sin ancho. `undefined` = sin `<col>` width.
+   * Ancho de la columna en el modelo: el del arrastre en curso o el efectivo.
+   * En la de relleno es su BASE (lo que cuenta en la suma).
+   */
+  function liveWidth(key: string): number | undefined {
+    return drag?.key === key ? drag.width : baseWidth(key)
+  }
+
+  /**
+   * Ancho para el `<col>`: el vivo de cada columna; la de relleno, ninguno
+   * (`undefined`): table-fixed le da todo el sobrante.
    */
   function colWidth(key: string): number | undefined {
-    if (drag) {
-      if (key in drag.widths) return drag.widths[key]
-      if (key === drag.autoKey) return undefined
-    }
-    return baseWidth(key)
+    if (key === fillKey) return undefined
+    return liveWidth(key)
+  }
+
+  /** Suma de los anchos de `columns` (la de relleno, con su base). */
+  const totalWidth = columns
+    ? columns.reduce((sum, c) => sum + (liveWidth(c.key) ?? 0), 0)
+    : undefined
+
+  /** Estilo de la `<table>` para `extra` px fuera de `columns` (p. ej. una columna de selección). */
+  function tableStyle(extra = 0): React.CSSProperties | undefined {
+    return totalWidth == null ? undefined : tableSizing(totalWidth + extra, !!fillKey)
   }
 
   function clamp(d: DragRef, clientX: number) {
-    return Math.round(Math.max(d.min, Math.min(d.max, d.startW + clientX - d.startX)))
-  }
-
-  function liveWidths(d: DragRef, px: number): Record<string, number> {
-    return { ...d.pinned, [d.key]: px }
+    return Math.round(Math.max(d.min, d.startW + clientX - d.startX))
   }
 
   /**
    * Asa de redimensión. Va dentro de un `<th>` con `relative` (la propia asa es
-   * `absolute`), y no se pinta en la última columna visible: arrastrarla no
-   * tendría contra qué repartir. Con columna flexible, la flexible no lleva asa
-   * si no hay columna que la compense (devuelve `null`).
+   * `absolute`). Quien pinta la tabla decide en qué columnas ponerla.
    *
    * La línea se ve SIEMPRE (no solo al pasar por encima): un asa invisible hay
    * que buscarla a tientas con el ratón, y quien no sepa que existe no la
@@ -135,7 +126,6 @@ export function useColumnResize({
    * cuanto el arrastre actualiza el ancho — y con ella, la captura del puntero.
    */
   function resizeHandle(columnKey: string) {
-    if (flexKey && columnKey === flexKey && !absorberKey) return null
     return (
       <span
         role="presentation"
@@ -146,47 +136,28 @@ export function useColumnResize({
         onPointerDown={(e) => {
           if (e.button !== 0) return
           const th = e.currentTarget.parentElement
-          const measured = flexKey ? measureRow(th) : {}
-          const isFlex = !!flexKey && columnKey === flexKey
-          const startW =
-            (isFlex ? measured[columnKey] : (columnWidths?.[columnKey] ?? measured[columnKey])) ??
-            th?.getBoundingClientRect().width ??
-            0
+          const measured = () => th?.getBoundingClientRect().width || undefined
+          const col = colOf(columnKey)
+          let startW: number
+          if (!col) startW = columnWidths?.[columnKey] ?? measured() ?? 0
+          else if (columnKey === fillKey) {
+            startW = Math.max(measured() ?? 0, baseWidth(columnKey)!)
+          } else startW = baseWidth(columnKey)!
           const d: DragRef = {
             key: columnKey,
             startX: e.clientX,
             startW,
-            min: isFlex ? flexMin : MIN_COLUMN_WIDTH,
-            max: Infinity,
-            pinned: {},
-          }
-          if (flexKey && columns) {
-            const partnerKey = isFlex ? absorberKey! : flexKey
-            const partnerStart =
-              measured[partnerKey] ?? (isFlex ? baseWidth(partnerKey) : undefined)
-            const partnerMin = isFlex ? MIN_COLUMN_WIDTH : flexMin
-            d.partner = { key: partnerKey, startW: partnerStart }
-            if (partnerStart != null) d.max = startW + Math.max(0, partnerStart - partnerMin)
-            for (const c of columns) {
-              if (c.key === columnKey || c.key === flexKey || c.key === partnerKey) continue
-              if (baseWidth(c.key) == null && measured[c.key] != null) {
-                d.pinned[c.key] = Math.round(measured[c.key])
-              }
-            }
+            min: col ? columnFloor(col) : MIN_COLUMN_WIDTH,
           }
           e.currentTarget.setPointerCapture(e.pointerId)
           dragRef.current = d
-          setDrag({
-            key: columnKey,
-            widths: liveWidths(d, clamp(d, e.clientX)),
-            autoKey: d.partner?.key,
-          })
+          setDrag({ key: columnKey, width: clamp(d, e.clientX) })
           e.preventDefault()
         }}
         onPointerMove={(e) => {
           const d = dragRef.current
           if (!d) return
-          setDrag({ key: d.key, widths: liveWidths(d, clamp(d, e.clientX)), autoKey: d.partner?.key })
+          setDrag({ key: d.key, width: clamp(d, e.clientX) })
         }}
         onPointerUp={(e) => {
           const d = dragRef.current
@@ -194,21 +165,7 @@ export function useColumnResize({
           const px = clamp(d, e.clientX)
           dragRef.current = null
           setDrag(null)
-          if (!flexKey) {
-            onColumnWidthsChange?.({ ...columnWidths, [d.key]: px })
-            return
-          }
-          // La flexible nunca se guarda en px: así absorbe el ancho de la ventana.
-          const next = { ...columnWidths, ...d.pinned }
-          delete next[flexKey]
-          if (d.key !== flexKey) next[d.key] = px
-          else if (d.partner?.startW != null) {
-            next[d.partner.key] = Math.max(
-              MIN_COLUMN_WIDTH,
-              Math.round(d.partner.startW - (px - d.startW)),
-            )
-          }
-          onColumnWidthsChange?.(next)
+          onColumnWidthsChange?.({ ...columnWidths, [d.key]: px })
         }}
         onPointerCancel={() => {
           dragRef.current = null
@@ -226,5 +183,14 @@ export function useColumnResize({
     )
   }
 
-  return { widthOf, colWidth, flexKey, resizeHandle }
+  return {
+    widthOf,
+    colWidth,
+    fillKey,
+    /** @deprecated v0.9.0: usa `fillKey`. */
+    flexKey: fillKey,
+    totalWidth,
+    tableStyle,
+    resizeHandle,
+  }
 }

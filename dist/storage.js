@@ -119,25 +119,28 @@ var EMPTY_LIST_PREFS = Object.freeze({
 
 // src/list/columnWidth.ts
 var DEFAULT_ACTION_COLUMN_WIDTH = 56;
+var DEFAULT_COLUMN_WIDTH = 160;
+var MIN_COLUMN_WIDTH = 64;
+function isFillColumn(col) {
+  return !!(col.fill ?? col.flex);
+}
+function resolveFillColumnKey(columns) {
+  return columns.find(isFillColumn)?.key;
+}
+function defaultWidthOf(col) {
+  return col.width ?? (col.action && !col.header ? DEFAULT_ACTION_COLUMN_WIDTH : DEFAULT_COLUMN_WIDTH);
+}
+function columnFloor(col) {
+  return col.minWidth ?? Math.min(MIN_COLUMN_WIDTH, defaultWidthOf(col));
+}
 function resolveColumnWidth(col, stored) {
-  return stored ?? col.width ?? (col.action && !col.header ? DEFAULT_ACTION_COLUMN_WIDTH : void 0);
+  return Math.max(stored ?? defaultWidthOf(col), columnFloor(col));
+}
+function tableSizing(totalWidth, hasFill) {
+  return hasFill ? { width: "100%", minWidth: totalWidth } : { width: totalWidth };
 }
 function visibleColumnsOf(columns, hidden) {
   return hidden?.length ? columns.filter((c) => c.primary || !hidden.includes(c.key)) : columns;
-}
-var FLEX_MIN_COLUMN_WIDTH = 96;
-function resolveFlexColumnKey(columns) {
-  const marked = columns.find((c) => c.flex);
-  if (marked) return marked.key;
-  const primary = columns.find((c) => c.primary);
-  if (primary && primary.width == null && !primary.action) return primary.key;
-  return columns.find((c) => !c.action && c.width == null)?.key;
-}
-function flexAbsorberKey(columns, flexKey) {
-  const free = columns.filter((c) => c.key !== flexKey && !c.action && c.width == null);
-  if (free.length) return free[free.length - 1].key;
-  const i = columns.findIndex((c) => c.key === flexKey);
-  return i >= 0 ? columns[i + 1]?.key : void 0;
 }
 
 // src/list/rowTone.ts
@@ -167,24 +170,27 @@ function setLastAuthMethod(method, storageKey = DEFAULT_LAST_AUTH_METHOD_KEY) {
 }
 export {
   DEFAULT_ACTION_COLUMN_WIDTH,
+  DEFAULT_COLUMN_WIDTH,
   DEFAULT_LAST_AUTH_METHOD_KEY,
   DEFAULT_LIST_PAGE_SIZE,
   EMPTY_LIST_PREFS,
-  FLEX_MIN_COLUMN_WIDTH,
   LIST_PAGE_SIZES,
   LIST_PREFS_STORAGE_PREFIX,
+  MIN_COLUMN_WIDTH,
   TINTED_ROW_CLASS,
   cn,
-  flexAbsorberKey,
+  columnFloor,
   getLastAuthMethod,
+  isFillColumn,
   isListPageSize,
   listPrefsEqual,
   normalizeListPrefs,
   resolveColumnWidth,
-  resolveFlexColumnKey,
+  resolveFillColumnKey,
   resolveListDefaults,
   rowTone,
   safeStorage,
   setLastAuthMethod,
+  tableSizing,
   visibleColumnsOf
 };

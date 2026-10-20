@@ -5,20 +5,93 @@
 export const DEFAULT_ACTION_COLUMN_WIDTH = 56
 
 /**
- * Ancho a aplicar en el <colgroup> de un ResponsiveList `resizable`: lo
- * guardado/arrastrado gana siempre; si no hay nada guardado, el `width` de la
- * columna; las `action` sin ninguno de los dos y SIN cabecera (icono suelto)
- * caen al ancho compacto por defecto. Una `action` CON cabecera es la
- * convención de un botón con texto: sin `width` propio se queda sin <col>
- * width y comparte el sobrante de table-fixed como cualquier otra columna.
- * `undefined` = "sin <col> width": la señal con la que table-fixed reparte el
- * sobrante en esa columna.
+ * Ancho por defecto (px) de una columna de un listado `resizable` que no trae
+ * `width` ni ancho guardado (v0.9.0). Desde el modelo «como Excel» TODAS las
+ * columnas tienen ancho efectivo; la de relleno usa este como base y se estira
+ * encima.
  */
-export function resolveColumnWidth(
-  col: { width?: number; action?: boolean; header?: unknown },
-  stored: number | undefined,
-): number | undefined {
-  return stored ?? col.width ?? (col.action && !col.header ? DEFAULT_ACTION_COLUMN_WIDTH : undefined)
+export const DEFAULT_COLUMN_WIDTH = 160
+
+/** Suelo por defecto (px) de una columna redimensionable, si no trae `minWidth`. */
+export const MIN_COLUMN_WIDTH = 64
+
+/** Lo que las reglas de anchos necesitan saber de cada columna. */
+export type SizedColumn = {
+  key: string
+  width?: number
+  action?: boolean
+  header?: unknown
+  primary?: boolean
+  /** Columna de relleno (v0.9.0): se estira para ocupar el hueco que sobre. */
+  fill?: boolean
+  /** @deprecated v0.9.0: alias de `fill`. */
+  flex?: boolean
+  minWidth?: number
+}
+
+/** ¿Es la columna de relleno? `fill`, o el alias deprecado `flex` (v0.5.0). */
+export function isFillColumn(col: { fill?: boolean; flex?: boolean }): boolean {
+  return !!(col.fill ?? col.flex)
+}
+
+/**
+ * Columna de relleno de un listado `resizable`: la PRIMERA marcada con `fill`
+ * (o `flex`) entre las visibles. Sin ninguna marcada, `undefined`: NO hay
+ * relleno y, si las columnas no llegan al ancho del contenedor, queda hueco a
+ * la derecha. Nunca se elige sola (ni la `primary`): la decide el consumidor.
+ */
+export function resolveFillColumnKey(columns: SizedColumn[]): string | undefined {
+  return columns.find(isFillColumn)?.key
+}
+
+/** Ancho que la columna tendría sin nada guardado: su `width` o el por defecto. */
+function defaultWidthOf(col: Omit<SizedColumn, 'key'>): number {
+  return (
+    col.width ?? (col.action && !col.header ? DEFAULT_ACTION_COLUMN_WIDTH : DEFAULT_COLUMN_WIDTH)
+  )
+}
+
+/**
+ * Suelo de una columna: su `minWidth` si lo trae; si no, `MIN_COLUMN_WIDTH`
+ * (64), salvo que su propio ancho por defecto sea menor (un icono de 40 o 56
+ * px no se infla a 64 por defecto).
+ */
+export function columnFloor(col: Omit<SizedColumn, 'key'>): number {
+  return col.minWidth ?? Math.min(MIN_COLUMN_WIDTH, defaultWidthOf(col))
+}
+
+/**
+ * Ancho efectivo (px) de una columna de un ResponsiveList `resizable`: lo
+ * guardado/arrastrado gana; si no hay, su `width`; si tampoco, el ancho
+ * compacto de una `action` SIN cabecera (icono suelto) o `DEFAULT_COLUMN_WIDTH`.
+ * Nunca baja de `columnFloor`: un ancho guardado por debajo del suelo (p. ej.
+ * una fecha guardada a 105 px que corta «19/10/2…») se pinta al suelo.
+ *
+ * En la columna de relleno es su ancho BASE: el que tiene cuando la tabla no
+ * cabe; si sobra sitio, se estira por encima (ver `tableSizing`).
+ */
+export function resolveColumnWidth(col: Omit<SizedColumn, 'key'>, stored: number | undefined): number {
+  return Math.max(stored ?? defaultWidthOf(col), columnFloor(col))
+}
+
+/**
+ * Estilo de la `<table>` (table-fixed) para el modelo «como Excel + relleno»:
+ * - Con columna de relleno: `width: 100%` y `min-width: suma`. La `<col>` del
+ *   relleno va SIN ancho, así que table-fixed le da todo lo que sobre
+ *   (tabla − resto de columnas); como la tabla nunca baja de la suma, ese
+ *   sobrante nunca es menor que su base. Resultado: ancho = máx(contenedor,
+ *   suma), el relleno solo crece y el resto no se mueve.
+ * - Sin relleno: `width: suma` exacta. Con `width: 100%` table-fixed
+ *   repartiría el sobrante entre TODAS las columnas; con la suma, queda hueco
+ *   a la derecha.
+ * Si la suma supera el contenedor, la tabla lo desborda y el contenedor de
+ * scroll la desplaza a lo ancho.
+ */
+export function tableSizing(totalWidth: number, hasFill: boolean): {
+  width: string | number
+  minWidth?: number
+} {
+  return hasFill ? { width: '100%', minWidth: totalWidth } : { width: totalWidth }
 }
 
 /**
@@ -30,53 +103,4 @@ export function visibleColumnsOf<C extends { key: string; primary?: boolean }>(
   hidden: string[] | undefined,
 ): C[] {
   return hidden?.length ? columns.filter((c) => c.primary || !hidden.includes(c.key)) : columns
-}
-
-/** Ancho mínimo por defecto de la columna flexible, en px (ver `minWidth`). */
-export const FLEX_MIN_COLUMN_WIDTH = 96
-
-/** Lo que las reglas de la columna flexible necesitan saber de cada columna. */
-export type SizedColumn = {
-  key: string
-  width?: number
-  action?: boolean
-  header?: unknown
-  primary?: boolean
-  flex?: boolean
-  minWidth?: number
-}
-
-/**
- * Columna flexible de un listado `resizable`: la ÚNICA que gana o pierde
- * ancho cuando se arrastra otra o cambia el ancho de la ventana. Regla, sobre
- * las columnas VISIBLES y en orden:
- * 1. la primera marcada con `flex: true`;
- * 2. si ninguna, la `primary` si no tiene `width` ni es `action`;
- * 3. si no, la primera columna no-`action` sin `width`;
- * 4. si tampoco hay, ninguna (`undefined`): arrastrar cambia solo la columna
- *    arrastrada y table-fixed reparte la diferencia como antes de v0.5.0.
- */
-export function resolveFlexColumnKey(columns: SizedColumn[]): string | undefined {
-  const marked = columns.find((c) => c.flex)
-  if (marked) return marked.key
-  const primary = columns.find((c) => c.primary)
-  if (primary && primary.width == null && !primary.action) return primary.key
-  return columns.find((c) => !c.action && c.width == null)?.key
-}
-
-/**
- * Columna que compensa cuando se arrastra la PROPIA flexible: la última
- * columna no-`action` sin `width` (distinta de la flexible) y, si no hay, la
- * vecina de la derecha de la flexible (sea cual sea). `undefined` = la
- * flexible no tiene asa (es la última y no hay con quién compensar).
- *
- * Por qué la última sin `width` y no la vecina sin más: una columna sin
- * `width` es una de texto que el consumidor dejó crecer; las que traen `width`
- * (importes, fechas, estados) tienen el ancho pensado para su contenido.
- */
-export function flexAbsorberKey(columns: SizedColumn[], flexKey: string): string | undefined {
-  const free = columns.filter((c) => c.key !== flexKey && !c.action && c.width == null)
-  if (free.length) return free[free.length - 1].key
-  const i = columns.findIndex((c) => c.key === flexKey)
-  return i >= 0 ? columns[i + 1]?.key : undefined
 }
