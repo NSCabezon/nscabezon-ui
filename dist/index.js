@@ -20,6 +20,7 @@ import {
   flexAbsorberKey,
   isListPageSize,
   listPrefsEqual,
+  listPrefsStorageKey,
   localOnlyListPrefsStore,
   moveColumn,
   normalizeListPrefs,
@@ -36,7 +37,7 @@ import {
   usePagination,
   useSupabaseListPrefsStore,
   visibleColumnsOf
-} from "./chunk-5KT5VB24.js";
+} from "./chunk-5PTM5QDJ.js";
 import {
   VERSION_FOCUS_THROTTLE_MS,
   VERSION_POLL_INTERVAL_MS,
@@ -93,6 +94,7 @@ export {
   getLastAuthMethod,
   isListPageSize,
   listPrefsEqual,
+  listPrefsStorageKey,
   localOnlyListPrefsStore,
   moveColumn,
   normalizeListPrefs,

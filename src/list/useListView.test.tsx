@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { QueryClientProvider } from '@tanstack/react-query'
 
 import type { ListSort } from '../prefs/listPrefs'
+import type { ListPrefsStore } from '../prefs/stores'
 import { __resetListPrefsCache } from '../prefs/useListPrefs'
 import { resolveListDefaults, useListView, type UnpaginatedListView } from './useListView'
 import { rowTone } from './rowTone'
@@ -326,6 +327,76 @@ describe('useListView (persistencia local)', () => {
       sort: SORT,
       pageSize: 25,
     })
+  })
+})
+
+describe('useListView (v0.8.0: ready)', () => {
+  function StoreHarness({ store, report }: { store: ListPrefsStore; report: (v: View) => void }) {
+    const view = useListView('ready-list', {
+      columnKeys: COLUMN_KEYS,
+      defaults: { sort: SORT },
+      store,
+    })
+    React.useEffect(() => {
+      report(view)
+    })
+    return null
+  }
+
+  it('solo local (sin sesión): ready al instante, también en listProps', () => {
+    mount()
+    expect(latest.ready).toBe(true)
+    expect(latest.isLoaded).toBe(true)
+    expect(latest.listProps.ready).toBe(true)
+  })
+
+  it('sin caché local y con el servidor pendiente: ready=false con sort/from/to por defecto; al responder, ready y las prefs del servidor', async () => {
+    let resolve!: (row: unknown | null) => void
+    const store: ListPrefsStore = {
+      userId: 'u1',
+      load: () =>
+        new Promise((r) => {
+          resolve = r
+        }),
+      save: async () => {},
+    }
+    act(() => {
+      root.render(
+        <QueryClientProvider client={makeQueryClient()}>
+          <StoreHarness store={store} report={(v) => (latest = v)} />
+        </QueryClientProvider>,
+      )
+    })
+    expect(latest.ready).toBe(false)
+    expect(latest.isLoaded).toBe(false)
+    expect(latest.listProps.ready).toBe(false)
+    expect(latest.sort).toEqual(SORT)
+    expect([latest.from, latest.to]).toEqual([0, 24])
+    await act(async () => {
+      resolve({ pageSize: 50, sort: { key: 'client', dir: 'asc' } })
+    })
+    // TanStack Query notifica en un tick aparte (más lento con la suite en paralelo).
+    for (let i = 0; i < 50 && !latest.ready; i++) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 10))
+      })
+    }
+    expect(latest.ready).toBe(true)
+    expect(latest.listProps.ready).toBe(true)
+    expect(latest.sort).toEqual({ key: 'client', dir: 'asc' })
+    expect([latest.from, latest.to]).toEqual([0, 49])
+  })
+
+  it('usuario aún desconocido (undefined): ready=false', () => {
+    const store: ListPrefsStore = { userId: undefined, load: async () => null, save: async () => {} }
+    act(() => {
+      root.render(
+        <QueryClientProvider client={makeQueryClient()}>
+          <StoreHarness store={store} report={(v) => (latest = v)} />
+        </QueryClientProvider>,
+      )
+    })
+    expect(latest.ready).toBe(false)
   })
 })
 

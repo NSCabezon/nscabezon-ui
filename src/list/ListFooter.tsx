@@ -2,7 +2,7 @@ import { Loader2 } from 'lucide-react'
 
 import { cn } from '../lib/cn'
 import { ColumnsMenu, type ColumnsMenuColumn } from './columns-menu'
-import { Pagination } from './pagination'
+import { Pagination, stableCountMinWidth } from './pagination'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../primitives/select'
 import { LIST_PAGE_SIZES } from '../prefs/listPrefs'
 import { useLabels, type Labels } from '../context/UiProvider'
@@ -162,11 +162,19 @@ export function ListFooter({
           {status}
         </span>
         <div className="flex items-center justify-center gap-2">
+          {/* v0.8.0: el recuento va centrado y medía distinto con cada nº
+              de dígitos (9 → 10 resultados movía ~5 px los botones). Caja de
+              ancho mínimo fijo (texto sin dígitos + 6 huecos de dígito,
+              `tabular-nums`): cambiar de dígitos no mueve nada alrededor. Se
+              eligió frente a alinear a la izquierda para no cambiar la
+              composición del pie. */}
           {showCountOnly && (
-            <span className="text-sm text-muted-foreground tabular-nums">
-              {truncated
-                ? labels.countTruncated(total)
-                : labels.count(total)}
+            <span
+              data-list-count=""
+              className="inline-block text-center text-sm text-muted-foreground tabular-nums"
+              style={{ minWidth: stableCountMinWidth(status, 6) }}
+            >
+              {status}
             </span>
           )}
           <Pagination

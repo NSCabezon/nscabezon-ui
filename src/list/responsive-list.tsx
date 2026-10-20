@@ -178,6 +178,11 @@ export type ResponsiveListProps<T> = {
   // `top` (px) if the header must pin below something.
   stickyHeader?: boolean
   stickyHeaderTop?: number
+  // v0.8.0: con `false` las preferencias del listado aún no son las
+  // definitivas (`useListView` lo cablea en `listProps`): en vez de pintar la
+  // tabla con anchos/orden/columnas por defecto que luego saltarían, se pinta
+  // un esqueleto (`aria-busy`). Por defecto, `true`.
+  ready?: boolean
   className?: string
   // Textos propios (menú de columnas); ganan al `UiProvider`.
   labels?: Partial<Labels>
@@ -230,6 +235,7 @@ export function ResponsiveList<T>({
   onPageSizeChange,
   stickyHeader,
   stickyHeaderTop,
+  ready = true,
   className,
   labels: labelsProp,
 }: ResponsiveListProps<T>) {
@@ -469,6 +475,21 @@ export function ResponsiveList<T>({
       },
       onDragEnd: endDrag,
     }
+  }
+
+  if (!ready) {
+    return (
+      <div
+        className={cn('flex flex-col gap-2 py-1', className)}
+        aria-busy="true"
+        data-list-pending=""
+      >
+        <span className="sr-only">{labels.loading}</span>
+        {Array.from({ length: 5 }, (_, i) => (
+          <div key={i} aria-hidden="true" className="h-9 animate-pulse rounded-md bg-muted" />
+        ))}
+      </div>
+    )
   }
 
   return (

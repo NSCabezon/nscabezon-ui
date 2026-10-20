@@ -198,12 +198,21 @@ const view = useListView('orders', {
   deps: [search, tab], // vuelven a la página 1 al cambiar
 })
 // consulta: .order(view.sort.key, …).range(view.from, view.to)
+//   con `enabled: view.ready` (v0.8.0): no se consulta con las prefs por defecto
 
 <ResponsiveList columns={columns} data={rows} rowKey={(o) => o.id}
   rowHref={(o) => `/orders/${o.id}`} {...view.listProps} />
 <ListFooter {...view.footerProps} columns={columns} total={count} />
 ```
 
+- `view.ready` (v0.8.0; `view.isLoaded` es su alias): las preferencias ya
+  son las definitivas (caché local de ESTE usuario, respuesta del servidor
+  —con o sin fila, o error— o sin sesión). Mientras es `false`, `sort`,
+  `from` y `to` son los por defecto y **no** deben usarse: pasa
+  `enabled: view.ready` a la consulta del listado. `listProps.ready` llega a
+  `ResponsiveList`, que con `ready={false}` pinta un esqueleto (`aria-busy`,
+  5 barras) en vez de la tabla con anchos, orden y columnas por defecto que
+  luego saltarían. Sin la prop, `ready` es `true` (como antes).
 - `rowHref` hace la fila entera un enlace: la columna `primary` se envuelve en
   el `Link` del provider (teclado, «abrir en pestaña nueva»), el resto de la
   fila navega con `navigate`, y cmd/ctrl/shift+click o click de rueda abren en
@@ -265,6 +274,12 @@ const view = useListView('orders', {
     cambiar el tamaño.
   - Pie compacto (v0.7.0): fila con `pt-1` y flechas de `Pagination` de
     28 px (`icon-sm`); en táctil todo sigue a 44 px (`pointer-coarse:`).
+  - Recuento estable (v0.8.0): el «N resultados» del pie y el rango de
+    `Pagination` van centrados, con `tabular-nums` y un **ancho mínimo fijo**
+    (texto sin dígitos + 6 huecos de dígito el recuento, + 12 el rango, en
+    `ch`): pasar de 9 a 10 resultados o de página no mueve los botones; solo
+    el texto se recentra dentro de su caja. Se prefirió a alinearlo a la
+    izquierda para no cambiar la composición del pie.
 - Regla de anchos con `resizable`: la tabla llena siempre el ancho (sin
   scroll lateral) y el espacio que sobra o falta lo absorbe UNA columna, la
   **flexible**. Al arrastrar el borde de una columna solo cambian ella y la
@@ -301,10 +316,25 @@ useListPrefs(listKey, { columnKeys, defaults?, store? }): {
 }
 ```
 
-- Caché local en `localStorage` (`list-prefs:<listKey>`, vía `safeStorage`),
-  leída con `useSyncExternalStore`: en Next el render de servidor y la
-  hidratación usan los defaults y justo después se aplica la caché (sin error
-  de hidratación); en una SPA el primer render ya la lee.
+- Caché local en `localStorage` (vía `safeStorage`), leída con
+  `useSyncExternalStore`: en Next el render de servidor y la hidratación usan
+  los defaults y justo después se aplica la caché (sin error de hidratación);
+  en una SPA el primer render ya la lee. Clave según `store.userId`
+  (v0.8.0, `listPrefsStorageKey(userId, listKey)`):
+  - usuario (`string`): `list-prefs:<userId>:<listKey>`. En un PC compartido
+    cada usuario pinta con lo suyo. Al cambiar de usuario en la misma pestaña
+    se vacía la caché en memoria.
+  - sin sesión (`null`): `list-prefs:<listKey>` (la de siempre, del dispositivo).
+  - desconocido (`undefined`, sesión resolviéndose): ninguna; defaults e
+    `isLoaded = false`.
+- Migración de la clave vieja (`list-prefs:<listKey>`, < v0.8.0): con usuario
+  **no** se usa para pintar ni se sube a su cuenta (pudo dejarla otro
+  usuario); se borra cuando el servidor responde. Ese primer arranque de cada
+  lista espera al servidor (una vez).
+- `isLoaded` (v0.8.0): `true` solo si hay caché local de ESTE usuario para
+  esta lista, si la consulta al servidor terminó (con fila, sin fila o con
+  error) o si no hay sesión (`userId === null`). Antes era `true` con usuario
+  aún desconocido.
 - Remoto: la fila del almacén gana (una vez por usuario y lista); si no hay
   fila y la caché difiere del defecto, se sube la local.
 - Ocultas, orden, orden de columnas, tamaño de página y compacto se guardan al instante; los anchos con
@@ -334,11 +364,15 @@ create table public.user_list_prefs (
 
 ```ts
 // Hook: sigue la sesión (getSession al montar + onAuthStateChange, con baja al
-// desmontar). userId null sin sesión. Memoizado por cliente + usuario + tabla.
+// desmontar). userId undefined mientras getSession no responde (las listas
+// esperan), null sin sesión (o si getSession falla). Memoizado por cliente +
+// usuario + tabla.
 const store = useSupabaseListPrefsStore(supabase)
 // opciones: { table?: string; onError?: (e) => void }  (onError puede ir en línea)
 
-// Sin React, o si ya tienes el userId: la factoría de siempre.
+// Sin React, o si ya tienes el userId: la factoría de siempre. OJO: trata
+// `undefined` como «sin sesión» (null); si tu userId aún se resuelve, pasa
+// `{ ...store, userId: undefined }` para que las listas esperen.
 const store = useMemo(() => createSupabaseListPrefsStore(supabase, userId), [userId])
 ```
 
@@ -351,7 +385,7 @@ Un almacén propio solo tiene que cumplir:
 
 ```ts
 type ListPrefsStore = {
-  userId: string | null
+  userId: string | null | undefined   // undefined = aún desconocido (v0.8.0)
   load(listKey: string): Promise<unknown | null>   // fila sin normalizar o null
   save(listKey: string, prefs: ListPrefs): Promise<void>
 }

@@ -3,8 +3,11 @@ import type { ListPrefs } from './listPrefs'
 /**
  * Dónde se sincronizan las preferencias de listado entre dispositivos.
  *
- * - `userId`: usuario con sesión. `null` = no hay nada remoto que leer ni
- *   escribir (solo caché local). Cambiar de usuario vuelve a reconciliar.
+ * - `userId`: usuario con sesión. `null` = DEFINITIVAMENTE sin sesión: nada
+ *   remoto que leer ni escribir (solo caché local, clave `list-prefs:<lista>`).
+ *   `undefined` (v0.8.0) = usuario aún desconocido (se está resolviendo la
+ *   sesión): `useListPrefs` no lee ninguna caché y `isLoaded` es `false`.
+ *   Cambiar de usuario vuelve a reconciliar.
  * - `load`: fila guardada para esa lista, SIN normalizar (el hook la sanea
  *   contra las columnas de hoy), o `null` si no hay fila. Si lanza, el hook se
  *   queda con la caché local.
@@ -12,7 +15,7 @@ import type { ListPrefs } from './listPrefs'
  *   pantalla; el siguiente cambio lo vuelve a intentar).
  */
 export type ListPrefsStore = {
-  userId: string | null
+  userId: string | null | undefined
   load: (listKey: string) => Promise<unknown | null>
   save: (listKey: string, prefs: ListPrefs) => Promise<void>
 }

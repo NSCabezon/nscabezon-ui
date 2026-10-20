@@ -1272,3 +1272,17 @@ describe('ResponsiveList (columna flexible)', () => {
     expect(onChange).toHaveBeenCalledWith({ ref: 130, client: 200 })
   })
 })
+
+describe('ResponsiveList (v0.8.0: ready)', () => {
+  it('con ready=false pinta un esqueleto aria-busy en vez de la tabla con anchos por defecto', () => {
+    render(<ResponsiveList columns={columns} data={rows} rowKey={(r) => r.id} ready={false} />)
+    expect(container.querySelector('table')).toBeNull()
+    expect(container.querySelector('[aria-busy="true"][data-list-pending]')).not.toBeNull()
+  })
+
+  it('por defecto (sin ready) pinta la tabla como siempre', () => {
+    render(<ResponsiveList columns={columns} data={rows} rowKey={(r) => r.id} />)
+    expect(container.querySelector('table')).not.toBeNull()
+    expect(container.querySelector('[data-list-pending]')).toBeNull()
+  })
+})

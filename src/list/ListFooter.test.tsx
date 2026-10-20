@@ -375,3 +375,26 @@ describe('ListFooter (pie compacto, v0.7.0)', () => {
     }
   })
 })
+
+describe('ListFooter (v0.8.0: recuento estable)', () => {
+  it('el recuento usa tabular-nums y su ancho mínimo no cambia al pasar de 9 a 10 resultados', () => {
+    renderFooter({ total: 9, pageSize: 25 })
+    const nine = container.querySelector<HTMLElement>('[data-list-count]')!
+    expect(nine.className).toContain('tabular-nums')
+    const w9 = nine.style.minWidth
+    renderFooter({ total: 10, pageSize: 25 })
+    const ten = container.querySelector<HTMLElement>('[data-list-count]')!
+    expect(ten.textContent).toBe('10 resultados')
+    expect(w9).toMatch(/ch$/)
+    expect(ten.style.minWidth).toBe(w9)
+  })
+
+  it('el rango de la paginación tampoco cambia de ancho mínimo entre páginas', () => {
+    renderFooter({ total: 120, pageSize: 25, page: 1 })
+    const range = () => nav()!.querySelector<HTMLElement>('span.tabular-nums')!
+    const w1 = range().style.minWidth
+    renderFooter({ total: 120, pageSize: 25, page: 5 })
+    expect(range().textContent).toContain('101')
+    expect(range().style.minWidth).toBe(w1)
+  })
+})

@@ -80,20 +80,20 @@ describe('useListPrefs', () => {
   })
 
   it('la fila del servidor gana a la caché local (normalizada) y se escribe en la caché', async () => {
-    localStorage.setItem('list-prefs:orders', JSON.stringify({ hidden: ['client'] }))
+    localStorage.setItem('list-prefs:u1:orders', JSON.stringify({ hidden: ['client'] }))
     const { store, save } = fakeStore({ hidden: ['status', 'ghost'], widths: { number: 80 } })
     const { result } = renderPrefs(store)
     expect(result.current.prefs.hidden).toEqual(['client'])
     await waitFor(() => expect(result.current.prefs.hidden).toEqual(['status']))
     expect(result.current.prefs.widths).toEqual({ number: 80 })
     expect(result.current.isLoaded).toBe(true)
-    expect(JSON.parse(localStorage.getItem('list-prefs:orders')!).hidden).toEqual(['status'])
+    expect(JSON.parse(localStorage.getItem('list-prefs:u1:orders')!).hidden).toEqual(['status'])
     // El servidor ya lo tenía: no se vuelve a subir.
     expect(save).not.toHaveBeenCalled()
   })
 
   it('sin fila en el servidor sube la caché local si difiere del defecto', async () => {
-    localStorage.setItem('list-prefs:orders', JSON.stringify({ hidden: ['client'] }))
+    localStorage.setItem('list-prefs:u1:orders', JSON.stringify({ hidden: ['client'] }))
     const { store, save } = fakeStore(null)
     renderPrefs(store)
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
@@ -109,7 +109,7 @@ describe('useListPrefs', () => {
   })
 
   it('un error al cargar deja la caché local y marca isLoaded', async () => {
-    localStorage.setItem('list-prefs:orders', JSON.stringify({ hidden: ['client'] }))
+    localStorage.setItem('list-prefs:u1:orders', JSON.stringify({ hidden: ['client'] }))
     const store: ListPrefsStore = {
       userId: 'u1',
       load: async () => {
@@ -142,7 +142,7 @@ describe('useListPrefs', () => {
       order: [],
     })
     expect(save).toHaveBeenCalledTimes(3)
-    expect(JSON.parse(localStorage.getItem('list-prefs:orders')!).pageSize).toBe(10)
+    expect(JSON.parse(localStorage.getItem('list-prefs:u1:orders')!).pageSize).toBe(10)
   })
 
   it('los anchos van con debounce de 400 ms (solo el último) y la caché local al instante', async () => {
@@ -154,7 +154,7 @@ describe('useListPrefs', () => {
     act(() => result.current.setWidths({ number: 100 }))
     act(() => result.current.setWidths({ number: 120 }))
     expect(result.current.prefs.widths).toEqual({ number: 120 })
-    expect(JSON.parse(localStorage.getItem('list-prefs:orders')!).widths).toEqual({ number: 120 })
+    expect(JSON.parse(localStorage.getItem('list-prefs:u1:orders')!).widths).toEqual({ number: 120 })
     act(() => vi.advanceTimersByTime(LIST_PREFS_WIDTHS_DEBOUNCE_MS - 1))
     expect(save).not.toHaveBeenCalled()
     act(() => vi.advanceTimersByTime(1))
@@ -201,7 +201,7 @@ describe('useListPrefs', () => {
     expect(result.current.prefs.compact).toBe(true)
     expect(save).toHaveBeenCalledTimes(1)
     expect(save).toHaveBeenLastCalledWith('orders', { ...DEFAULT_PREFS, compact: true })
-    expect(JSON.parse(localStorage.getItem('list-prefs:orders')!).compact).toBe(true)
+    expect(JSON.parse(localStorage.getItem('list-prefs:u1:orders')!).compact).toBe(true)
     act(() => result.current.setCompact(false))
     expect(result.current.prefs.compact).toBe(false)
     expect(save).toHaveBeenLastCalledWith('orders', DEFAULT_PREFS)
@@ -218,7 +218,7 @@ describe('useListPrefs', () => {
       ...DEFAULT_PREFS,
       order: ['status', 'number', 'client'],
     })
-    expect(JSON.parse(localStorage.getItem('list-prefs:orders')!).order).toEqual([
+    expect(JSON.parse(localStorage.getItem('list-prefs:u1:orders')!).order).toEqual([
       'status',
       'number',
       'client',
@@ -272,5 +272,103 @@ describe('useListPrefs', () => {
     expect(result.current.isLoaded).toBe(true)
     expect(load).not.toHaveBeenCalled()
     expect(save).not.toHaveBeenCalled()
+  })
+})
+
+// v0.8.0: los listados «bailaban» porque las prefs del servidor llegaban
+// después del primer pintado y la caché local no era por usuario.
+describe('useListPrefs (v0.8.0: clave por usuario e isLoaded)', () => {
+  // Almacén cuyo `load` no responde hasta que el test lo dice.
+  function pendingStore(...args: [userId?: string | null | undefined]) {
+    // Sin argumento, 'u1'; `pendingStore(undefined)` = usuario desconocido.
+    const userId = args.length ? args[0] : 'u1'
+    let resolve!: (row: unknown | null) => void
+    const load = vi.fn<ListPrefsStore['load']>(
+      () => new Promise((r) => {
+        resolve = r
+      }),
+    )
+    const save = vi.fn<ListPrefsStore['save']>(async () => {})
+    const store: ListPrefsStore = { userId, load, save }
+    return { store, load, save, respond: (row: unknown | null) => act(async () => resolve(row)) }
+  }
+
+  it('escribe y lee la caché en `list-prefs:<userId>:<listKey>`, no en la clave sin usuario', async () => {
+    const { store } = fakeStore(null)
+    const { result } = renderPrefs(store)
+    await waitFor(() => expect(result.current.isLoaded).toBe(true))
+    act(() => result.current.setHidden(['client']))
+    expect(JSON.parse(localStorage.getItem('list-prefs:u1:orders')!).hidden).toEqual(['client'])
+    expect(localStorage.getItem('list-prefs:orders')).toBeNull()
+  })
+
+  it('con caché local de ESTE usuario isLoaded es true en el primer render y pinta con ella', () => {
+    localStorage.setItem('list-prefs:u1:orders', JSON.stringify({ hidden: ['client'] }))
+    const { store } = pendingStore()
+    const { result } = renderPrefs(store)
+    expect(result.current.isLoaded).toBe(true)
+    expect(result.current.prefs.hidden).toEqual(['client'])
+  })
+
+  it('sin caché local isLoaded es false hasta que responde el servidor', async () => {
+    const { store, respond } = pendingStore()
+    const { result } = renderPrefs(store)
+    expect(result.current.isLoaded).toBe(false)
+    expect(result.current.prefs).toEqual(DEFAULT_PREFS)
+    await respond({ hidden: ['status'] })
+    await waitFor(() => expect(result.current.isLoaded).toBe(true))
+    expect(result.current.prefs.hidden).toEqual(['status'])
+  })
+
+  it('sin fila en el servidor isLoaded pasa a true al responder (defaults)', async () => {
+    const { store, respond } = pendingStore()
+    const { result } = renderPrefs(store)
+    expect(result.current.isLoaded).toBe(false)
+    await respond(null)
+    await waitFor(() => expect(result.current.isLoaded).toBe(true))
+    expect(result.current.prefs).toEqual(DEFAULT_PREFS)
+  })
+
+  it('no pinta con la clave vieja sin usuario y la borra cuando el servidor responde (sin subirla)', async () => {
+    localStorage.setItem('list-prefs:orders', JSON.stringify({ hidden: ['client'], pageSize: 100 }))
+    const { store, save, respond } = pendingStore()
+    const { result } = renderPrefs(store)
+    expect(result.current.prefs).toEqual(DEFAULT_PREFS)
+    expect(result.current.isLoaded).toBe(false)
+    await respond(null)
+    await waitFor(() => expect(localStorage.getItem('list-prefs:orders')).toBeNull())
+    expect(result.current.prefs).toEqual(DEFAULT_PREFS)
+    // Podía ser de otro usuario: no se sube a la cuenta de este.
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it('con usuario desconocido (undefined) no lee ninguna clave, no carga e isLoaded es false', () => {
+    localStorage.setItem('list-prefs:orders', JSON.stringify({ hidden: ['client'] }))
+    const { store, load } = pendingStore(undefined)
+    const { result } = renderPrefs(store)
+    expect(result.current.prefs).toEqual(DEFAULT_PREFS)
+    expect(result.current.isLoaded).toBe(false)
+    expect(load).not.toHaveBeenCalled()
+  })
+
+  it('cada usuario pinta con lo suyo y cambiar de usuario vacía la caché en memoria', async () => {
+    localStorage.setItem('list-prefs:u1:orders', JSON.stringify({ hidden: ['client'] }))
+    localStorage.setItem('list-prefs:u2:orders', JSON.stringify({ hidden: ['status'] }))
+    const s1 = pendingStore('u1').store
+    const s2 = pendingStore('u2').store
+    const client = makeQueryClient()
+    const { result, rerender } = renderHook(
+      ({ store }: { store: ListPrefsStore }) =>
+        useListPrefs('orders', { columnKeys: KEYS, defaults: DEFAULTS, store }),
+      { wrapper: withQueryClient(client), initialProps: { store: s1 } },
+    )
+    expect(result.current.prefs.hidden).toEqual(['client'])
+    // Otro proceso cambia la caché de u1 a espaldas de la memoria.
+    localStorage.setItem('list-prefs:u1:orders', JSON.stringify({ hidden: ['number'] }))
+    rerender({ store: s2 })
+    expect(result.current.prefs.hidden).toEqual(['status'])
+    rerender({ store: s1 })
+    // La memoria se vació al cambiar de usuario: se relee localStorage.
+    expect(result.current.prefs.hidden).toEqual(['number'])
   })
 })

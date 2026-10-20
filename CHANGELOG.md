@@ -3,6 +3,43 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.8.0] - 2026-10-20
+
+Los listados «bailaban»: las preferencias del servidor (anchos, orden de
+columnas, compacto, ocultas, orden, filas por página) se aplicaban después del
+primer pintado, y la caché local no era por usuario.
+
+> **Consumidores: pasad `enabled: view.ready` a la consulta del listado.**
+> Mientras `view.ready` es `false`, `sort`/`from`/`to` son los por defecto.
+
+### Añadido
+
+- `useListView`: `ready: boolean` (y `isLoaded` se queda como alias). También
+  en `listProps.ready`.
+- `ResponsiveList`: prop `ready?: boolean` (por defecto `true`). Con `false`
+  pinta un esqueleto (`aria-busy`, `data-list-pending`) en vez de la tabla con
+  anchos/orden/columnas por defecto.
+- `listPrefsStorageKey(userId, listKey)`: la clave local que usa `useListPrefs`.
+- `ListPrefsStore.userId` admite `undefined` = usuario aún desconocido.
+
+### Cambiado
+
+- `useListPrefs`: caché local por usuario, `list-prefs:<userId>:<listKey>`
+  (sin sesión, `list-prefs:<listKey>` como antes; usuario desconocido, ninguna).
+  La caché en memoria se vacía al cambiar de usuario en la misma pestaña.
+- `useListPrefs.isLoaded`: `true` solo con caché local de ESTE usuario, con la
+  consulta al servidor terminada (con o sin fila, o error) o sin sesión
+  (`userId === null`). Antes era `true` también con el usuario sin resolver.
+- Migración de la clave vieja `list-prefs:<listKey>`: con usuario no se usa
+  para pintar ni se sube a su cuenta (pudo dejarla otro usuario); se borra
+  cuando el servidor responde.
+- `useSupabaseListPrefsStore`: `userId` es `undefined` mientras `getSession`
+  no responde y `null` sin sesión (o si `getSession` falla). Antes, `null`
+  desde el principio.
+- `ListFooter`/`Pagination`: el recuento «N resultados» y el rango van con
+  `tabular-nums` y ancho mínimo fijo en `ch` (texto sin dígitos + 6 / 12
+  huecos de dígito): cambiar de dígitos ya no desplaza los botones (~5 px).
+
 ## [0.7.0] - 2026-10-20
 
 ### Añadido

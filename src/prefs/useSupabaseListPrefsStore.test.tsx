@@ -86,10 +86,10 @@ afterEach(() => {
 })
 
 describe('useSupabaseListPrefsStore', () => {
-  it('empieza sin usuario y toma el de getSession al montar', async () => {
+  it('empieza con usuario desconocido (undefined) y toma el de getSession al montar', async () => {
     const f = fakeClient({ user: { id: 'u1' } })
     act(() => root.render(<Harness client={f.client} />))
-    expect(latest().userId).toBeNull()
+    expect(latest().userId).toBeUndefined()
     await f.resolveInitial()
     expect(latest().userId).toBe('u1')
     expect(f.client.auth.getSession).toHaveBeenCalledTimes(1)
@@ -152,5 +152,28 @@ describe('useSupabaseListPrefsStore', () => {
     })
     const typed: SupabaseLikeAuthClient = real
     expect(typeof typed.auth.getSession).toBe('function')
+  })
+
+  it('v0.8.0: undefined mientras resuelve; null cuando getSession dice que no hay sesión', async () => {
+    const f = fakeClient(null)
+    act(() => root.render(<Harness client={f.client} />))
+    expect(latest().userId).toBeUndefined()
+    await f.resolveInitial()
+    expect(latest().userId).toBeNull()
+  })
+
+  it('v0.8.0: si getSession falla, null (sin sesión), no undefined para siempre', async () => {
+    const f = fakeClient(null)
+    let reject!: (e: unknown) => void
+    f.client.auth.getSession.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, r) => {
+          reject = r
+        }),
+    )
+    act(() => root.render(<Harness client={f.client} />))
+    expect(latest().userId).toBeUndefined()
+    await act(async () => reject(new Error('sin red')))
+    expect(latest().userId).toBeNull()
   })
 })

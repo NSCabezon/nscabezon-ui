@@ -740,6 +740,7 @@ function ResponsiveList({
   onPageSizeChange,
   stickyHeader,
   stickyHeaderTop,
+  ready = true,
   className,
   labels: labelsProp
 }) {
@@ -897,6 +898,20 @@ function ResponsiveList({
       },
       onDragEnd: endDrag
     };
+  }
+  if (!ready) {
+    return /* @__PURE__ */ jsxs3(
+      "div",
+      {
+        className: cn("flex flex-col gap-2 py-1", className),
+        "aria-busy": "true",
+        "data-list-pending": "",
+        children: [
+          /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.loading }),
+          Array.from({ length: 5 }, (_, i) => /* @__PURE__ */ jsx5("div", { "aria-hidden": "true", className: "h-9 animate-pulse rounded-md bg-muted" }, i))
+        ]
+      }
+    );
   }
   return (
     // @container + @3xl (48rem, el mismo valor que `md`) en vez de `md:`: el
@@ -1154,6 +1169,9 @@ function ResponsiveList({
 import { useEffect } from "react";
 import { ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
 import { jsx as jsx6, jsxs as jsxs4 } from "react/jsx-runtime";
+function stableCountMinWidth(text, digitSlots) {
+  return `${text.replace(/\d/g, "").length + digitSlots}ch`;
+}
 function Pagination({
   page,
   pageSize,
@@ -1198,7 +1216,17 @@ function Pagination({
         children: /* @__PURE__ */ jsx6(ChevronLeft, { className: "size-4" })
       }
     ),
-    /* @__PURE__ */ jsx6("span", { className: "px-2 text-sm text-muted-foreground tabular-nums", children: truncated ? labels.paginationRangeTruncated(from, to, total) : labels.paginationRange(from, to, total) }),
+    (() => {
+      const text = truncated ? labels.paginationRangeTruncated(from, to, total) : labels.paginationRange(from, to, total);
+      return /* @__PURE__ */ jsx6(
+        "span",
+        {
+          className: "inline-block px-2 text-center text-sm text-muted-foreground tabular-nums",
+          style: { minWidth: stableCountMinWidth(text, 12) },
+          children: text
+        }
+      );
+    })(),
     /* @__PURE__ */ jsx6(
       Button,
       {
@@ -1413,7 +1441,15 @@ function ListFooter({
           /* @__PURE__ */ jsx8("span", { className: "hidden @2xl:block", "aria-hidden": "true" }),
           /* @__PURE__ */ jsx8("span", { role: "status", className: "sr-only", children: status }),
           /* @__PURE__ */ jsxs6("div", { className: "flex items-center justify-center gap-2", children: [
-            showCountOnly && /* @__PURE__ */ jsx8("span", { className: "text-sm text-muted-foreground tabular-nums", children: truncated ? labels.countTruncated(total) : labels.count(total) }),
+            showCountOnly && /* @__PURE__ */ jsx8(
+              "span",
+              {
+                "data-list-count": "",
+                className: "inline-block text-center text-sm text-muted-foreground tabular-nums",
+                style: { minWidth: stableCountMinWidth(status, 6) },
+                children: status
+              }
+            ),
             /* @__PURE__ */ jsx8(
               Pagination,
               {
@@ -1522,33 +1558,52 @@ function defaultOnError(error) {
 var LIST_PREFS_WIDTHS_DEBOUNCE_MS = 400;
 var memory = /* @__PURE__ */ new Map();
 var listeners = /* @__PURE__ */ new Map();
-function storageKey(listKey) {
-  return `${LIST_PREFS_STORAGE_PREFIX}${listKey}`;
+var memoryUser;
+function listPrefsStorageKey(userId, listKey) {
+  if (userId === void 0) return null;
+  if (userId === null) return `${LIST_PREFS_STORAGE_PREFIX}${listKey}`;
+  return `${LIST_PREFS_STORAGE_PREFIX}${userId}:${listKey}`;
 }
-function readSnapshot(listKey) {
-  if (!memory.has(listKey)) memory.set(listKey, safeStorage.getItem(storageKey(listKey)));
-  return memory.get(listKey) ?? null;
+function noteUser(userId) {
+  if (typeof userId !== "string" || userId === memoryUser) return;
+  if (typeof memoryUser === "string") memory.clear();
+  memoryUser = userId;
 }
-function notify(listKey) {
-  listeners.get(listKey)?.forEach((cb) => cb());
+function readSnapshot(key) {
+  if (key == null) return null;
+  if (!memory.has(key)) memory.set(key, safeStorage.getItem(key));
+  return memory.get(key) ?? null;
 }
-function writeLocal(listKey, prefs) {
+function notify(key) {
+  listeners.get(key)?.forEach((cb) => cb());
+}
+function writeLocal(key, prefs) {
+  if (key == null) return;
   const raw = JSON.stringify(prefs);
-  if (memory.get(listKey) === raw) return;
-  memory.set(listKey, raw);
-  safeStorage.setItem(storageKey(listKey), raw);
-  notify(listKey);
+  if (memory.get(key) === raw) return;
+  memory.set(key, raw);
+  safeStorage.setItem(key, raw);
+  notify(key);
 }
-function subscribe(listKey, cb) {
-  let set = listeners.get(listKey);
+function dropLegacy(listKey) {
+  const legacy = listPrefsStorageKey(null, listKey);
+  if (safeStorage.getItem(legacy) == null && !memory.get(legacy)) return;
+  safeStorage.removeItem(legacy);
+  memory.delete(legacy);
+  notify(legacy);
+}
+function subscribe(key, cb) {
+  if (key == null) return () => {
+  };
+  let set = listeners.get(key);
   if (!set) {
     set = /* @__PURE__ */ new Set();
-    listeners.set(listKey, set);
+    listeners.set(key, set);
   }
   set.add(cb);
   const onStorage = (e) => {
-    if (e.key !== storageKey(listKey)) return;
-    memory.set(listKey, e.newValue);
+    if (e.key !== key) return;
+    memory.set(key, e.newValue);
     cb();
   };
   window.addEventListener("storage", onStorage);
@@ -1569,6 +1624,8 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
   const ui = useUi();
   const store = storeProp ?? ui.listPrefsStore ?? localOnlyListPrefsStore;
   const userId = store.userId;
+  noteUser(userId);
+  const key = listPrefsStorageKey(userId, listKey);
   const storeRef = useRef3(store);
   useEffect2(() => {
     storeRef.current = store;
@@ -1585,12 +1642,12 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
     [knownKey, defaultsJson]
   );
   const snapshot = useSyncExternalStore(
-    useCallback((cb) => subscribe(listKey, cb), [listKey]),
-    () => readSnapshot(listKey),
+    useCallback((cb) => subscribe(key, cb), [key]),
+    () => readSnapshot(key),
     () => null
   );
   const prefs = useMemo(() => normalize(parse(snapshot)), [normalize, snapshot]);
-  const current = useCallback(() => normalize(parse(readSnapshot(listKey))), [normalize, listKey]);
+  const current = useCallback(() => normalize(parse(readSnapshot(key))), [normalize, key]);
   const queryKey = useMemo(() => ["list-prefs", userId, listKey], [userId, listKey]);
   const query = useQuery({
     queryKey,
@@ -1613,11 +1670,12 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
     const local = current();
     if (query.data) {
       const next = normalize(query.data.prefs);
-      if (!listPrefsEqual(next, local)) writeLocal(listKey, next);
+      if (!listPrefsEqual(next, local)) writeLocal(key, next);
     } else if (!listPrefsEqual(local, normalize(null))) {
       void storeRef.current.save(listKey, local);
     }
-  }, [userId, listKey, query.isSuccess, query.data, normalize, current]);
+    dropLegacy(listKey);
+  }, [userId, listKey, key, query.isSuccess, query.data, normalize, current]);
   const timerRef = useRef3(null);
   const pendingRef = useRef3(null);
   const commit = useCallback(
@@ -1631,7 +1689,7 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
   );
   const persist = useCallback(
     (next, { debounce }) => {
-      writeLocal(listKey, next);
+      writeLocal(key, next);
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
@@ -1646,7 +1704,7 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
         if (pendingRef.current) commit(pendingRef.current);
       }, LIST_PREFS_WIDTHS_DEBOUNCE_MS);
     },
-    [listKey, commit]
+    [key, commit]
   );
   useEffect2(
     () => () => {
@@ -1695,7 +1753,7 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
     setCompact,
     setOrder,
     reset,
-    isLoaded: !userId || query.isSuccess || query.isError
+    isLoaded: userId === null || userId !== void 0 && (snapshot != null || query.isSuccess || query.isError)
   };
 }
 
@@ -1713,6 +1771,7 @@ function useListView(listKey, {
   const { prefs, setSort, setWidths, setHidden, setPageSize, setCompact, setOrder, reset } = listPrefs;
   const { sort, hidden, widths, pageSize, order } = prefs;
   const compact = compactable && prefs.compact;
+  const ready = listPrefs.isLoaded;
   const { page, setPage, from, to } = usePagination([...deps, sort], pageSize);
   const listProps = useMemo2(
     () => ({
@@ -1729,9 +1788,11 @@ function useListView(listKey, {
       columnOrder: order,
       onColumnOrderChange: setOrder,
       ...compactable ? { compact, onCompactChange: setCompact } : {},
-      ...paginated ? { pageSize, onPageSizeChange: setPageSize } : {}
+      ...paginated ? { pageSize, onPageSizeChange: setPageSize } : {},
+      ready
     }),
     [
+      ready,
       order,
       setOrder,
       pageSize,
@@ -1782,7 +1843,8 @@ function useListView(listKey, {
     prefs,
     sort,
     listProps,
-    isLoaded: listPrefs.isLoaded,
+    ready,
+    isLoaded: ready,
     compact,
     order
   };
@@ -1811,7 +1873,7 @@ function useListColumns(listKey, columnKeys, { store } = {}) {
 // src/prefs/useSupabaseListPrefsStore.ts
 import { useEffect as useEffect3, useMemo as useMemo3, useRef as useRef4, useState as useState4 } from "react";
 function useSupabaseListPrefsStore(client, { table, onError } = {}) {
-  const [userId, setUserId] = useState4(null);
+  const [userId, setUserId] = useState4(void 0);
   useEffect3(() => {
     let active = true;
     let heardFromListener = false;
@@ -1823,6 +1885,7 @@ function useSupabaseListPrefsStore(client, { table, onError } = {}) {
     client.auth.getSession().then(({ data: { session } }) => {
       if (active && !heardFromListener) setUserId(session?.user.id ?? null);
     }).catch(() => {
+      if (active && !heardFromListener) setUserId(null);
     });
     return () => {
       active = false;
@@ -1833,17 +1896,17 @@ function useSupabaseListPrefsStore(client, { table, onError } = {}) {
   useEffect3(() => {
     onErrorRef.current = onError;
   });
-  return useMemo3(
-    () => createSupabaseListPrefsStore(client, userId, {
+  return useMemo3(() => {
+    const store = createSupabaseListPrefsStore(client, userId, {
       table,
       onError: (error) => {
         const handler = onErrorRef.current;
         if (handler) handler(error);
         else defaultOnError(error);
       }
-    }),
-    [client, userId, table]
-  );
+    });
+    return userId === void 0 ? { ...store, userId: void 0 } : store;
+  }, [client, userId, table]);
 }
 
 export {
@@ -1879,6 +1942,7 @@ export {
   localOnlyListPrefsStore,
   createSupabaseListPrefsStore,
   LIST_PREFS_WIDTHS_DEBOUNCE_MS,
+  listPrefsStorageKey,
   useListPrefs,
   useListView,
   useListColumns,

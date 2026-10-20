@@ -34,7 +34,9 @@ export type SupabaseLikeAuthClient = SupabaseLikeClient & {
  *
  * Sigue al usuario él solo: lee la sesión al montar (`getSession`, local, sin
  * red) y se suscribe a `onAuthStateChange` (login/logout en esta u otra
- * pestaña). Sin sesión, `userId` es `null` (solo caché local). El almacén se
+ * pestaña). Mientras `getSession` no responde, `userId` es `undefined`
+ * (desconocido: las listas esperan, `isLoaded` = `false`); sin sesión, `null`
+ * (solo caché local). El almacén se
  * memoiza por cliente + usuario + tabla: pasa un cliente ESTABLE (el
  * singleton del navegador, o memoízalo). `onError` se lee de un ref: puede
  * ser una función en línea.
@@ -43,7 +45,8 @@ export function useSupabaseListPrefsStore(
   client: SupabaseLikeAuthClient,
   { table, onError }: SupabaseListPrefsStoreOptions = {},
 ): ListPrefsStore {
-  const [userId, setUserId] = useState<string | null>(null)
+  // `undefined` = sesión aún sin resolver (v0.8.0); `null` = sin sesión.
+  const [userId, setUserId] = useState<string | null | undefined>(undefined)
 
   useEffect(() => {
     let active = true
@@ -61,7 +64,8 @@ export function useSupabaseListPrefsStore(
         if (active && !heardFromListener) setUserId(session?.user.id ?? null)
       })
       .catch(() => {
-        // Sin sesión legible: nos quedamos solo con la caché local.
+        // Sin sesión legible: definitivamente sin usuario (solo caché local).
+        if (active && !heardFromListener) setUserId(null)
       })
     return () => {
       active = false
@@ -74,16 +78,17 @@ export function useSupabaseListPrefsStore(
     onErrorRef.current = onError
   })
 
-  return useMemo(
-    () =>
-      createSupabaseListPrefsStore(client, userId, {
-        table,
-        onError: (error) => {
-          const handler = onErrorRef.current
-          if (handler) handler(error)
-          else defaultOnError(error)
-        },
-      }),
-    [client, userId, table],
-  )
+  return useMemo(() => {
+    const store = createSupabaseListPrefsStore(client, userId, {
+      table,
+      onError: (error) => {
+        const handler = onErrorRef.current
+        if (handler) handler(error)
+        else defaultOnError(error)
+      },
+    })
+    // `createSupabaseListPrefsStore` trata `undefined` como «sin sesión» (su
+    // contrato de siempre); aquí se conserva como «aún desconocido».
+    return userId === undefined ? { ...store, userId: undefined } : store
+  }, [client, userId, table])
 }

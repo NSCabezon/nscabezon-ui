@@ -36,6 +36,7 @@ export {
 export { useListColumns } from './list/useListColumns'
 export {
   LIST_PREFS_WIDTHS_DEBOUNCE_MS,
+  listPrefsStorageKey,
   useListPrefs,
   type UseListPrefsOptions,
   type UseListPrefsResult,

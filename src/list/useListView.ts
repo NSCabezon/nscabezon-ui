@@ -64,6 +64,10 @@ export type ListViewListProps = {
   // columnas de la cabecera. Cambiarlo vuelve a la página 1.
   pageSize?: number
   onPageSizeChange?: (pageSize: number) => void
+  // v0.8.0: `false` mientras las preferencias no son las definitivas (ver
+  // `ListView.ready`): `ResponsiveList` pinta un esqueleto en vez de la tabla
+  // con anchos/orden/columnas por defecto que luego saltarían.
+  ready: boolean
 }
 
 // Props que `useListView` cablea en `ListFooter` (faltan `total`, que sale de
@@ -89,6 +93,16 @@ type ListViewBase = {
   prefs: ListPrefs
   sort: ListSort | null
   listProps: ListViewListProps
+  /**
+   * v0.8.0: las preferencias (orden, columnas, anchos, compacto, filas por
+   * página) ya son las definitivas: caché local de ESTE usuario, respuesta del
+   * servidor o sin sesión. Mientras es `false`, `sort`/`from`/`to` son los
+   * por defecto y NO deben usarse para consultar: pasa `enabled: view.ready`
+   * a la consulta del listado (así no se pide una página con el orden o el
+   * tamaño equivocados que luego cambia).
+   */
+  ready: boolean
+  /** Alias de `ready` (nombre anterior a v0.8.0). */
   isLoaded: boolean
   /** Modo compacto vigente (`false` si el listado no es `compactable`). */
   compact: boolean
@@ -118,7 +132,7 @@ export { resolveListDefaults }
  * (`usePagination`) ya cableadas entre sí. Devuelve dos paquetes de props
  * listos para hacer spread: `listProps` → `ResponsiveList` (incluido el menú
  * de columnas de la cabecera) y `footerProps` → `ListFooter`; y lo que la
- * consulta necesita: `sort`, `from`, `to`.
+ * consulta necesita: `sort`, `from`, `to` y `ready` (`enabled: view.ready`).
  *
  * Cambiar el orden, el tamaño de página o cualquiera de las `deps` vuelve a la
  * página 1. `listKey` es la clave de `user_list_prefs` (kebab-case, única por
@@ -151,6 +165,7 @@ export function useListView(
     listPrefs
   const { sort, hidden, widths, pageSize, order } = prefs
   const compact = compactable && prefs.compact
+  const ready = listPrefs.isLoaded
 
   // Siempre se llama (reglas de los hooks); sin paginación simplemente no se usa.
   const { page, setPage, from, to } = usePagination([...deps, sort], pageSize)
@@ -171,8 +186,10 @@ export function useListView(
       onColumnOrderChange: setOrder,
       ...(compactable ? { compact, onCompactChange: setCompact } : {}),
       ...(paginated ? { pageSize, onPageSizeChange: setPageSize } : {}),
+      ready,
     }),
     [
+      ready,
       order,
       setOrder,
       pageSize,
@@ -225,7 +242,8 @@ export function useListView(
     prefs,
     sort,
     listProps,
-    isLoaded: listPrefs.isLoaded,
+    ready,
+    isLoaded: ready,
     compact,
     order,
   }

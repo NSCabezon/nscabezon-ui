@@ -18,6 +18,17 @@ export type PaginationProps = {
   labels?: Partial<Labels>
 }
 
+/**
+ * Ancho mínimo estable (v0.8.0) para un recuento centrado: el texto sin
+ * dígitos + `digitSlots` huecos de dígito, en `ch` (con `tabular-nums` cada
+ * dígito mide 1ch). Pasar de 9 a 10 o de 99 a 100 no cambia el ancho de la
+ * caja, así que los botones de alrededor no se mueven; solo el texto se
+ * recentra dentro de ella. @internal
+ */
+export function stableCountMinWidth(text: string, digitSlots: number): string {
+  return `${text.replace(/\d/g, '').length + digitSlots}ch`
+}
+
 // Server-side pagination footer: first/prev, centered "from–to of total" range, next/last.
 // Renders nothing when everything fits on a single page.
 // Flechas `icon-sm` (28×28 px, v0.7.0; antes `sm`, igual de altas y más
@@ -71,11 +82,21 @@ export function Pagination({
       >
         <ChevronLeft className="size-4" />
       </Button>
-      <span className="px-2 text-sm text-muted-foreground tabular-nums">
-        {truncated
+      {(() => {
+        const text = truncated
           ? labels.paginationRangeTruncated(from, to, total)
-          : labels.paginationRange(from, to, total)}
-      </span>
+          : labels.paginationRange(from, to, total)
+        // Ancho reservado para 12 dígitos (desde, hasta, total): las flechas
+        // no bailan al cambiar de página ni de total.
+        return (
+          <span
+            className="inline-block px-2 text-center text-sm text-muted-foreground tabular-nums"
+            style={{ minWidth: stableCountMinWidth(text, 12) }}
+          >
+            {text}
+          </span>
+        )
+      })()}
       <Button
         variant="outline"
         size="icon-sm"

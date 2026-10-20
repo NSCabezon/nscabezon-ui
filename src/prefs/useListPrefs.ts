@@ -26,46 +26,84 @@ export const LIST_PREFS_WIDTHS_DEBOUNCE_MS = 400
 // cliente: sin desajuste de markup ni setState en efectos. En una SPA (Vite)
 // no hay hidratación y el primer render ya lee la caché.
 //
-// `memory` guarda la última cadena conocida por clave: da un snapshot estable
-// (misma referencia mientras no cambie) y hace de caché cuando localStorage no
-// está disponible (modo privado, webviews): la preferencia sigue viva en la
-// sesión aunque no sobreviva a una recarga.
+// Claves (v0.8.0), según `store.userId`:
+// - usuario con sesión (`string`): `list-prefs:<userId>:<listKey>`. En un PC
+//   compartido cada usuario pinta con LO SUYO, no con lo del anterior.
+// - sin sesión (`null`, p. ej. `localOnlyListPrefsStore`): `list-prefs:<listKey>`,
+//   la clave de siempre (preferencias del dispositivo).
+// - usuario aún desconocido (`undefined`, resolviendo la sesión): NINGUNA
+//   clave: se pinta con los defaults y `isLoaded` es `false`.
+//
+// `memory` guarda la última cadena conocida por clave de almacenamiento: da un
+// snapshot estable (misma referencia mientras no cambie) y hace de caché
+// cuando localStorage no está disponible (modo privado, webviews). Se vacía al
+// cambiar de usuario en la misma pestaña.
 // ---------------------------------------------------------------------------
 const memory = new Map<string, string | null>()
 const listeners = new Map<string, Set<() => void>>()
+let memoryUser: string | null | undefined
 
-function storageKey(listKey: string) {
-  return `${LIST_PREFS_STORAGE_PREFIX}${listKey}`
+/** Clave de localStorage para (usuario, lista); `null` si el usuario aún no se conoce. */
+export function listPrefsStorageKey(
+  userId: string | null | undefined,
+  listKey: string,
+): string | null {
+  if (userId === undefined) return null
+  if (userId === null) return `${LIST_PREFS_STORAGE_PREFIX}${listKey}`
+  return `${LIST_PREFS_STORAGE_PREFIX}${userId}:${listKey}`
 }
 
-function readSnapshot(listKey: string): string | null {
-  if (!memory.has(listKey)) memory.set(listKey, safeStorage.getItem(storageKey(listKey)))
-  return memory.get(listKey) ?? null
+// Al aparecer otro usuario con sesión, la caché en memoria del anterior fuera.
+function noteUser(userId: string | null | undefined) {
+  if (typeof userId !== 'string' || userId === memoryUser) return
+  if (typeof memoryUser === 'string') memory.clear()
+  memoryUser = userId
 }
 
-function notify(listKey: string) {
-  listeners.get(listKey)?.forEach((cb) => cb())
+function readSnapshot(key: string | null): string | null {
+  if (key == null) return null
+  if (!memory.has(key)) memory.set(key, safeStorage.getItem(key))
+  return memory.get(key) ?? null
 }
 
-function writeLocal(listKey: string, prefs: ListPrefs) {
+function notify(key: string) {
+  listeners.get(key)?.forEach((cb) => cb())
+}
+
+function writeLocal(key: string | null, prefs: ListPrefs) {
+  // Usuario aún desconocido: no hay clave donde escribir (la lista no debería
+  // ofrecer controles hasta `isLoaded`).
+  if (key == null) return
   const raw = JSON.stringify(prefs)
-  if (memory.get(listKey) === raw) return
-  memory.set(listKey, raw)
-  safeStorage.setItem(storageKey(listKey), raw)
-  notify(listKey)
+  if (memory.get(key) === raw) return
+  memory.set(key, raw)
+  safeStorage.setItem(key, raw)
+  notify(key)
 }
 
-function subscribe(listKey: string, cb: () => void) {
-  let set = listeners.get(listKey)
+// Clave vieja `list-prefs:<listKey>` (sin usuario, < v0.8.0): puede ser de
+// otro usuario del mismo navegador, así que con sesión no se usa para pintar
+// ni se sube; se borra cuando el servidor responde.
+function dropLegacy(listKey: string) {
+  const legacy = listPrefsStorageKey(null, listKey)!
+  if (safeStorage.getItem(legacy) == null && !memory.get(legacy)) return
+  safeStorage.removeItem(legacy)
+  memory.delete(legacy)
+  notify(legacy)
+}
+
+function subscribe(key: string | null, cb: () => void) {
+  if (key == null) return () => {}
+  let set = listeners.get(key)
   if (!set) {
     set = new Set()
-    listeners.set(listKey, set)
+    listeners.set(key, set)
   }
   set.add(cb)
   // Otra pestaña cambió la misma lista: se refleja aquí también.
   const onStorage = (e: StorageEvent) => {
-    if (e.key !== storageKey(listKey)) return
-    memory.set(listKey, e.newValue)
+    if (e.key !== key) return
+    memory.set(key, e.newValue)
     cb()
   }
   window.addEventListener('storage', onStorage)
@@ -87,6 +125,7 @@ function parse(raw: string | null): unknown {
 /** Solo para tests: olvida la caché en memoria (localStorage no se toca). */
 export function __resetListPrefsCache() {
   memory.clear()
+  memoryUser = undefined
 }
 
 export type UseListPrefsOptions = {
@@ -117,7 +156,15 @@ export type UseListPrefsResult = {
    * conservan (la densidad no es una columna).
    */
   reset: () => void
-  /** Ya se reconcilió con el servidor (o no hay nada remoto que esperar). */
+  /**
+   * Las `prefs` ya son las definitivas para pintar y consultar (v0.8.0):
+   * `true` si (a) hay caché local de ESTE usuario para esta lista, (b) la
+   * consulta al servidor ya terminó (con fila, sin fila o con error), o (c) no
+   * hay sesión (`userId === null`, solo local). `false` mientras el usuario
+   * se está resolviendo (`undefined`) o, sin caché local, hasta que responde
+   * el servidor: ahí `prefs` son los defaults y la lista no debe pintarse ni
+   * consultar con ellos.
+   */
   isLoaded: boolean
 }
 
@@ -125,8 +172,10 @@ export type UseListPrefsResult = {
  * Preferencias de un listado configurable (orden, anchos, columnas ocultas,
  * orden de columnas, filas por página, modo compacto), por usuario y sincronizadas entre dispositivos.
  *
- * - Lectura: `list-prefs:<listKey>` de localStorage (vía `safeStorage`), sin
- *   salto en el primer render de una SPA y sin error de hidratación en Next.
+ * - Lectura: `list-prefs:<userId>:<listKey>` de localStorage (vía
+ *   `safeStorage`; sin sesión, `list-prefs:<listKey>`), sin salto en el primer
+ *   render de una SPA y sin error de hidratación en Next. Sin caché local de
+ *   este usuario, `isLoaded` espera al servidor.
  *   Cuando llega la fila del almacén remoto, GANA (una vez por usuario y
  *   lista). Si el almacén no tiene fila y la caché local trae algo distinto del
  *   defecto, se sube la local para que el siguiente dispositivo la encuentre.
@@ -143,6 +192,8 @@ export function useListPrefs(
   const ui = useUi()
   const store = storeProp ?? ui.listPrefsStore ?? localOnlyListPrefsStore
   const userId = store.userId
+  noteUser(userId)
+  const key = listPrefsStorageKey(userId, listKey)
   // El almacén se suele crear en el render: se lee por ref para que su
   // identidad no reinicie callbacks ni efectos (manda `userId`).
   const storeRef = useRef(store)
@@ -165,14 +216,14 @@ export function useListPrefs(
   )
 
   const snapshot = useSyncExternalStore(
-    useCallback((cb: () => void) => subscribe(listKey, cb), [listKey]),
-    () => readSnapshot(listKey),
+    useCallback((cb: () => void) => subscribe(key, cb), [key]),
+    () => readSnapshot(key),
     () => null,
   )
   const prefs = useMemo(() => normalize(parse(snapshot)), [normalize, snapshot])
   // Valor vigente para los setters, leído del store en el momento de la
   // llamada (evita closures rancias al encadenar cambios).
-  const current = useCallback(() => normalize(parse(readSnapshot(listKey))), [normalize, listKey])
+  const current = useCallback(() => normalize(parse(readSnapshot(key))), [normalize, key])
 
   const queryKey = useMemo(() => ['list-prefs', userId, listKey] as const, [userId, listKey])
   const query = useQuery({
@@ -200,11 +251,12 @@ export function useListPrefs(
     const local = current()
     if (query.data) {
       const next = normalize(query.data.prefs)
-      if (!listPrefsEqual(next, local)) writeLocal(listKey, next)
+      if (!listPrefsEqual(next, local)) writeLocal(key, next)
     } else if (!listPrefsEqual(local, normalize(null))) {
       void storeRef.current.save(listKey, local)
     }
-  }, [userId, listKey, query.isSuccess, query.data, normalize, current])
+    dropLegacy(listKey)
+  }, [userId, listKey, key, query.isSuccess, query.data, normalize, current])
 
   // Escritura. `pendingRef` guarda la escritura pendiente de los anchos para
   // ejecutarla si la lista se desmonta antes de que venza el debounce.
@@ -221,7 +273,7 @@ export function useListPrefs(
   )
   const persist = useCallback(
     (next: ListPrefs, { debounce }: { debounce: boolean }) => {
-      writeLocal(listKey, next)
+      writeLocal(key, next)
       if (timerRef.current) {
         clearTimeout(timerRef.current)
         timerRef.current = null
@@ -236,7 +288,7 @@ export function useListPrefs(
         if (pendingRef.current) commit(pendingRef.current)
       }, LIST_PREFS_WIDTHS_DEBOUNCE_MS)
     },
-    [listKey, commit],
+    [key, commit],
   )
   useEffect(
     () => () => {
@@ -287,6 +339,8 @@ export function useListPrefs(
     setCompact,
     setOrder,
     reset,
-    isLoaded: !userId || query.isSuccess || query.isError,
+    isLoaded:
+      userId === null ||
+      (userId !== undefined && (snapshot != null || query.isSuccess || query.isError)),
   }
 }
