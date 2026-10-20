@@ -100,6 +100,8 @@ export function ListFooter({
   onReset,
   compact,
   onCompactChange,
+  columnOrder,
+  onColumnOrderChange,
   columns,
   truncated,
   loading,
@@ -182,6 +184,8 @@ export function ListFooter({
             onReset={onReset}
             compact={compact}
             onCompactChange={onCompactChange}
+            columnOrder={columnOrder}
+            onColumnOrderChange={onColumnOrderChange}
             labels={labelsProp}
           />
           {!isEmpty && (

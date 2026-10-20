@@ -45,7 +45,8 @@ function normalizeListPrefs(raw, knownKeys, defaults) {
     widths: cleanWidths(defaults.widths, known),
     sort: cleanSort(defaults.sort, known),
     pageSize: isListPageSize(defaults.pageSize) ? defaults.pageSize : DEFAULT_LIST_PAGE_SIZE,
-    compact: typeof defaults.compact === "boolean" ? defaults.compact : false
+    compact: typeof defaults.compact === "boolean" ? defaults.compact : false,
+    order: cleanOrder(defaults.order, knownKeys)
   };
   if (!isRecord(raw)) return base;
   const hidden = Array.isArray(raw.hidden) ? Array.from(
@@ -55,7 +56,18 @@ function normalizeListPrefs(raw, knownKeys, defaults) {
   const sort = "sort" in raw ? cleanSort(raw.sort, known) ?? base.sort : base.sort;
   const pageSize = isListPageSize(raw.pageSize) ? raw.pageSize : base.pageSize;
   const compact = typeof raw.compact === "boolean" ? raw.compact : base.compact;
-  return { hidden, widths, sort, pageSize, compact };
+  const order = Array.isArray(raw.order) ? cleanOrder(raw.order, knownKeys) : base.order;
+  return { hidden, widths, sort, pageSize, compact, order };
+}
+function cleanOrder(raw, knownKeys) {
+  if (!Array.isArray(raw)) return [];
+  const known = new Set(knownKeys);
+  const kept = Array.from(
+    new Set(raw.filter((k) => typeof k === "string" && known.has(k)))
+  );
+  if (kept.length === 0) return [];
+  const seen = new Set(kept);
+  return [...kept, ...knownKeys.filter((k) => !seen.has(k))];
 }
 function cleanWidths(raw, known) {
   const out = {};
@@ -82,6 +94,7 @@ function listPrefsEqual(a, b) {
   if (aw.length !== bw.length || aw.some(([k, v]) => b.widths[k] !== v)) return false;
   if (a.pageSize !== b.pageSize) return false;
   if (a.compact !== b.compact) return false;
+  if (a.order.length !== b.order.length || a.order.some((k, i) => k !== b.order[i])) return false;
   if (a.sort === null || b.sort === null) return a.sort === b.sort;
   return a.sort.key === b.sort.key && a.sort.dir === b.sort.dir;
 }
@@ -91,7 +104,8 @@ function resolveListDefaults(defaults = {}) {
     widths: defaults.widths ?? {},
     sort: defaults.sort ?? null,
     pageSize: defaults.pageSize ?? DEFAULT_LIST_PAGE_SIZE,
-    compact: defaults.compact ?? false
+    compact: defaults.compact ?? false,
+    order: defaults.order ?? []
   };
 }
 var EMPTY_LIST_PREFS = Object.freeze({
@@ -99,7 +113,8 @@ var EMPTY_LIST_PREFS = Object.freeze({
   widths: {},
   sort: null,
   pageSize: DEFAULT_LIST_PAGE_SIZE,
-  compact: false
+  compact: false,
+  order: []
 });
 
 // src/list/columnWidth.ts

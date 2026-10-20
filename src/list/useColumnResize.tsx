@@ -48,6 +48,9 @@ export function useColumnResize({
     return (
       <span
         role="presentation"
+        // Gancho para `ResponsiveList`: arrastrar desde el asa redimensiona,
+        // nunca reordena la columna.
+        data-column-resize-handle=""
         className="absolute inset-y-0 right-0 w-1.5 cursor-col-resize touch-none select-none before:absolute before:inset-y-1.5 before:right-0 before:w-px before:bg-border before:content-[''] hover:before:inset-y-0 hover:before:w-0.5 hover:before:bg-muted-foreground"
         onPointerDown={(e) => {
           if (e.button !== 0) return

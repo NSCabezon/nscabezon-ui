@@ -7,6 +7,8 @@ var defaultLabels = {
   columnsMenu: "Columnas",
   columnsReset: "Restablecer columnas",
   compactMode: "Modo compacto",
+  columnMoveUp: (column) => `Subir ${column}`,
+  columnMoveDown: (column) => `Bajar ${column}`,
   paginationFirst: "Primera p\xE1gina",
   paginationPrev: "P\xE1gina anterior",
   paginationNext: "P\xE1gina siguiente",

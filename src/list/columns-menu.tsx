@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Columns3 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Columns3 } from 'lucide-react'
 
 import { Button } from '../primitives/button'
 import {
@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '../primitives/dropdown-menu'
 import { useLabels, type Labels } from '../context/UiProvider'
+import { moveColumn, orderColumns } from './columnOrder'
 
 export type ColumnsMenuColumn = {
   key: string
@@ -19,6 +20,8 @@ export type ColumnsMenuColumn = {
   header?: React.ReactNode
   // La columna `primary` no se puede ocultar: sale marcada y deshabilitada.
   primary?: boolean
+  // Las `action` no se reordenan: salen sin botones «Subir»/«Bajar».
+  action?: boolean
 }
 
 export type ColumnsMenuProps = {
@@ -33,14 +36,38 @@ export type ColumnsMenuProps = {
    */
   compact?: boolean
   onCompactChange?: (compact: boolean) => void
-  /** Textos propios (`columnsMenu`, `columnsReset`, `compactMode`); ganan al `UiProvider`. */
-  labels?: Partial<Pick<Labels, 'columnsMenu' | 'columnsReset' | 'compactMode'>>
+  /**
+   * Orden de columnas (opt-in): el menú lista las columnas en `columnOrder`
+   * (ver `orderColumns`) y, con `onColumnOrderChange`, cada columna no-`action`
+   * lleva «Subir»/«Bajar» (deshabilitados en los extremos, sin cerrar el menú).
+   * El callback recibe todas las claves de `columns` en el orden nuevo.
+   */
+  columnOrder?: string[]
+  onColumnOrderChange?: (order: string[]) => void
+  /** Textos propios; ganan al `UiProvider`. */
+  labels?: Partial<
+    Pick<Labels, 'columnsMenu' | 'columnsReset' | 'compactMode' | 'columnMoveUp' | 'columnMoveDown'>
+  >
+}
+
+// Texto plano de una cabecera (para el aria-label de «Subir»/«Bajar»): las
+// cabeceras suelen ser cadenas, pero pueden ser nodos con texto dentro.
+function nodeText(node: React.ReactNode): string {
+  if (node == null || typeof node === 'boolean') return ''
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(nodeText).join('')
+  if (React.isValidElement<{ children?: React.ReactNode }>(node)) {
+    return nodeText(node.props.children)
+  }
+  return ''
 }
 
 // Selector de columnas visibles de un `ResponsiveList` (prop `hiddenColumns`).
 // Botón icono + menú con un checkbox por columna y «Restablecer columnas», que
 // delega en `onReset` (el consumidor limpia ocultas Y anchos guardados). Con
 // `onCompactChange`, además, la casilla «Modo compacto» (no la toca el reset).
+// Con `onColumnOrderChange`, «Subir»/«Bajar» por columna: la vía de teclado
+// para reordenar (en escritorio también se arrastra la cabecera).
 export function ColumnsMenu({
   columns,
   hidden,
@@ -49,9 +76,22 @@ export function ColumnsMenu({
   className,
   compact,
   onCompactChange,
+  columnOrder,
+  onColumnOrderChange,
   labels: labelsProp,
 }: ColumnsMenuProps) {
   const labels = useLabels(labelsProp)
+  const ordered = orderColumns(columns, columnOrder)
+  // Columnas que se pueden mover (las no-`action`), en el orden vigente: los
+  // extremos y el vecino de «Subir»/«Bajar» se miden sobre esta lista.
+  const movable = ordered.filter((c) => !c.action).map((c) => c.key)
+  function move(key: string, delta: -1 | 1) {
+    if (!onColumnOrderChange) return
+    const target = movable[movable.indexOf(key) + delta]
+    if (target === undefined) return
+    const next = moveColumn(columns, columnOrder, key, target)
+    if (next) onColumnOrderChange(next)
+  }
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -65,17 +105,18 @@ export function ColumnsMenu({
           <Columns3 />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
+      <DropdownMenuContent align="end" className={onColumnOrderChange ? 'w-64' : 'w-56'}>
         {/* Sin cabecera no hay etiqueta que enseñar (columnas de acciones y de
             restaurar): se filtran aquí para no pintar una casilla vacía o con
             la clave interna. */}
-        {columns
+        {ordered
           .filter((col) => col.header)
           .map((col) => {
             const visible = !!col.primary || !hidden.includes(col.key)
-            return (
+            const checkbox = (
               <DropdownMenuCheckboxItem
                 key={col.key}
+                className={onColumnOrderChange ? 'min-w-0 flex-1' : undefined}
                 checked={visible}
                 disabled={col.primary}
                 // Marcar/desmarcar no cierra el menú: lo normal es tocar varias.
@@ -87,6 +128,43 @@ export function ColumnsMenu({
               >
                 {col.header}
               </DropdownMenuCheckboxItem>
+            )
+            if (!onColumnOrderChange) return checkbox
+            // «Subir»/«Bajar» son items del menú (no <button> sueltos): Radix
+            // solo navega con flechas entre items y bloquea el Tab, así que es
+            // la única forma de que el reordenado por teclado sea alcanzable.
+            // `preventDefault` en onSelect: mover no cierra el menú.
+            const name = nodeText(col.header) || col.key
+            const pos = movable.indexOf(col.key)
+            const moveButton = (delta: -1 | 1) => {
+              const label = delta < 0 ? labels.columnMoveUp(name) : labels.columnMoveDown(name)
+              const Icon = delta < 0 ? ChevronUp : ChevronDown
+              return (
+                <DropdownMenuItem
+                  aria-label={label}
+                  title={label}
+                  data-column-move={delta < 0 ? 'up' : 'down'}
+                  className="size-7 shrink-0 justify-center p-0"
+                  disabled={delta < 0 ? pos <= 0 : pos >= movable.length - 1}
+                  onSelect={(e) => {
+                    e.preventDefault()
+                    move(col.key, delta)
+                  }}
+                >
+                  <Icon aria-hidden />
+                </DropdownMenuItem>
+              )
+            }
+            return (
+              <div key={col.key} className="flex items-center gap-0.5" data-column-row={col.key}>
+                {checkbox}
+                {!col.action && pos >= 0 && (
+                  <>
+                    {moveButton(-1)}
+                    {moveButton(1)}
+                  </>
+                )}
+              </div>
             )
           })}
         {onCompactChange && (

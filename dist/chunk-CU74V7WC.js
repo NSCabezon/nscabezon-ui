@@ -7,15 +7,15 @@ import {
 import {
   useLabels,
   useUi
-} from "./chunk-XYPFQI2E.js";
+} from "./chunk-QPTTCNNI.js";
 
 // src/list/responsive-list.tsx
-import "react";
+import * as React6 from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
 // src/list/columns-menu.tsx
-import "react";
-import { Columns3 } from "lucide-react";
+import * as React2 from "react";
+import { ChevronDown, ChevronUp, Columns3 } from "lucide-react";
 
 // src/primitives/dropdown-menu.tsx
 import "react";
@@ -118,8 +118,43 @@ function DropdownMenuSeparator({
   );
 }
 
+// src/list/columnOrder.ts
+function orderColumns(columns, order) {
+  if (!order?.length) return columns;
+  const rank = /* @__PURE__ */ new Map();
+  order.forEach((key, i) => {
+    if (!rank.has(key)) rank.set(key, i);
+  });
+  const movable = columns.map((col, i) => ({ col, i })).filter(({ col }) => !col.action).sort(
+    (a, b) => (rank.get(a.col.key) ?? Infinity) - (rank.get(b.col.key) ?? Infinity) || a.i - b.i
+  ).map(({ col }) => col);
+  let next = 0;
+  return columns.map((col) => col.action ? col : movable[next++]);
+}
+function moveColumn(columns, order, from, to) {
+  if (from === to) return null;
+  const ordered = orderColumns(columns, order);
+  const movable = ordered.filter((c) => !c.action).map((c) => c.key);
+  const fromIdx = movable.indexOf(from);
+  const toIdx = movable.indexOf(to);
+  if (fromIdx < 0 || toIdx < 0) return null;
+  movable.splice(fromIdx, 1);
+  movable.splice(toIdx, 0, from);
+  let next = 0;
+  return ordered.map((c) => c.action ? c.key : movable[next++]);
+}
+
 // src/list/columns-menu.tsx
 import { Fragment, jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
+function nodeText(node) {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(nodeText).join("");
+  if (React2.isValidElement(node)) {
+    return nodeText(node.props.children);
+  }
+  return "";
+}
 function ColumnsMenu({
   columns,
   hidden,
@@ -128,9 +163,20 @@ function ColumnsMenu({
   className,
   compact,
   onCompactChange,
+  columnOrder,
+  onColumnOrderChange,
   labels: labelsProp
 }) {
   const labels = useLabels(labelsProp);
+  const ordered = orderColumns(columns, columnOrder);
+  const movable = ordered.filter((c) => !c.action).map((c) => c.key);
+  function move(key, delta) {
+    if (!onColumnOrderChange) return;
+    const target = movable[movable.indexOf(key) + delta];
+    if (target === void 0) return;
+    const next = moveColumn(columns, columnOrder, key, target);
+    if (next) onColumnOrderChange(next);
+  }
   return /* @__PURE__ */ jsxs2(DropdownMenu, { children: [
     /* @__PURE__ */ jsx2(DropdownMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx2(
       Button,
@@ -143,12 +189,13 @@ function ColumnsMenu({
         children: /* @__PURE__ */ jsx2(Columns3, {})
       }
     ) }),
-    /* @__PURE__ */ jsxs2(DropdownMenuContent, { align: "end", className: "w-56", children: [
-      columns.filter((col) => col.header).map((col) => {
+    /* @__PURE__ */ jsxs2(DropdownMenuContent, { align: "end", className: onColumnOrderChange ? "w-64" : "w-56", children: [
+      ordered.filter((col) => col.header).map((col) => {
         const visible = !!col.primary || !hidden.includes(col.key);
-        return /* @__PURE__ */ jsx2(
+        const checkbox = /* @__PURE__ */ jsx2(
           DropdownMenuCheckboxItem,
           {
+            className: onColumnOrderChange ? "min-w-0 flex-1" : void 0,
             checked: visible,
             disabled: col.primary,
             onSelect: (e) => e.preventDefault(),
@@ -160,6 +207,35 @@ function ColumnsMenu({
           },
           col.key
         );
+        if (!onColumnOrderChange) return checkbox;
+        const name = nodeText(col.header) || col.key;
+        const pos = movable.indexOf(col.key);
+        const moveButton = (delta) => {
+          const label = delta < 0 ? labels.columnMoveUp(name) : labels.columnMoveDown(name);
+          const Icon = delta < 0 ? ChevronUp : ChevronDown;
+          return /* @__PURE__ */ jsx2(
+            DropdownMenuItem,
+            {
+              "aria-label": label,
+              title: label,
+              "data-column-move": delta < 0 ? "up" : "down",
+              className: "size-7 shrink-0 justify-center p-0",
+              disabled: delta < 0 ? pos <= 0 : pos >= movable.length - 1,
+              onSelect: (e) => {
+                e.preventDefault();
+                move(col.key, delta);
+              },
+              children: /* @__PURE__ */ jsx2(Icon, { "aria-hidden": true })
+            }
+          );
+        };
+        return /* @__PURE__ */ jsxs2("div", { className: "flex items-center gap-0.5", "data-column-row": col.key, children: [
+          checkbox,
+          !col.action && pos >= 0 && /* @__PURE__ */ jsxs2(Fragment, { children: [
+            moveButton(-1),
+            moveButton(1)
+          ] })
+        ] }, col.key);
       }),
       onCompactChange && /* @__PURE__ */ jsxs2(Fragment, { children: [
         /* @__PURE__ */ jsx2(DropdownMenuSeparator, {}),
@@ -206,6 +282,7 @@ function useColumnResize({
       "span",
       {
         role: "presentation",
+        "data-column-resize-handle": "",
         className: "absolute inset-y-0 right-0 w-1.5 cursor-col-resize touch-none select-none before:absolute before:inset-y-1.5 before:right-0 before:w-px before:bg-border before:content-[''] hover:before:inset-y-0 hover:before:w-0.5 hover:before:bg-muted-foreground",
         onPointerDown: (e) => {
           if (e.button !== 0) return;
@@ -374,6 +451,8 @@ function ResponsiveList({
   mobileColumnsMenu = true,
   compact = false,
   onCompactChange,
+  columnOrder,
+  onColumnOrderChange,
   stickyHeader,
   stickyHeaderTop,
   className,
@@ -449,7 +528,8 @@ function ResponsiveList({
   function colWidth(col) {
     return resolveColumnWidth(col, widthOf(col.key));
   }
-  const visibleColumns = visibleColumnsOf(columns, hiddenColumns);
+  const orderedColumns = orderColumns(columns, columnOrder);
+  const visibleColumns = visibleColumnsOf(orderedColumns, hiddenColumns);
   const mobileColumns = visibleColumns.filter((c) => !c.hideOnMobile);
   const primary = mobileColumns.find((c) => c.primary);
   const actions = mobileColumns.filter((c) => c.action);
@@ -467,12 +547,64 @@ function ResponsiveList({
       onReset: onColumnsReset,
       compact,
       onCompactChange,
+      columnOrder,
+      onColumnOrderChange,
       labels: labelsProp
     }
   ) : null;
   const compactCellClass = compact ? "whitespace-nowrap overflow-hidden text-ellipsis" : void 0;
   const compactHeadClass = compact ? "whitespace-nowrap" : void 0;
   const menuHeadStyle = { ...stickyHeadStyle, right: 0 };
+  const reorderable = !!onColumnOrderChange;
+  const [dragKey, setDragKey] = React6.useState(null);
+  const [overKey, setOverKey] = React6.useState(null);
+  const resizingRef = React6.useRef(false);
+  const visibleIndex = (key) => key == null ? -1 : visibleColumns.findIndex((c) => c.key === key);
+  const dropSide = (key) => {
+    if (!dragKey || overKey !== key || dragKey === key) return null;
+    return visibleIndex(dragKey) < visibleIndex(key) ? "after" : "before";
+  };
+  function endDrag() {
+    setDragKey(null);
+    setOverKey(null);
+  }
+  function headDragProps(col) {
+    if (!reorderable || col.action) return {};
+    return {
+      draggable: true,
+      onPointerDown: (e) => {
+        resizingRef.current = !!e.target.closest?.("[data-column-resize-handle]");
+      },
+      onDragStart: (e) => {
+        if (resizingRef.current) {
+          resizingRef.current = false;
+          e.preventDefault();
+          return;
+        }
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", col.key);
+        setDragKey(col.key);
+      },
+      onDragOver: (e) => {
+        if (!dragKey) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        if (overKey !== col.key) setOverKey(col.key);
+      },
+      onDragLeave: (e) => {
+        if (e.currentTarget.contains(e.relatedTarget)) return;
+        if (overKey === col.key) setOverKey(null);
+      },
+      onDrop: (e) => {
+        if (!dragKey) return;
+        e.preventDefault();
+        const next = moveColumn(columns, columnOrder, dragKey, col.key);
+        endDrag();
+        if (next) onColumnOrderChange?.(next);
+      },
+      onDragEnd: endDrag
+    };
+  }
   return (
     // @container + @3xl (48rem, el mismo valor que `md`) en vez de `md:`: el
     // breakpoint miraba el VIEWPORT, pero el hueco real es el viewport menos el
@@ -502,30 +634,51 @@ function ResponsiveList({
             ] }),
             /* @__PURE__ */ jsx5(TableHeader, { className: stickyHeader ? "[&_tr]:border-b-0" : void 0, children: /* @__PURE__ */ jsxs3(TableRow, { className: stickyHeader ? "hover:bg-transparent" : void 0, children: [
               leading && /* @__PURE__ */ jsx5(TableHead, { className: cn("w-10", stickyHeadClass), style: stickyHeadStyle, children: /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.selectColumn }) }),
-              visibleColumns.map((col) => /* @__PURE__ */ jsxs3(
-                TableHead,
-                {
-                  className: cn(
-                    // `relative` ANTES de `sticky` (stickyHeadClass): con las
-                    // dos, tailwind-merge se queda con la última y sticky es
-                    // también contenedor del asa absoluta.
-                    resizable && "relative",
-                    fixedCellClass,
-                    col.sortable && onSortChange && "group",
-                    col.headClassName,
-                    compactHeadClass,
-                    stickyHeadClass
-                  ),
-                  style: stickyHeadStyle,
-                  "aria-sort": ariaSort(col),
-                  children: [
-                    renderHead(col),
-                    col.action && !col.header && /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.actionsColumn }),
-                    resizable && col.key !== lastVisibleKey && resizeHandle(col.key)
-                  ]
-                },
-                col.key
-              )),
+              visibleColumns.map((col) => {
+                const draggable = reorderable && !col.action;
+                const side = draggable ? dropSide(col.key) : null;
+                return /* @__PURE__ */ jsxs3(
+                  TableHead,
+                  {
+                    className: cn(
+                      // `relative` ANTES de `sticky` (stickyHeadClass): con las
+                      // dos, tailwind-merge se queda con la última y sticky es
+                      // también contenedor del asa absoluta (y del indicador).
+                      (resizable || draggable) && "relative",
+                      fixedCellClass,
+                      col.sortable && onSortChange && "group",
+                      draggable && "cursor-grab active:cursor-grabbing",
+                      dragKey === col.key && "opacity-50",
+                      col.headClassName,
+                      compactHeadClass,
+                      stickyHeadClass
+                    ),
+                    style: stickyHeadStyle,
+                    "aria-sort": ariaSort(col),
+                    "data-column-key": draggable ? col.key : void 0,
+                    "data-dragging": dragKey === col.key ? "" : void 0,
+                    "data-drop": side ?? void 0,
+                    ...headDragProps(col),
+                    children: [
+                      renderHead(col),
+                      side && /* @__PURE__ */ jsx5(
+                        "span",
+                        {
+                          "aria-hidden": true,
+                          "data-column-drop-indicator": side,
+                          className: cn(
+                            "pointer-events-none absolute inset-y-0 z-10 w-0.5 bg-primary",
+                            side === "before" ? "left-0" : "right-0"
+                          )
+                        }
+                      ),
+                      col.action && !col.header && /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.actionsColumn }),
+                      resizable && col.key !== lastVisibleKey && resizeHandle(col.key)
+                    ]
+                  },
+                  col.key
+                );
+              }),
               columnsMenu && /* @__PURE__ */ jsxs3(
                 TableHead,
                 {
@@ -782,7 +935,7 @@ function Pagination({
 }
 
 // src/list/usePagination.ts
-import { useState as useState2 } from "react";
+import { useState as useState3 } from "react";
 
 // src/prefs/listPrefs.ts
 var LIST_PAGE_SIZES = [10, 25, 50, 100];
@@ -801,7 +954,8 @@ function normalizeListPrefs(raw, knownKeys, defaults) {
     widths: cleanWidths(defaults.widths, known),
     sort: cleanSort(defaults.sort, known),
     pageSize: isListPageSize(defaults.pageSize) ? defaults.pageSize : DEFAULT_LIST_PAGE_SIZE,
-    compact: typeof defaults.compact === "boolean" ? defaults.compact : false
+    compact: typeof defaults.compact === "boolean" ? defaults.compact : false,
+    order: cleanOrder(defaults.order, knownKeys)
   };
   if (!isRecord(raw)) return base;
   const hidden = Array.isArray(raw.hidden) ? Array.from(
@@ -811,7 +965,18 @@ function normalizeListPrefs(raw, knownKeys, defaults) {
   const sort = "sort" in raw ? cleanSort(raw.sort, known) ?? base.sort : base.sort;
   const pageSize = isListPageSize(raw.pageSize) ? raw.pageSize : base.pageSize;
   const compact = typeof raw.compact === "boolean" ? raw.compact : base.compact;
-  return { hidden, widths, sort, pageSize, compact };
+  const order = Array.isArray(raw.order) ? cleanOrder(raw.order, knownKeys) : base.order;
+  return { hidden, widths, sort, pageSize, compact, order };
+}
+function cleanOrder(raw, knownKeys) {
+  if (!Array.isArray(raw)) return [];
+  const known = new Set(knownKeys);
+  const kept = Array.from(
+    new Set(raw.filter((k) => typeof k === "string" && known.has(k)))
+  );
+  if (kept.length === 0) return [];
+  const seen = new Set(kept);
+  return [...kept, ...knownKeys.filter((k) => !seen.has(k))];
 }
 function cleanWidths(raw, known) {
   const out = {};
@@ -838,6 +1003,7 @@ function listPrefsEqual(a, b) {
   if (aw.length !== bw.length || aw.some(([k, v]) => b.widths[k] !== v)) return false;
   if (a.pageSize !== b.pageSize) return false;
   if (a.compact !== b.compact) return false;
+  if (a.order.length !== b.order.length || a.order.some((k, i) => k !== b.order[i])) return false;
   if (a.sort === null || b.sort === null) return a.sort === b.sort;
   return a.sort.key === b.sort.key && a.sort.dir === b.sort.dir;
 }
@@ -847,7 +1013,8 @@ function resolveListDefaults(defaults = {}) {
     widths: defaults.widths ?? {},
     sort: defaults.sort ?? null,
     pageSize: defaults.pageSize ?? DEFAULT_LIST_PAGE_SIZE,
-    compact: defaults.compact ?? false
+    compact: defaults.compact ?? false,
+    order: defaults.order ?? []
   };
 }
 var EMPTY_LIST_PREFS = Object.freeze({
@@ -855,15 +1022,16 @@ var EMPTY_LIST_PREFS = Object.freeze({
   widths: {},
   sort: null,
   pageSize: DEFAULT_LIST_PAGE_SIZE,
-  compact: false
+  compact: false,
+  order: []
 });
 
 // src/list/usePagination.ts
 var DEFAULT_PAGE_SIZE = DEFAULT_LIST_PAGE_SIZE;
 function usePagination(deps = [], pageSize = DEFAULT_PAGE_SIZE) {
-  const [page, setPage] = useState2(1);
+  const [page, setPage] = useState3(1);
   const key = JSON.stringify([deps, pageSize]);
-  const [prevKey, setPrevKey] = useState2(key);
+  const [prevKey, setPrevKey] = useState3(key);
   if (prevKey !== key) {
     setPrevKey(key);
     setPage(1);
@@ -1014,6 +1182,8 @@ function ListFooter({
   onReset,
   compact,
   onCompactChange,
+  columnOrder,
+  onColumnOrderChange,
   columns,
   truncated,
   loading,
@@ -1075,6 +1245,8 @@ function ListFooter({
                 onReset,
                 compact,
                 onCompactChange,
+                columnOrder,
+                onColumnOrderChange,
                 labels: labelsProp
               }
             ),
@@ -1104,7 +1276,7 @@ function ListFooter({
 import { useMemo as useMemo2 } from "react";
 
 // src/prefs/useListPrefs.ts
-import { useCallback, useEffect as useEffect2, useMemo, useRef as useRef2, useSyncExternalStore } from "react";
+import { useCallback, useEffect as useEffect2, useMemo, useRef as useRef3, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 // src/prefs/stores.ts
@@ -1191,7 +1363,7 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
   const ui = useUi();
   const store = storeProp ?? ui.listPrefsStore ?? localOnlyListPrefsStore;
   const userId = store.userId;
-  const storeRef = useRef2(store);
+  const storeRef = useRef3(store);
   useEffect2(() => {
     storeRef.current = store;
   });
@@ -1226,7 +1398,7 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
       return raw == null ? null : { prefs: raw };
     }
   });
-  const reconciledRef = useRef2(null);
+  const reconciledRef = useRef3(null);
   useEffect2(() => {
     if (!userId || !query.isSuccess) return;
     const tag = `${userId}:${listKey}`;
@@ -1240,8 +1412,8 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
       void storeRef.current.save(listKey, local);
     }
   }, [userId, listKey, query.isSuccess, query.data, normalize, current]);
-  const timerRef = useRef2(null);
-  const pendingRef = useRef2(null);
+  const timerRef = useRef3(null);
+  const pendingRef = useRef3(null);
   const commit = useCallback(
     (next) => {
       pendingRef.current = null;
@@ -1300,8 +1472,12 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
     (compact) => persist({ ...current(), compact }, { debounce: false }),
     [persist, current]
   );
+  const setOrder = useCallback(
+    (order) => persist({ ...current(), order }, { debounce: false }),
+    [persist, current]
+  );
   const reset = useCallback(
-    () => persist({ ...current(), hidden: [], widths: {} }, { debounce: false }),
+    () => persist({ ...current(), hidden: [], widths: {}, order: [] }, { debounce: false }),
     [persist, current]
   );
   return {
@@ -1311,6 +1487,7 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
     setSort,
     setPageSize,
     setCompact,
+    setOrder,
     reset,
     isLoaded: !userId || query.isSuccess || query.isError
   };
@@ -1327,8 +1504,8 @@ function useListView(listKey, {
   compactable = false
 }) {
   const listPrefs = useListPrefs(listKey, { columnKeys, defaults, store });
-  const { prefs, setSort, setWidths, setHidden, setPageSize, setCompact, reset } = listPrefs;
-  const { sort, hidden, widths, pageSize } = prefs;
+  const { prefs, setSort, setWidths, setHidden, setPageSize, setCompact, setOrder, reset } = listPrefs;
+  const { sort, hidden, widths, pageSize, order } = prefs;
   const compact = compactable && prefs.compact;
   const { page, setPage, from, to } = usePagination([...deps, sort], pageSize);
   const listProps = useMemo2(
@@ -1343,9 +1520,13 @@ function useListView(listKey, {
       onColumnsReset: reset,
       mobileColumnsMenu: !paginated,
       stickyHeader,
+      columnOrder: order,
+      onColumnOrderChange: setOrder,
       ...compactable ? { compact, onCompactChange: setCompact } : {}
     }),
     [
+      order,
+      setOrder,
       sort,
       setSort,
       widths,
@@ -1369,16 +1550,32 @@ function useListView(listKey, {
       hidden,
       onHiddenChange: setHidden,
       onReset: reset,
+      columnOrder: order,
+      onColumnOrderChange: setOrder,
       ...compactable ? { compact, onCompactChange: setCompact } : {}
     }),
-    [page, pageSize, setPage, setPageSize, hidden, setHidden, reset, compactable, compact, setCompact]
+    [
+      page,
+      pageSize,
+      setPage,
+      setPageSize,
+      hidden,
+      setHidden,
+      reset,
+      order,
+      setOrder,
+      compactable,
+      compact,
+      setCompact
+    ]
   );
   const base = {
     prefs,
     sort,
     listProps,
     isLoaded: listPrefs.isLoaded,
-    compact
+    compact,
+    order
   };
   if (!paginated) return base;
   return { ...base, pageSize, page, setPage, from, to, footerProps };
@@ -1386,21 +1583,26 @@ function useListView(listKey, {
 
 // src/list/useListColumns.ts
 function useListColumns(listKey, columnKeys, { store } = {}) {
-  const { prefs, setHidden, setWidths, reset } = useListPrefs(listKey, { columnKeys, store });
+  const { prefs, setHidden, setWidths, setOrder, reset } = useListPrefs(listKey, {
+    columnKeys,
+    store
+  });
   return {
     resizable: true,
     columnWidths: prefs.widths,
     onColumnWidthsChange: setWidths,
     hiddenColumns: prefs.hidden,
     onHiddenColumnsChange: setHidden,
-    onColumnsReset: reset
+    onColumnsReset: reset,
+    columnOrder: prefs.order,
+    onColumnOrderChange: setOrder
   };
 }
 
 // src/prefs/useSupabaseListPrefsStore.ts
-import { useEffect as useEffect3, useMemo as useMemo3, useRef as useRef3, useState as useState3 } from "react";
+import { useEffect as useEffect3, useMemo as useMemo3, useRef as useRef4, useState as useState4 } from "react";
 function useSupabaseListPrefsStore(client, { table, onError } = {}) {
-  const [userId, setUserId] = useState3(null);
+  const [userId, setUserId] = useState4(null);
   useEffect3(() => {
     let active = true;
     let heardFromListener = false;
@@ -1418,7 +1620,7 @@ function useSupabaseListPrefsStore(client, { table, onError } = {}) {
       data.subscription.unsubscribe();
     };
   }, [client]);
-  const onErrorRef = useRef3(onError);
+  const onErrorRef = useRef4(onError);
   useEffect3(() => {
     onErrorRef.current = onError;
   });
@@ -1436,6 +1638,8 @@ function useSupabaseListPrefsStore(client, { table, onError } = {}) {
 }
 
 export {
+  orderColumns,
+  moveColumn,
   ColumnsMenu,
   useListCompact,
   MIN_COLUMN_WIDTH,

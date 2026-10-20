@@ -14,6 +14,7 @@ export {
   resolveColumnWidth,
   visibleColumnsOf,
 } from './list/columnWidth'
+export { moveColumn, orderColumns } from './list/columnOrder'
 export { TINTED_ROW_CLASS, rowTone } from './list/rowTone'
 export { Pagination, type PaginationProps } from './list/pagination'
 export { DEFAULT_PAGE_SIZE, usePagination } from './list/usePagination'

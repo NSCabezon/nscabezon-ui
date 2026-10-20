@@ -18,7 +18,9 @@ import {
   isListPageSize,
   listPrefsEqual,
   localOnlyListPrefsStore,
+  moveColumn,
   normalizeListPrefs,
+  orderColumns,
   resolveColumnWidth,
   resolveListDefaults,
   rowTone,
@@ -30,9 +32,9 @@ import {
   usePagination,
   useSupabaseListPrefsStore,
   visibleColumnsOf
-} from "./chunk-WSH25OMW.js";
+} from "./chunk-CU74V7WC.js";
 import "./chunk-6CXBNIIA.js";
-import "./chunk-XYPFQI2E.js";
+import "./chunk-QPTTCNNI.js";
 export {
   ColumnsMenu,
   DEFAULT_ACTION_COLUMN_WIDTH,
@@ -52,7 +54,9 @@ export {
   isListPageSize,
   listPrefsEqual,
   localOnlyListPrefsStore,
+  moveColumn,
   normalizeListPrefs,
+  orderColumns,
   resolveColumnWidth,
   resolveListDefaults,
   rowTone,

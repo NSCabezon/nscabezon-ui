@@ -7,6 +7,7 @@ import { ListCompactProvider } from './listCompact'
 import { useColumnResize } from './useColumnResize'
 import { TINTED_ROW_CLASS } from './rowTone'
 import { resolveColumnWidth, visibleColumnsOf } from './columnWidth'
+import { moveColumn, orderColumns } from './columnOrder'
 import { useLabels, useUi, type Labels } from '../context/UiProvider'
 import type { ListSort, SortDir } from '../prefs/listPrefs'
 import {
@@ -145,6 +146,15 @@ export type ResponsiveListProps<T> = {
   // Con este callback (y el menú de columnas activo) el `ColumnsMenu` pinta la
   // casilla «Modo compacto».
   onCompactChange?: (compact: boolean) => void
+  // Orden de columnas del usuario (opt-in). `columnOrder` (claves; `[]` = el
+  // de `columns`) se aplica a tabla, <colgroup> y <dl> de la tarjeta móvil; el
+  // título de la tarjeta sigue siendo la `primary`. Las `action` (y la columna
+  // del menú) no se mueven. Con `onColumnOrderChange`, en escritorio se
+  // arrastra la cabecera para mover la columna (HTML5 drag and drop) y el menú
+  // de columnas ofrece «Subir»/«Bajar» (la vía de teclado). El callback recibe
+  // todas las claves de `columns` en el orden nuevo.
+  columnOrder?: string[]
+  onColumnOrderChange?: (order: string[]) => void
   // Pins the desktop table header (thead) at the top while the list scrolls. Intended
   // for a list rendered inside its own vertical scroll container (`overflow-y-auto`),
   // so the header sticks to that container's top. `stickyHeaderTop` overrides the CSS
@@ -197,6 +207,8 @@ export function ResponsiveList<T>({
   mobileColumnsMenu = true,
   compact = false,
   onCompactChange,
+  columnOrder,
+  onColumnOrderChange,
   stickyHeader,
   stickyHeaderTop,
   className,
@@ -307,7 +319,8 @@ export function ResponsiveList<T>({
     return resolveColumnWidth(col, widthOf(col.key))
   }
 
-  const visibleColumns = visibleColumnsOf(columns, hiddenColumns)
+  const orderedColumns = orderColumns(columns, columnOrder)
+  const visibleColumns = visibleColumnsOf(orderedColumns, hiddenColumns)
   const mobileColumns = visibleColumns.filter((c) => !c.hideOnMobile)
   const primary = mobileColumns.find((c) => c.primary)
   // TODAS las columnas `action` van al slot superior derecho: con find() solo
@@ -340,6 +353,8 @@ export function ResponsiveList<T>({
         onReset={onColumnsReset}
         compact={compact}
         onCompactChange={onCompactChange}
+        columnOrder={columnOrder}
+        onColumnOrderChange={onColumnOrderChange}
         labels={labelsProp}
       />
     ) : null
@@ -353,6 +368,70 @@ export function ResponsiveList<T>({
   // opaco para que el contenido pase por debajo sin transparentarse. El `top`
   // sale del sticky de cabecera cuando lo hay: la celda se fija en los dos ejes.
   const menuHeadStyle: React.CSSProperties = { ...stickyHeadStyle, right: 0 }
+
+  // Arrastre de cabeceras (HTML5 drag and drop nativo, sin dependencias). Solo
+  // las columnas no-`action` se arrastran y reciben. La columna cae DETRÁS del
+  // destino si venía de su izquierda y DELANTE si venía de su derecha (lo que
+  // marca el indicador), sin medir geometría.
+  // - Un clic sin mover no es un arrastre: el botón de ordenar sigue ordenando
+  //   (el navegador no dispara `click` tras un `dragstart`).
+  // - El asa de redimensión NO arrastra: `pointerdown` sobre ella marca
+  //   `resizingRef` y el `dragstart` siguiente se cancela.
+  // - El foco no se toca: `draggable` va en el <th> (no enfocable), el botón de
+  //   ordenar de dentro sigue siendo el que recibe Tab.
+  const reorderable = !!onColumnOrderChange
+  const [dragKey, setDragKey] = React.useState<string | null>(null)
+  const [overKey, setOverKey] = React.useState<string | null>(null)
+  const resizingRef = React.useRef(false)
+  const visibleIndex = (key: string | null) =>
+    key == null ? -1 : visibleColumns.findIndex((c) => c.key === key)
+  const dropSide = (key: string): 'before' | 'after' | null => {
+    if (!dragKey || overKey !== key || dragKey === key) return null
+    return visibleIndex(dragKey) < visibleIndex(key) ? 'after' : 'before'
+  }
+  function endDrag() {
+    setDragKey(null)
+    setOverKey(null)
+  }
+  function headDragProps(col: ResponsiveColumn<T>): React.ThHTMLAttributes<HTMLTableCellElement> {
+    if (!reorderable || col.action) return {}
+    return {
+      draggable: true,
+      onPointerDown: (e) => {
+        resizingRef.current = !!(e.target as Element).closest?.('[data-column-resize-handle]')
+      },
+      onDragStart: (e) => {
+        if (resizingRef.current) {
+          resizingRef.current = false
+          e.preventDefault()
+          return
+        }
+        e.dataTransfer.effectAllowed = 'move'
+        // Firefox no arranca el arrastre sin datos.
+        e.dataTransfer.setData('text/plain', col.key)
+        setDragKey(col.key)
+      },
+      onDragOver: (e) => {
+        if (!dragKey) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        if (overKey !== col.key) setOverKey(col.key)
+      },
+      onDragLeave: (e) => {
+        // Solo al salir del <th>, no al pasar entre sus hijos.
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+        if (overKey === col.key) setOverKey(null)
+      },
+      onDrop: (e) => {
+        if (!dragKey) return
+        e.preventDefault()
+        const next = moveColumn(columns, columnOrder, dragKey, col.key)
+        endDrag()
+        if (next) onColumnOrderChange?.(next)
+      },
+      onDragEnd: endDrag,
+    }
+  }
 
   return (
     // @container + @3xl (48rem, el mismo valor que `md`) en vez de `md:`: el
@@ -400,32 +479,54 @@ export function ResponsiveList<T>({
                     <span className="sr-only">{labels.selectColumn}</span>
                   </TableHead>
                 )}
-                {visibleColumns.map((col) => (
-                  <TableHead
-                    key={col.key}
-                    className={cn(
-                      // `relative` ANTES de `sticky` (stickyHeadClass): con las
-                      // dos, tailwind-merge se queda con la última y sticky es
-                      // también contenedor del asa absoluta.
-                      resizable && 'relative',
-                      fixedCellClass,
-                      col.sortable && onSortChange && 'group',
-                      col.headClassName,
-                      compactHeadClass,
-                      stickyHeadClass,
-                    )}
-                    style={stickyHeadStyle}
-                    aria-sort={ariaSort(col)}
-                  >
-                    {renderHead(col)}
-                    {/* Columna de acciones sin cabecera visible: un <th> vacío no
-                        tiene nombre accesible (axe empty-table-header). */}
-                    {col.action && !col.header && (
-                      <span className="sr-only">{labels.actionsColumn}</span>
-                    )}
-                    {resizable && col.key !== lastVisibleKey && resizeHandle(col.key)}
-                  </TableHead>
-                ))}
+                {visibleColumns.map((col) => {
+                  const draggable = reorderable && !col.action
+                  const side = draggable ? dropSide(col.key) : null
+                  return (
+                    <TableHead
+                      key={col.key}
+                      className={cn(
+                        // `relative` ANTES de `sticky` (stickyHeadClass): con las
+                        // dos, tailwind-merge se queda con la última y sticky es
+                        // también contenedor del asa absoluta (y del indicador).
+                        (resizable || draggable) && 'relative',
+                        fixedCellClass,
+                        col.sortable && onSortChange && 'group',
+                        draggable && 'cursor-grab active:cursor-grabbing',
+                        dragKey === col.key && 'opacity-50',
+                        col.headClassName,
+                        compactHeadClass,
+                        stickyHeadClass,
+                      )}
+                      style={stickyHeadStyle}
+                      aria-sort={ariaSort(col)}
+                      data-column-key={draggable ? col.key : undefined}
+                      data-dragging={dragKey === col.key ? '' : undefined}
+                      data-drop={side ?? undefined}
+                      {...headDragProps(col)}
+                    >
+                      {renderHead(col)}
+                      {/* Dónde cae la columna arrastrada: una línea en el borde
+                          izquierdo (delante) o derecho (detrás) del destino. */}
+                      {side && (
+                        <span
+                          aria-hidden
+                          data-column-drop-indicator={side}
+                          className={cn(
+                            'pointer-events-none absolute inset-y-0 z-10 w-0.5 bg-primary',
+                            side === 'before' ? 'left-0' : 'right-0',
+                          )}
+                        />
+                      )}
+                      {/* Columna de acciones sin cabecera visible: un <th> vacío no
+                          tiene nombre accesible (axe empty-table-header). */}
+                      {col.action && !col.header && (
+                        <span className="sr-only">{labels.actionsColumn}</span>
+                      )}
+                      {resizable && col.key !== lastVisibleKey && resizeHandle(col.key)}
+                    </TableHead>
+                  )
+                })}
                 {columnsMenu && (
                   <TableHead
                     className={cn(

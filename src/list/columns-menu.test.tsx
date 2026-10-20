@@ -124,3 +124,104 @@ describe('ColumnsMenu — modo compacto', () => {
     expect(screen.getByRole('menuitemcheckbox', { name: 'Compact mode' })).not.toBeNull()
   })
 })
+
+describe('ColumnsMenu — orden de columnas', () => {
+  const orderColumnsDef: ColumnsMenuColumn[] = [
+    { key: 'name', header: 'Nombre', primary: true },
+    { key: 'total', header: <span>Total</span> },
+    { key: 'client', header: 'Cliente' },
+    { key: 'menu', action: true },
+    { key: 'quote', header: 'Presupuesto', action: true },
+  ]
+
+  function OrderHarness({
+    initial = [],
+    onOrder,
+  }: {
+    initial?: string[]
+    onOrder?: (order: string[]) => void
+  }) {
+    const [order, setOrder] = React.useState(initial)
+    return (
+      <ColumnsMenu
+        columns={orderColumnsDef}
+        hidden={[]}
+        onHiddenChange={() => {}}
+        onReset={() => {}}
+        columnOrder={order}
+        onColumnOrderChange={(next) => {
+          setOrder(next)
+          onOrder?.(next)
+        }}
+      />
+    )
+  }
+  const names = () => screen.getAllByRole('menuitemcheckbox').map((el) => el.textContent)
+  const moveItem = (name: string) => screen.getByRole('menuitem', { name })
+  const isDisabled = (el: HTMLElement) => el.hasAttribute('data-disabled')
+
+  it('sin `onColumnOrderChange` no hay botones Subir/Bajar, pero la lista sigue el orden', () => {
+    render(
+      <ColumnsMenu
+        columns={orderColumnsDef}
+        hidden={[]}
+        onHiddenChange={() => {}}
+        onReset={() => {}}
+        columnOrder={['client', 'name', 'total']}
+      />,
+    )
+    openMenu()
+    expect(names()).toEqual(['Cliente', 'Nombre', 'Total', 'Presupuesto'])
+    expect(screen.queryByRole('menuitem', { name: /^Subir/ })).toBeNull()
+  })
+
+  it('pinta la lista en el orden actual, Subir/Bajar con el nombre y deshabilitados en los extremos', () => {
+    render(<OrderHarness initial={['client', 'name', 'total']} />)
+    openMenu()
+    expect(names()).toEqual(['Cliente', 'Nombre', 'Total', 'Presupuesto'])
+    expect(isDisabled(moveItem('Subir Cliente'))).toBe(true)
+    expect(isDisabled(moveItem('Bajar Cliente'))).toBe(false)
+    expect(isDisabled(moveItem('Subir Total'))).toBe(false)
+    // Cabecera como nodo: el nombre sale de su texto.
+    expect(isDisabled(moveItem('Bajar Total'))).toBe(true)
+    // Las `action` no se mueven.
+    expect(screen.queryByRole('menuitem', { name: 'Subir Presupuesto' })).toBeNull()
+  })
+
+  it('subir y bajar reordenan sin cerrar el menú', () => {
+    const onOrder = vi.fn()
+    render(<OrderHarness onOrder={onOrder} />)
+    openMenu()
+    expect(names()).toEqual(['Nombre', 'Total', 'Cliente', 'Presupuesto'])
+    act(() => {
+      fireEvent.click(moveItem('Subir Cliente'))
+    })
+    expect(onOrder).toHaveBeenLastCalledWith(['name', 'client', 'total', 'menu', 'quote'])
+    // Sigue abierto y ya en el orden nuevo.
+    expect(names()).toEqual(['Nombre', 'Cliente', 'Total', 'Presupuesto'])
+    act(() => {
+      fireEvent.click(moveItem('Bajar Nombre'))
+    })
+    expect(onOrder).toHaveBeenLastCalledWith(['client', 'name', 'total', 'menu', 'quote'])
+    expect(names()).toEqual(['Cliente', 'Nombre', 'Total', 'Presupuesto'])
+    // Un extremo deshabilitado no hace nada.
+    onOrder.mockClear()
+    act(() => {
+      fireEvent.click(moveItem('Subir Cliente'))
+    })
+    expect(onOrder).not.toHaveBeenCalled()
+  })
+
+  it('los textos salen de `labels.columnMoveUp/Down` (con el nombre interpolado)', () => {
+    render(
+      <UiProvider
+        labels={{ columnMoveUp: (c) => `Move ${c} up`, columnMoveDown: (c) => `Move ${c} down` }}
+      >
+        <OrderHarness />
+      </UiProvider>,
+    )
+    openMenu()
+    expect(moveItem('Move Total up')).not.toBeNull()
+    expect(moveItem('Move Total down')).not.toBeNull()
+  })
+})

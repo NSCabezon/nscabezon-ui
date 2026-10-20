@@ -109,9 +109,12 @@ export type UseListPrefsResult = {
   setPageSize: (pageSize: number) => void
   /** Modo compacto (al instante, sin debounce). */
   setCompact: (compact: boolean) => void
+  /** Orden de las columnas (claves), al instante. `[]` = orden de serie. */
+  setOrder: (order: string[]) => void
   /**
-   * «Restablecer columnas»: ocultas y anchos fuera; orden, tamaño de página y
-   * modo compacto se conservan (la densidad no es una columna).
+   * «Restablecer columnas»: ocultas, anchos y orden de columnas fuera (vuelven
+   * a los de serie); orden de filas, tamaño de página y modo compacto se
+   * conservan (la densidad no es una columna).
    */
   reset: () => void
   /** Ya se reconcilió con el servidor (o no hay nada remoto que esperar). */
@@ -120,14 +123,14 @@ export type UseListPrefsResult = {
 
 /**
  * Preferencias de un listado configurable (orden, anchos, columnas ocultas,
- * filas por página, modo compacto), por usuario y sincronizadas entre dispositivos.
+ * orden de columnas, filas por página, modo compacto), por usuario y sincronizadas entre dispositivos.
  *
  * - Lectura: `list-prefs:<listKey>` de localStorage (vía `safeStorage`), sin
  *   salto en el primer render de una SPA y sin error de hidratación en Next.
  *   Cuando llega la fila del almacén remoto, GANA (una vez por usuario y
  *   lista). Si el almacén no tiene fila y la caché local trae algo distinto del
  *   defecto, se sube la local para que el siguiente dispositivo la encuentre.
- * - Escritura: orden, ocultas, tamaño de página y compacto al instante; anchos con
+ * - Escritura: orden, ocultas, orden de columnas, tamaño de página y compacto al instante; anchos con
  *   debounce de 400 ms y flush al desmontar. La caché local se actualiza
  *   siempre, sin esperar al servidor.
  *
@@ -266,8 +269,12 @@ export function useListPrefs(
     (compact: boolean) => persist({ ...current(), compact }, { debounce: false }),
     [persist, current],
   )
+  const setOrder = useCallback(
+    (order: string[]) => persist({ ...current(), order }, { debounce: false }),
+    [persist, current],
+  )
   const reset = useCallback(
-    () => persist({ ...current(), hidden: [], widths: {} }, { debounce: false }),
+    () => persist({ ...current(), hidden: [], widths: {}, order: [] }, { debounce: false }),
     [persist, current],
   )
 
@@ -278,6 +285,7 @@ export function useListPrefs(
     setSort,
     setPageSize,
     setCompact,
+    setOrder,
     reset,
     isLoaded: !userId || query.isSuccess || query.isError,
   }

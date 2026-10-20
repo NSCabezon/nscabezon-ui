@@ -85,6 +85,7 @@ describe('resolveListDefaults', () => {
       sort: SORT,
       pageSize: 25,
       compact: false,
+      order: [],
     })
     expect(
       resolveListDefaults({ sort: null, hidden: ['a'], widths: { a: 90 }, pageSize: 10 }),
@@ -94,6 +95,7 @@ describe('resolveListDefaults', () => {
       sort: null,
       pageSize: 10,
       compact: false,
+      order: [],
     })
   })
 })
@@ -275,6 +277,27 @@ describe('useListView (compactable)', () => {
     expect(view().compact).toBe(true)
     act(() => view().footerProps.onCompactChange!(false))
     expect(view().compact).toBe(false)
+  })
+
+  it('cablea columnOrder + onColumnOrderChange en los dos paquetes (sin opt-in), expone `order` y el reset lo vacía', () => {
+    const view = mountWith({})
+    expect(view().order).toEqual([])
+    expect(view().listProps.columnOrder).toEqual([])
+    expect(view().footerProps.columnOrder).toEqual([])
+    act(() => view().listProps.onColumnOrderChange(['status', 'number', 'client']))
+    expect(view().order).toEqual(['status', 'number', 'client'])
+    expect(view().listProps.columnOrder).toEqual(['status', 'number', 'client'])
+    expect(view().footerProps.columnOrder).toEqual(['status', 'number', 'client'])
+    expect(JSON.parse(localStorage.getItem('list-prefs:compact-list')!).order).toEqual([
+      'status',
+      'number',
+      'client',
+    ])
+    act(() => view().footerProps.onColumnOrderChange!(['client', 'number', 'status']))
+    expect(view().order).toEqual(['client', 'number', 'status'])
+    // «Restablecer columnas» vuelve al orden de serie.
+    act(() => view().listProps.onColumnsReset())
+    expect(view().order).toEqual([])
   })
 })
 

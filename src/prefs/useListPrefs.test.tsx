@@ -13,7 +13,7 @@ import { LIST_PREFS_WIDTHS_DEBOUNCE_MS, __resetListPrefsCache, useListPrefs } fr
 const KEYS = ['number', 'client', 'status'] as const
 const SORT = { key: 'number', dir: 'desc' } as const
 const DEFAULTS = { sort: SORT }
-const DEFAULT_PREFS: ListPrefs = { hidden: [], widths: {}, sort: SORT, pageSize: 25, compact: false }
+const DEFAULT_PREFS: ListPrefs = { hidden: [], widths: {}, sort: SORT, pageSize: 25, compact: false, order: [] }
 
 function fakeStore(row: unknown | null = null, userId: string | null = 'u1') {
   const save = vi.fn<ListPrefsStore['save']>(async () => {})
@@ -59,6 +59,7 @@ describe('useListPrefs', () => {
       sort: SORT,
       pageSize: 50,
       compact: false,
+      order: [],
     })
   })
 
@@ -138,6 +139,7 @@ describe('useListPrefs', () => {
       sort: { key: 'status', dir: 'asc' },
       pageSize: 10,
       compact: false,
+      order: [],
     })
     expect(save).toHaveBeenCalledTimes(3)
     expect(JSON.parse(localStorage.getItem('list-prefs:orders')!).pageSize).toBe(10)
@@ -171,8 +173,10 @@ describe('useListPrefs', () => {
     expect(save).toHaveBeenCalledWith('orders', { ...DEFAULT_PREFS, widths: { client: 150 } })
   })
 
-  it('reset limpia ocultas y anchos pero conserva orden, tamaño de página y compacto', async () => {
+  it('reset limpia ocultas, anchos y orden de columnas pero conserva orden de filas, tamaño de página y compacto', async () => {
     const { result } = renderPrefs()
+    act(() => result.current.setOrder(['status', 'number', 'client']))
+    expect(result.current.prefs.order).toEqual(['status', 'number', 'client'])
     act(() => result.current.setSort({ key: 'client', dir: 'asc' }))
     act(() => result.current.setPageSize(50))
     act(() => result.current.setCompact(true))
@@ -185,6 +189,7 @@ describe('useListPrefs', () => {
       sort: { key: 'client', dir: 'asc' },
       pageSize: 50,
       compact: true,
+      order: [],
     })
   })
 
@@ -200,6 +205,35 @@ describe('useListPrefs', () => {
     act(() => result.current.setCompact(false))
     expect(result.current.prefs.compact).toBe(false)
     expect(save).toHaveBeenLastCalledWith('orders', DEFAULT_PREFS)
+  })
+
+  it('setOrder se guarda al instante (local y remoto, sin debounce) y normalizado', async () => {
+    const { store, save } = fakeStore(null)
+    const { result } = renderPrefs(store)
+    await waitFor(() => expect(result.current.isLoaded).toBe(true))
+    act(() => result.current.setOrder(['status', 'number', 'client']))
+    expect(result.current.prefs.order).toEqual(['status', 'number', 'client'])
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(save).toHaveBeenLastCalledWith('orders', {
+      ...DEFAULT_PREFS,
+      order: ['status', 'number', 'client'],
+    })
+    expect(JSON.parse(localStorage.getItem('list-prefs:orders')!).order).toEqual([
+      'status',
+      'number',
+      'client',
+    ])
+    // Lo que se lee pasa por normalizeListPrefs: faltantes al final.
+    act(() => result.current.setOrder(['client']))
+    expect(result.current.prefs.order).toEqual(['client', 'number', 'status'])
+  })
+
+  it('la fila del servidor trae el orden de columnas guardado', async () => {
+    const { store } = fakeStore({ order: ['client', 'status', 'number'] })
+    const { result } = renderPrefs(store)
+    await waitFor(() =>
+      expect(result.current.prefs.order).toEqual(['client', 'status', 'number']),
+    )
   })
 
   it('la fila del servidor trae el compacto guardado', async () => {

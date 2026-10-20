@@ -3,6 +3,43 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.4.0] - 2026-10-20
+
+### Añadido
+
+- Columnas reordenables por usuario, en todos los listados de `useListView`
+  (sin opt-in).
+  - `ListPrefs.order: string[]` (claves; `[]` = orden de serie; también en
+    `ListPrefsDefaults`, `EMPTY_LIST_PREFS` y `listPrefsEqual`).
+    `normalizeListPrefs` quita claves desconocidas y repetidas y añade al
+    final las columnas conocidas que falten (columnas nuevas); si no es un
+    array, `[]`. Viaja en el jsonb de `user_list_prefs`: sin migración.
+  - `useListPrefs`: `setOrder(keys)`, al instante (sin debounce). `reset()`
+    («Restablecer columnas») ahora también vacía `order`; sigue sin tocar
+    orden de filas, tamaño de página ni compacto.
+  - `ResponsiveList`: props `columnOrder` / `onColumnOrderChange`. El orden se
+    aplica a cabeceras, celdas, `<colgroup>` y al `<dl>` de la tarjeta móvil
+    (el título sigue siendo la `primary`, que en la tabla puede ir en
+    cualquier posición). Las columnas `action` y la del menú no se mueven.
+    Con el callback, en escritorio la cabecera se arrastra (HTML5 drag and
+    drop nativo, sin dependencias): `cursor-grab`, la columna arrastrada al
+    50 % y una línea `bg-primary` en el borde donde cae (detrás del destino si
+    venía de la izquierda, delante si venía de la derecha). Un clic sin mover
+    sigue ordenando y el asa de redimensión no inicia arrastre.
+  - `ColumnsMenu`: props `columnOrder` / `onColumnOrderChange`; la lista sale
+    en el orden actual y, con el callback, cada columna no-`action` lleva
+    «Subir»/«Bajar» (items del menú: la vía de teclado), deshabilitados en los
+    extremos y sin cerrar el menú. `ColumnsMenuColumn.action` opcional.
+    Textos nuevos `Labels.columnMoveUp` / `columnMoveDown`
+    (`(column) => string`; por defecto «Subir X» / «Bajar X»).
+  - `ListFooter`: props `columnOrder` / `onColumnOrderChange` para su menú.
+  - `useListView`: `listProps` y `footerProps` llevan `columnOrder` +
+    `onColumnOrderChange`; el resultado expone `order`. `useListColumns`
+    también los devuelve.
+  - `orderColumns(columns, order)` y `moveColumn(columns, order, from, to)`
+    exportados (para tablas hechas a mano).
+  - El asa de `useColumnResize` lleva `data-column-resize-handle`.
+
 ## [0.3.0] - 2026-10-20
 
 ### Añadido

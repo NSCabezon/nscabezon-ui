@@ -17,6 +17,9 @@ export type ListPrefs = {
   // cada fila en una línea, con elipsis. Cualquier valor no booleano guardado
   // vuelve al defecto (`false`).
   compact: boolean
+  // Orden de las columnas elegido por el usuario (claves). `[]` = orden de
+  // serie (el de `columns`). Ver `normalizeListPrefs` y `orderColumns`.
+  order: string[]
 }
 
 // Tamaños de página que ofrece el selector. Si se cambia esta lista, las
@@ -48,6 +51,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  *   columna: `knownKeys` no le afecta.
  * - Compacto: solo un booleano; si no, el de `defaults` (y si ese tampoco lo
  *   es, `false`).
+ * - Orden de columnas: solo claves conocidas, sin repetidas, y las columnas
+ *   conocidas que falten se AÑADEN AL FINAL (una columna nueva aparece detrás
+ *   de las que el usuario ya colocó). Si no es un array, el de `defaults`; un
+ *   array sin ninguna clave conocida queda en `[]` (orden de serie).
  *
  * Una columna renombrada o eliminada deja de aparecer sin romper nada, y un
  * `prefs` corrupto vuelve a los valores por defecto.
@@ -64,6 +71,7 @@ export function normalizeListPrefs(
     sort: cleanSort(defaults.sort, known),
     pageSize: isListPageSize(defaults.pageSize) ? defaults.pageSize : DEFAULT_LIST_PAGE_SIZE,
     compact: typeof defaults.compact === 'boolean' ? defaults.compact : false,
+    order: cleanOrder(defaults.order, knownKeys),
   }
   if (!isRecord(raw)) return base
 
@@ -81,7 +89,20 @@ export function normalizeListPrefs(
 
   const compact = typeof raw.compact === 'boolean' ? raw.compact : base.compact
 
-  return { hidden, widths, sort, pageSize, compact }
+  const order = Array.isArray(raw.order) ? cleanOrder(raw.order, knownKeys) : base.order
+
+  return { hidden, widths, sort, pageSize, compact, order }
+}
+
+function cleanOrder(raw: unknown, knownKeys: string[]): string[] {
+  if (!Array.isArray(raw)) return []
+  const known = new Set(knownKeys)
+  const kept = Array.from(
+    new Set(raw.filter((k): k is string => typeof k === 'string' && known.has(k))),
+  )
+  if (kept.length === 0) return []
+  const seen = new Set(kept)
+  return [...kept, ...knownKeys.filter((k) => !seen.has(k))]
 }
 
 function cleanWidths(raw: Record<string, unknown>, known: Set<string>): Record<string, number> {
@@ -112,13 +133,15 @@ export function listPrefsEqual(a: ListPrefs, b: ListPrefs): boolean {
   if (aw.length !== bw.length || aw.some(([k, v]) => b.widths[k] !== v)) return false
   if (a.pageSize !== b.pageSize) return false
   if (a.compact !== b.compact) return false
+  if (a.order.length !== b.order.length || a.order.some((k, i) => k !== b.order[i])) return false
   if (a.sort === null || b.sort === null) return a.sort === b.sort
   return a.sort.key === b.sort.key && a.sort.dir === b.sort.dir
 }
 
 /**
  * Valores por defecto de un listado tal como los escribe una página: todo es
- * opcional (sin orden, sin ocultas, sin anchos, 25 por página, sin compacto).
+ * opcional (sin orden, sin ocultas, sin anchos, 25 por página, sin compacto,
+ * columnas en su orden de serie).
  */
 export type ListPrefsDefaults = {
   sort?: ListSort | null
@@ -126,6 +149,7 @@ export type ListPrefsDefaults = {
   widths?: Record<string, number>
   pageSize?: number
   compact?: boolean
+  order?: string[]
 }
 
 /** Rellena los opcionales de unos defaults para obtener unas `ListPrefs`. */
@@ -136,14 +160,19 @@ export function resolveListDefaults(defaults: ListPrefsDefaults = {}): ListPrefs
     sort: defaults.sort ?? null,
     pageSize: defaults.pageSize ?? DEFAULT_LIST_PAGE_SIZE,
     compact: defaults.compact ?? false,
+    order: defaults.order ?? [],
   }
 }
 
-/** Preferencias vacías: sin ocultas, sin anchos, sin orden, 25 por página, sin compacto. */
+/**
+ * Preferencias vacías: sin ocultas, sin anchos, sin orden, 25 por página, sin
+ * compacto, columnas en su orden de serie.
+ */
 export const EMPTY_LIST_PREFS: ListPrefs = Object.freeze({
   hidden: [],
   widths: {},
   sort: null,
   pageSize: DEFAULT_LIST_PAGE_SIZE,
   compact: false,
+  order: [],
 }) as ListPrefs

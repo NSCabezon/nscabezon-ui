@@ -14,6 +14,7 @@ const DEFAULTS: ListPrefs = {
   sort: { key: 'number', dir: 'desc' },
   pageSize: 25,
   compact: false,
+  order: [],
 }
 
 describe('normalizeListPrefs', () => {
@@ -99,6 +100,7 @@ describe('normalizeListPrefs', () => {
       sort: { key: 'ghost', dir: 'asc' },
       pageSize: 999,
       compact: 'yes' as unknown as boolean,
+      order: [],
     }
     expect(normalizeListPrefs(null, KNOWN, stale)).toEqual({
       hidden: [],
@@ -106,6 +108,7 @@ describe('normalizeListPrefs', () => {
       sort: null,
       pageSize: 25,
       compact: false,
+      order: [],
     })
   })
 
@@ -123,6 +126,32 @@ describe('normalizeListPrefs', () => {
     expect(normalizeListPrefs({ compact: true }, [], DEFAULTS).compact).toBe(true)
   })
 
+  it('order: unknown keys out, duplicates out, missing known columns appended at the end', () => {
+    expect(
+      normalizeListPrefs({ order: ['status', 'ghost', 'client', 'status', 7] }, KNOWN, DEFAULTS)
+        .order,
+    ).toEqual(['status', 'client', 'number', 'vehicle'])
+    // A full valid order stays as is.
+    expect(
+      normalizeListPrefs({ order: ['vehicle', 'status', 'client', 'number'] }, KNOWN, DEFAULTS)
+        .order,
+    ).toEqual(['vehicle', 'status', 'client', 'number'])
+    // A column added later shows up after the ones the user already placed.
+    expect(
+      normalizeListPrefs({ order: ['client', 'number', 'status'] }, KNOWN, DEFAULTS).order,
+    ).toEqual(['client', 'number', 'status', 'vehicle'])
+  })
+
+  it('order: not an array (or nothing known) means factory order []', () => {
+    for (const bad of ['client', 1, null, {}, undefined]) {
+      expect(normalizeListPrefs({ order: bad }, KNOWN, DEFAULTS).order).toEqual([])
+    }
+    expect(normalizeListPrefs({ order: ['ghost'] }, KNOWN, DEFAULTS).order).toEqual([])
+    expect(normalizeListPrefs({ order: [] }, KNOWN, DEFAULTS).order).toEqual([])
+    // Rows saved before order existed take the list default.
+    expect(normalizeListPrefs({ hidden: [] }, KNOWN, DEFAULTS).order).toEqual([])
+  })
+
   it('merges a full valid object untouched', () => {
     const raw = {
       hidden: ['vehicle'],
@@ -130,6 +159,7 @@ describe('normalizeListPrefs', () => {
       sort: { key: 'status', dir: 'desc' },
       pageSize: 50,
       compact: true,
+      order: [],
     }
     expect(normalizeListPrefs(raw, KNOWN, DEFAULTS)).toEqual(raw)
   })
@@ -143,10 +173,14 @@ describe('listPrefsEqual', () => {
       sort: { key: 'x', dir: 'asc' },
       pageSize: 25,
       compact: false,
+      order: [],
     }
     expect(listPrefsEqual(a, { ...a, widths: { x: 1 } })).toBe(true)
     expect(listPrefsEqual(a, { ...a, pageSize: 50 })).toBe(false)
     expect(listPrefsEqual(a, { ...a, compact: true })).toBe(false)
+    expect(listPrefsEqual(a, { ...a, order: ['x'] })).toBe(false)
+    expect(listPrefsEqual({ ...a, order: ['x', 'y'] }, { ...a, order: ['y', 'x'] })).toBe(false)
+    expect(listPrefsEqual({ ...a, order: ['x', 'y'] }, { ...a, order: ['x', 'y'] })).toBe(true)
     expect(listPrefsEqual(a, { ...a, widths: { x: 2 } })).toBe(false)
     expect(listPrefsEqual(a, { ...a, hidden: [] })).toBe(false)
     expect(listPrefsEqual(a, { ...a, sort: { key: 'x', dir: 'desc' } })).toBe(false)
@@ -163,6 +197,7 @@ describe('resolveListDefaults', () => {
       sort: null,
       pageSize: 25,
       compact: false,
+      order: [],
     })
     expect(resolveListDefaults({})).toEqual(EMPTY_LIST_PREFS)
     expect(
@@ -173,7 +208,9 @@ describe('resolveListDefaults', () => {
       sort: { key: 'a', dir: 'asc' },
       pageSize: 10,
       compact: false,
+      order: [],
     })
     expect(resolveListDefaults({ compact: true }).compact).toBe(true)
+    expect(resolveListDefaults({ order: ['a', 'b'] }).order).toEqual(['a', 'b'])
   })
 })

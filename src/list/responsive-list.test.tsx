@@ -733,3 +733,216 @@ describe('ResponsiveList (modo compacto)', () => {
     expect(onCompactChange).toHaveBeenCalledWith(false)
   })
 })
+
+describe('ResponsiveList (orden de columnas)', () => {
+  // jsdom no trae DragEvent/DataTransfer: un Event con un `dataTransfer` falso
+  // basta para los handlers de React (leen `e.dataTransfer`).
+  function dnd(type: string, el: Element) {
+    const ev = new Event(type, { bubbles: true, cancelable: true })
+    Object.defineProperty(ev, 'dataTransfer', {
+      value: { setData: () => {}, getData: () => '', effectAllowed: 'all', dropEffect: 'none' },
+    })
+    act(() => {
+      el.dispatchEvent(ev)
+    })
+    return ev
+  }
+  class FakePointerEvent extends MouseEvent {
+    pointerId = 1
+  }
+  const headKeys = () => heads().map((th) => th.textContent)
+  const withActions: ResponsiveColumn<Row>[] = [
+    ...columns,
+    { key: 'menu', cell: () => '⋯', action: true },
+  ]
+
+  it('aplica columnOrder a cabeceras, celdas y colgroup; las action se quedan al final', () => {
+    render(
+      <ResponsiveList
+        columns={withActions}
+        data={rows}
+        rowKey={(r) => r.id}
+        resizable
+        columnOrder={['id', 'menu', 'total', 'name']}
+      />,
+    )
+    expect(headKeys()).toEqual(['Id', 'Total', 'Nombre', 'Acciones'])
+    const cells = Array.from(table().querySelectorAll('tbody tr')[0].querySelectorAll('td'))
+    expect(cells.map((td) => td.textContent)).toEqual(['1', '10', 'Alfa', '⋯'])
+    expect(table().querySelectorAll('colgroup col')).toHaveLength(4)
+  })
+
+  it('móvil: el <dl> sigue el orden guardado y el título sigue siendo la primary', () => {
+    render(
+      <ResponsiveList
+        columns={columns}
+        data={rows}
+        rowKey={(r) => r.id}
+        columnOrder={['id', 'total', 'name']}
+      />,
+    )
+    const card = cards()[0]
+    expect(card.querySelector('[data-list-card-title]')!.textContent).toBe('Alfa')
+    expect(Array.from(card.querySelectorAll('dt')).map((dt) => dt.textContent)).toEqual([
+      'Id',
+      'Total',
+    ])
+  })
+
+  it('la primary puede quedar en cualquier posición de la tabla', () => {
+    render(
+      <ResponsiveList
+        columns={columns}
+        data={rows}
+        rowKey={(r) => r.id}
+        columnOrder={['total', 'id', 'name']}
+      />,
+    )
+    expect(headKeys()).toEqual(['Total', 'Id', 'Nombre'])
+  })
+
+  it('sin onColumnOrderChange las cabeceras no son arrastrables', () => {
+    render(<ResponsiveList columns={columns} data={rows} rowKey={(r) => r.id} />)
+    expect(heads().some((th) => th.hasAttribute('draggable'))).toBe(false)
+    expect(heads().some((th) => th.hasAttribute('data-column-key'))).toBe(false)
+  })
+
+  it('arrastrar una cabecera la mueve, con indicador de dónde cae, y llama a onColumnOrderChange', () => {
+    const onColumnOrderChange = vi.fn<(order: string[]) => void>()
+    render(
+      <ResponsiveList
+        columns={withActions}
+        data={rows}
+        rowKey={(r) => r.id}
+        onColumnOrderChange={onColumnOrderChange}
+      />,
+    )
+    const [nameTh, totalTh, idTh, menuTh] = heads()
+    expect(nameTh.getAttribute('draggable')).toBe('true')
+    expect(nameTh.className).toContain('cursor-grab')
+    // La columna de acciones ni se arrastra ni recibe.
+    expect(menuTh.hasAttribute('draggable')).toBe(false)
+
+    // Nombre (primera) → sobre Id: cae DETRÁS de Id.
+    dnd('dragstart', nameTh)
+    expect(heads()[0].hasAttribute('data-dragging')).toBe(true)
+    const over = dnd('dragover', idTh)
+    expect(over.defaultPrevented).toBe(true)
+    expect(heads()[2].getAttribute('data-drop')).toBe('after')
+    expect(
+      heads()[2].querySelector('[data-column-drop-indicator="after"]')!.className,
+    ).toContain('right-0')
+    dnd('drop', heads()[2])
+    expect(onColumnOrderChange).toHaveBeenLastCalledWith(['total', 'id', 'name', 'menu'])
+    expect(container.querySelector('[data-column-drop-indicator]')).toBeNull()
+    expect(heads()[0].hasAttribute('data-dragging')).toBe(false)
+
+    // Id (última movible) → sobre Total: cae DELANTE de Total.
+    dnd('dragstart', heads()[2])
+    dnd('dragover', totalTh)
+    expect(heads()[1].getAttribute('data-drop')).toBe('before')
+    dnd('drop', heads()[1])
+    expect(onColumnOrderChange).toHaveBeenLastCalledWith(['name', 'id', 'total', 'menu'])
+
+    // Soltar sobre la columna de acciones no hace nada.
+    onColumnOrderChange.mockClear()
+    dnd('dragstart', heads()[0])
+    const onMenu = dnd('dragover', heads()[3])
+    expect(onMenu.defaultPrevented).toBe(false)
+    dnd('drop', heads()[3])
+    dnd('dragend', heads()[0])
+    expect(onColumnOrderChange).not.toHaveBeenCalled()
+  })
+
+  it('un clic simple en una cabecera ordenable sigue ordenando (y no reordena)', () => {
+    const onSortChange = vi.fn<(next: ListSort) => void>()
+    const onColumnOrderChange = vi.fn()
+    render(
+      <ResponsiveList
+        columns={columns}
+        data={rows}
+        rowKey={(r) => r.id}
+        sort={null}
+        onSortChange={onSortChange}
+        onColumnOrderChange={onColumnOrderChange}
+      />,
+    )
+    const button = heads()[1].querySelector('button')!
+    act(() => {
+      button.dispatchEvent(new FakePointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    })
+    click(button)
+    expect(onSortChange).toHaveBeenCalledWith({ key: 'total', dir: 'asc' })
+    expect(onColumnOrderChange).not.toHaveBeenCalled()
+  })
+
+  it('arrastrar desde el asa de redimensión no reordena', () => {
+    const setPointerCapture = Element.prototype.setPointerCapture
+    Element.prototype.setPointerCapture = vi.fn()
+    try {
+      const onColumnOrderChange = vi.fn()
+      render(
+        <ResponsiveList
+          columns={columns}
+          data={rows}
+          rowKey={(r) => r.id}
+          resizable
+          onColumnWidthsChange={() => {}}
+          onColumnOrderChange={onColumnOrderChange}
+        />,
+      )
+      const handle = heads()[0].querySelector('[data-column-resize-handle]')!
+      act(() => {
+        handle.dispatchEvent(new FakePointerEvent('pointerdown', { bubbles: true, button: 0 }))
+      })
+      const start = dnd('dragstart', heads()[0])
+      expect(start.defaultPrevented).toBe(true)
+      expect(heads()[0].hasAttribute('data-dragging')).toBe(false)
+      const over = dnd('dragover', heads()[2])
+      expect(over.defaultPrevented).toBe(false)
+      dnd('drop', heads()[2])
+      expect(onColumnOrderChange).not.toHaveBeenCalled()
+      act(() => {
+        handle.dispatchEvent(new FakePointerEvent('pointerup', { bubbles: true }))
+      })
+      // Tras el redimensionado, un arrastre normal vuelve a funcionar.
+      act(() => {
+        heads()[0].dispatchEvent(new FakePointerEvent('pointerdown', { bubbles: true, button: 0 }))
+      })
+      dnd('dragstart', heads()[0])
+      dnd('dragover', heads()[2])
+      dnd('drop', heads()[2])
+      expect(onColumnOrderChange).toHaveBeenCalledWith(['total', 'id', 'name'])
+    } finally {
+      Element.prototype.setPointerCapture = setPointerCapture
+    }
+  })
+
+  it('columnOrder y onColumnOrderChange llegan al ColumnsMenu (lista en orden + Subir/Bajar)', async () => {
+    const { fireEvent, screen } = await import('@testing-library/react')
+    const onColumnOrderChange = vi.fn()
+    render(
+      <ResponsiveList
+        columns={columns}
+        data={rows}
+        rowKey={(r) => r.id}
+        onHiddenColumnsChange={() => {}}
+        onColumnsReset={() => {}}
+        mobileColumnsMenu={false}
+        columnOrder={['id', 'name', 'total']}
+        onColumnOrderChange={onColumnOrderChange}
+      />,
+    )
+    const trigger = heads()[heads().length - 1].querySelector('button')!
+    act(() => {
+      fireEvent.keyDown(trigger, { key: 'Enter' })
+    })
+    expect(
+      screen.getAllByRole('menuitemcheckbox').map((el) => el.textContent),
+    ).toEqual(['Id', 'Nombre', 'Total'])
+    act(() => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Bajar Id' }))
+    })
+    expect(onColumnOrderChange).toHaveBeenCalledWith(['name', 'id', 'total'])
+  })
+})

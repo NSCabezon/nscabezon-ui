@@ -14,6 +14,10 @@ export type Labels = {
   columnsReset: string
   /** Casilla «Modo compacto» del menú de columnas (listados con `compactable`). */
   compactMode: string
+  /** Botón «Subir» de una columna en el menú de columnas (aria-label/title). */
+  columnMoveUp: (column: string) => string
+  /** Botón «Bajar» de una columna en el menú de columnas (aria-label/title). */
+  columnMoveDown: (column: string) => string
   paginationFirst: string
   paginationPrev: string
   paginationNext: string
@@ -56,6 +60,8 @@ export const defaultLabels: Labels = {
   columnsMenu: 'Columnas',
   columnsReset: 'Restablecer columnas',
   compactMode: 'Modo compacto',
+  columnMoveUp: (column) => `Subir ${column}`,
+  columnMoveDown: (column) => `Bajar ${column}`,
   paginationFirst: 'Primera página',
   paginationPrev: 'Página anterior',
   paginationNext: 'Página siguiente',

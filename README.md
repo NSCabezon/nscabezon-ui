@@ -13,7 +13,7 @@ hay `prepare`: instalar no compila nada).
 | Área | Exportaciones |
 | --- | --- |
 | Integración | `UiProvider`, `useUi`, `useLabels`, `defaultLabels`, tipos `Labels`, `UiLinkProps` |
-| Listados | `ResponsiveList` (tabla en escritorio / tarjetas en móvil, orden servidor, anchos arrastrables, columnas ocultas, cabecera fija, filas teñidas, `rowHref`, modo compacto), `ColumnsMenu`, `useListCompact`, `useColumnResize`, `MIN_COLUMN_WIDTH`, `TOUCH_TEXT_LINK`, `rowTone`, `TINTED_ROW_CLASS`, `resolveColumnWidth`, `visibleColumnsOf`, `DEFAULT_ACTION_COLUMN_WIDTH` |
+| Listados | `ResponsiveList` (tabla en escritorio / tarjetas en móvil, orden servidor, anchos arrastrables, columnas ocultas, cabecera fija, filas teñidas, `rowHref`, modo compacto, columnas reordenables), `ColumnsMenu`, `useListCompact`, `orderColumns`, `moveColumn`, `useColumnResize`, `MIN_COLUMN_WIDTH`, `TOUCH_TEXT_LINK`, `rowTone`, `TINTED_ROW_CLASS`, `resolveColumnWidth`, `visibleColumnsOf`, `DEFAULT_ACTION_COLUMN_WIDTH` |
 | Paginación | `Pagination`, `usePagination`, `DEFAULT_PAGE_SIZE`, `ListFooter` |
 | Estado de listado | `useListView` (preferencias + paginación, `paginated: false` y `compactable` opcionales), `useListColumns` (solo columnas), `useListPrefs` |
 | Preferencias | `ListPrefs`, `ListSort`, `normalizeListPrefs`, `listPrefsEqual`, `resolveListDefaults`, `LIST_PAGE_SIZES`, `DEFAULT_LIST_PAGE_SIZE`, `EMPTY_LIST_PREFS`, almacenes `useSupabaseListPrefsStore` (hook que sigue la sesión), `createSupabaseListPrefsStore` y `localOnlyListPrefsStore` |
@@ -228,6 +228,16 @@ const view = useListView('orders', {
   y las celdas pueden adaptar su contenido con `useListCompact()`. Se guarda
   en `ListPrefs.compact`; «Restablecer columnas» no lo toca. Sin
   `compactable`, nada cambia.
+- Orden de columnas (todos los listados de `useListView` y `useListColumns`):
+  `listProps` lleva `columnOrder` + `onColumnOrderChange`. En escritorio se
+  arrastra la cabecera para mover la columna (un clic sin mover sigue
+  ordenando; el asa de redimensión no arrastra) y el menú de columnas pinta la
+  lista en el orden actual con «Subir»/«Bajar» por columna (la vía de
+  teclado; textos `labels.columnMoveUp/Down`, funciones con el nombre de la
+  columna). Las columnas `action` y la del menú no se mueven; la `primary`
+  puede ir en cualquier posición de la tabla, pero en móvil sigue siendo el
+  título de la tarjeta (el `<dl>` sí sigue el orden). `view.order` da el orden
+  guardado; `orderColumns(columns, order)` lo aplica en una tabla a mano.
 - Regla de anchos con `resizable`: como mucho UNA columna (lo normal, la
   `primary`) sin `width`; una `action` con botón de texto necesita `width` o
   `header` (sin ellos cae a 56 px).
@@ -236,8 +246,8 @@ const view = useListView('orders', {
 
 ```ts
 useListPrefs(listKey, { columnKeys, defaults?, store? }): {
-  prefs: ListPrefs            // { hidden, widths, sort, pageSize, compact }
-  setHidden, setWidths, setSort, setPageSize, setCompact, reset, isLoaded
+  prefs: ListPrefs            // { hidden, widths, sort, pageSize, compact, order }
+  setHidden, setWidths, setSort, setPageSize, setCompact, setOrder, reset, isLoaded
 }
 ```
 
@@ -247,11 +257,14 @@ useListPrefs(listKey, { columnKeys, defaults?, store? }): {
   de hidratación); en una SPA el primer render ya la lee.
 - Remoto: la fila del almacén gana (una vez por usuario y lista); si no hay
   fila y la caché difiere del defecto, se sube la local.
-- Ocultas, orden, tamaño de página y compacto se guardan al instante; los anchos con
+- Ocultas, orden, orden de columnas, tamaño de página y compacto se guardan al instante; los anchos con
   debounce de 400 ms y flush al desmontar.
 - Todo se normaliza contra las columnas de hoy: claves desconocidas fuera,
-  tamaño de página solo 10/25/50/100, compacto solo booleano (si no, `false`).
-- `reset()` limpia ocultas y anchos; conserva orden, tamaño de página y compacto.
+  tamaño de página solo 10/25/50/100, compacto solo booleano (si no, `false`),
+  orden de columnas sin desconocidas ni repetidas y con las que falten
+  (columnas nuevas) añadidas al final (`[]` = orden de serie).
+- `reset()` limpia ocultas, anchos y orden de columnas; conserva orden de
+  filas, tamaño de página y compacto.
 
 ### Almacén de Supabase
 

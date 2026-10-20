@@ -22,6 +22,7 @@ type ListPrefs = {
     sort: ListSort | null;
     pageSize: number;
     compact: boolean;
+    order: string[];
 };
 declare const LIST_PAGE_SIZES: readonly [10, 25, 50, 100];
 type ListPageSize = (typeof LIST_PAGE_SIZES)[number];
@@ -41,6 +42,10 @@ declare const LIST_PREFS_STORAGE_PREFIX = "list-prefs:";
  *   columna: `knownKeys` no le afecta.
  * - Compacto: solo un booleano; si no, el de `defaults` (y si ese tampoco lo
  *   es, `false`).
+ * - Orden de columnas: solo claves conocidas, sin repetidas, y las columnas
+ *   conocidas que falten se AÑADEN AL FINAL (una columna nueva aparece detrás
+ *   de las que el usuario ya colocó). Si no es un array, el de `defaults`; un
+ *   array sin ninguna clave conocida queda en `[]` (orden de serie).
  *
  * Una columna renombrada o eliminada deja de aparecer sin romper nada, y un
  * `prefs` corrupto vuelve a los valores por defecto.
@@ -50,7 +55,8 @@ declare function normalizeListPrefs(raw: unknown, knownKeys: string[], defaults:
 declare function listPrefsEqual(a: ListPrefs, b: ListPrefs): boolean;
 /**
  * Valores por defecto de un listado tal como los escribe una página: todo es
- * opcional (sin orden, sin ocultas, sin anchos, 25 por página, sin compacto).
+ * opcional (sin orden, sin ocultas, sin anchos, 25 por página, sin compacto,
+ * columnas en su orden de serie).
  */
 type ListPrefsDefaults = {
     sort?: ListSort | null;
@@ -58,10 +64,14 @@ type ListPrefsDefaults = {
     widths?: Record<string, number>;
     pageSize?: number;
     compact?: boolean;
+    order?: string[];
 };
 /** Rellena los opcionales de unos defaults para obtener unas `ListPrefs`. */
 declare function resolveListDefaults(defaults?: ListPrefsDefaults): ListPrefs;
-/** Preferencias vacías: sin ocultas, sin anchos, sin orden, 25 por página, sin compacto. */
+/**
+ * Preferencias vacías: sin ocultas, sin anchos, sin orden, 25 por página, sin
+ * compacto, columnas en su orden de serie.
+ */
 declare const EMPTY_LIST_PREFS: ListPrefs;
 
 declare const DEFAULT_ACTION_COLUMN_WIDTH = 56;

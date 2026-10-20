@@ -299,4 +299,20 @@ describe('ListFooter (textos)', () => {
     })
     expect(screen.queryByRole('menuitemcheckbox', { name: 'Modo compacto' })).toBeNull()
   })
+
+  it('columnOrder/onColumnOrderChange llegan al menú de columnas del pie (orden + Subir/Bajar)', () => {
+    const onColumnOrderChange = vi.fn()
+    renderFooter({ columnOrder: ['total', 'name'], onColumnOrderChange })
+    act(() => {
+      fireEvent.keyDown(columnsButton()!, { key: 'Enter' })
+    })
+    expect(screen.getAllByRole('menuitemcheckbox').map((el) => el.textContent)).toEqual([
+      'Total',
+      'Nombre',
+    ])
+    act(() => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Subir Nombre' }))
+    })
+    expect(onColumnOrderChange).toHaveBeenCalledWith(['name', 'total'])
+  })
 })

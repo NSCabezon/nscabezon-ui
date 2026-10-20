@@ -18,7 +18,9 @@ import {
   isListPageSize,
   listPrefsEqual,
   localOnlyListPrefsStore,
+  moveColumn,
   normalizeListPrefs,
+  orderColumns,
   resolveColumnWidth,
   resolveListDefaults,
   rowTone,
@@ -30,13 +32,13 @@ import {
   usePagination,
   useSupabaseListPrefsStore,
   visibleColumnsOf
-} from "./chunk-WSH25OMW.js";
+} from "./chunk-CU74V7WC.js";
 import {
   VERSION_FOCUS_THROTTLE_MS,
   VERSION_POLL_INTERVAL_MS,
   fetchVersionJson,
   useVersionCheck
-} from "./chunk-OBC3PB45.js";
+} from "./chunk-YOUUA3R4.js";
 import {
   AppleIcon,
   DEFAULT_LAST_AUTH_METHOD_KEY,
@@ -44,7 +46,7 @@ import {
   OAuthButtons,
   getLastAuthMethod,
   setLastAuthMethod
-} from "./chunk-7VASUR5S.js";
+} from "./chunk-HQ4LD33K.js";
 import {
   cn,
   safeStorage
@@ -54,7 +56,7 @@ import {
   defaultLabels,
   useLabels,
   useUi
-} from "./chunk-XYPFQI2E.js";
+} from "./chunk-QPTTCNNI.js";
 export {
   AppleIcon,
   ColumnsMenu,
@@ -85,7 +87,9 @@ export {
   isListPageSize,
   listPrefsEqual,
   localOnlyListPrefsStore,
+  moveColumn,
   normalizeListPrefs,
+  orderColumns,
   resolveColumnWidth,
   resolveListDefaults,
   rowTone,
