@@ -242,7 +242,7 @@ useListPrefs(listKey, { columnKeys, defaults?, store? }): {
 - Ocultas, orden y tamaño de página se guardan al instante; los anchos con
   debounce de 400 ms y flush al desmontar.
 - Todo se normaliza contra las columnas de hoy: claves desconocidas fuera,
-  tamaño de página solo 10/25/50.
+  tamaño de página solo 10/25/50/100.
 - `reset()` limpia ocultas y anchos; conserva orden y tamaño de página.
 
 ### Almacén de Supabase

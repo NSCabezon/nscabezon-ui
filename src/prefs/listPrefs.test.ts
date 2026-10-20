@@ -74,10 +74,11 @@ describe('normalizeListPrefs', () => {
     expect(normalizeListPrefs({}, KNOWN, DEFAULTS).sort).toEqual(DEFAULTS.sort)
   })
 
-  it('accepts only 10/25/50 as page size and falls back to the default otherwise', () => {
+  it('accepts only 10/25/50/100 as page size and falls back to the default otherwise', () => {
     expect(normalizeListPrefs({ pageSize: 10 }, KNOWN, DEFAULTS).pageSize).toBe(10)
     expect(normalizeListPrefs({ pageSize: 50 }, KNOWN, DEFAULTS).pageSize).toBe(50)
-    for (const bad of [0, 20, 100, -25, '25', null, Number.NaN, undefined]) {
+    expect(normalizeListPrefs({ pageSize: 100 }, KNOWN, DEFAULTS).pageSize).toBe(100)
+    for (const bad of [0, 20, 200, -25, '25', null, Number.NaN, undefined]) {
       expect(normalizeListPrefs({ pageSize: bad }, KNOWN, DEFAULTS).pageSize).toBe(25)
     }
     // pageSize is not a column key: knownKeys never filters it out.

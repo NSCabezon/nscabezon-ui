@@ -3,6 +3,12 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.2.2] - 2026-10-20
+
+### Añadido
+
+- `LIST_PAGE_SIZES` incluye 100: el selector «Filas por página» ofrece 10 · 25 · 50 · 100.
+
 ## [0.2.1] - 2026-10-08
 
 ### Corregido

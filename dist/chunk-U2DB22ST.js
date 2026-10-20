@@ -741,7 +741,7 @@ function Pagination({
 import { useState as useState2 } from "react";
 
 // src/prefs/listPrefs.ts
-var LIST_PAGE_SIZES = [10, 25, 50];
+var LIST_PAGE_SIZES = [10, 25, 50, 100];
 var DEFAULT_LIST_PAGE_SIZE = 25;
 function isListPageSize(value) {
   return LIST_PAGE_SIZES.includes(value);

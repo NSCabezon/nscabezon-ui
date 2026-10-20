@@ -17,7 +17,7 @@ export type ListPrefs = {
 
 // Tamaños de página que ofrece el selector. Si se cambia esta lista, las
 // preferencias guardadas con un tamaño retirado caen al defecto de la lista.
-export const LIST_PAGE_SIZES = [10, 25, 50] as const
+export const LIST_PAGE_SIZES = [10, 25, 50, 100] as const
 export type ListPageSize = (typeof LIST_PAGE_SIZES)[number]
 export const DEFAULT_LIST_PAGE_SIZE: ListPageSize = 25
 

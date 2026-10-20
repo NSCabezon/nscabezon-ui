@@ -13,7 +13,7 @@ type ListPrefs = {
     sort: ListSort | null;
     pageSize: number;
 };
-declare const LIST_PAGE_SIZES: readonly [10, 25, 50];
+declare const LIST_PAGE_SIZES: readonly [10, 25, 50, 100];
 type ListPageSize = (typeof LIST_PAGE_SIZES)[number];
 declare const DEFAULT_LIST_PAGE_SIZE: ListPageSize;
 declare function isListPageSize(value: unknown): value is ListPageSize;
