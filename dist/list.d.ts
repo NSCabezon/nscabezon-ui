@@ -514,9 +514,10 @@ type UseListPrefsResult = {
     /** Orden de las columnas (claves), al instante. `[]` = orden de serie. */
     setOrder: (order: string[]) => void;
     /**
-     * «Restablecer columnas»: ocultas, anchos y orden de columnas fuera (vuelven
-     * a los de serie); orden de filas, tamaño de página y modo compacto se
-     * conservan (la densidad no es una columna).
+     * «Restablecer columnas»: ocultas, anchos y orden de columnas vuelven a los
+     * DEFAULTS del listado (`defaults.hidden`, `defaults.widths` o `{}`,
+     * `defaults.order` o `[]`), no a «todo visible»; orden de filas, tamaño de
+     * página y modo compacto se conservan (la densidad no es una columna).
      */
     reset: () => void;
     /**

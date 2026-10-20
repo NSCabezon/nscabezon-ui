@@ -3,6 +3,17 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.9.2] - 2026-10-20
+
+### Corregido
+
+- «Restablecer columnas» (`reset()` de `useListPrefs`, `onColumnsReset` /
+  `onReset` de `useListView`) vuelve a los **defaults del listado**: las
+  columnas ocultas de serie (`defaults.hidden`) se ocultan otra vez, en vez de
+  quedar `hidden: []` y mostrarlas todas. Anchos y orden de columnas vuelven a
+  `defaults.widths`/`defaults.order` (sin ellos, `{}` y `[]`). Orden de filas,
+  tamaño de página y modo compacto se conservan, como antes.
+
 ## [0.9.1] - 2026-10-20
 
 ### Cambiado

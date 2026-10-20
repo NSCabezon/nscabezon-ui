@@ -32,16 +32,18 @@ const queryClient = makeQueryClient()
 // re-renderizando con otra prop.
 function Harness({
   pageSize,
+  hidden,
   filter,
   report,
 }: {
   pageSize?: number
+  hidden?: string[]
   filter: string
   report: (view: View) => void
 }) {
   const view = useListView('test-list', {
     columnKeys: COLUMN_KEYS,
-    defaults: { sort: SORT, pageSize },
+    defaults: { sort: SORT, pageSize, hidden },
     deps: [filter],
   })
   React.useEffect(() => {
@@ -50,7 +52,7 @@ function Harness({
   return null
 }
 
-function mount(props: { pageSize?: number; filter?: string } = {}) {
+function mount(props: { pageSize?: number; hidden?: string[]; filter?: string } = {}) {
   act(() => {
     root.render(
       <QueryClientProvider client={queryClient}>
@@ -197,6 +199,20 @@ describe('useListView', () => {
     expect(latest.listProps.columnWidths).toEqual({})
     expect(latest.pageSize).toBe(10)
     expect(latest.sort).toEqual({ key: 'status', dir: 'asc' })
+  })
+
+  it('onColumnsReset / onReset vuelven a las ocultas por defecto (defaults.hidden), no a []', () => {
+    mount({ hidden: ['status'] })
+    expect(latest.listProps.hiddenColumns).toEqual(['status'])
+    act(() => latest.listProps.onHiddenColumnsChange([]))
+    act(() => latest.listProps.onColumnWidthsChange({ number: 80 }))
+    expect(latest.listProps.hiddenColumns).toEqual([])
+    act(() => latest.listProps.onColumnsReset())
+    expect(latest.listProps.hiddenColumns).toEqual(['status'])
+    expect(latest.listProps.columnWidths).toEqual({})
+    act(() => latest.footerProps.onHiddenChange(['client']))
+    act(() => latest.footerProps.onReset())
+    expect(latest.footerProps.hidden).toEqual(['status'])
   })
 
   it('keeps stable prop bundles across renders that do not touch them', () => {

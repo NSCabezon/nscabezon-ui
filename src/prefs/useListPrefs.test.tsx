@@ -193,6 +193,27 @@ describe('useListPrefs', () => {
     })
   })
 
+  it('reset vuelve a las ocultas POR DEFECTO del listado, no a todo visible', () => {
+    const { result } = renderHook(
+      () =>
+        useListPrefs('orders-hidden', {
+          columnKeys: KEYS,
+          defaults: { sort: SORT, hidden: ['status'] },
+        }),
+      { wrapper: withQueryClient(makeQueryClient()) },
+    )
+    expect(result.current.prefs.hidden).toEqual(['status'])
+    act(() => result.current.setHidden([]))
+    act(() => result.current.setWidths({ number: 70 }))
+    act(() => result.current.setOrder(['client', 'number', 'status']))
+    act(() => result.current.setCompact(true))
+    act(() => result.current.reset())
+    expect(result.current.prefs.hidden).toEqual(['status'])
+    expect(result.current.prefs.widths).toEqual({})
+    expect(result.current.prefs.order).toEqual([])
+    expect(result.current.prefs.compact).toBe(true)
+  })
+
   it('setCompact se guarda al instante (local y remoto, sin debounce)', async () => {
     const { store, save } = fakeStore(null)
     const { result } = renderPrefs(store)

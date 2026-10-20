@@ -360,7 +360,9 @@ useListPrefs(listKey, { columnKeys, defaults?, store? }): {
   tamaño de página solo 10/25/50/100, compacto solo booleano (si no, `false`),
   orden de columnas sin desconocidas ni repetidas y con las que falten
   (columnas nuevas) añadidas al final (`[]` = orden de serie).
-- `reset()` limpia ocultas, anchos y orden de columnas; conserva orden de
+- `reset()` devuelve ocultas, anchos y orden de columnas a los **defaults del
+  listado** (`defaults.hidden`, `defaults.widths` o `{}`, `defaults.order` o
+  `[]`): una columna oculta de serie vuelve a ocultarse. Conserva orden de
   filas, tamaño de página y compacto.
 
 ### Almacén de Supabase

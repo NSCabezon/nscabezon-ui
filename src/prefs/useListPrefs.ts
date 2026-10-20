@@ -151,9 +151,10 @@ export type UseListPrefsResult = {
   /** Orden de las columnas (claves), al instante. `[]` = orden de serie. */
   setOrder: (order: string[]) => void
   /**
-   * «Restablecer columnas»: ocultas, anchos y orden de columnas fuera (vuelven
-   * a los de serie); orden de filas, tamaño de página y modo compacto se
-   * conservan (la densidad no es una columna).
+   * «Restablecer columnas»: ocultas, anchos y orden de columnas vuelven a los
+   * DEFAULTS del listado (`defaults.hidden`, `defaults.widths` o `{}`,
+   * `defaults.order` o `[]`), no a «todo visible»; orden de filas, tamaño de
+   * página y modo compacto se conservan (la densidad no es una columna).
    */
   reset: () => void
   /**
@@ -325,10 +326,17 @@ export function useListPrefs(
     (order: string[]) => persist({ ...current(), order }, { debounce: false }),
     [persist, current],
   )
-  const reset = useCallback(
-    () => persist({ ...current(), hidden: [], widths: {}, order: [] }, { debounce: false }),
-    [persist, current],
-  )
+  // «Restablecer columnas» vuelve a los DEFAULTS del listado (v0.9.2): las
+  // columnas que la lista oculta de serie (`defaults.hidden`) vuelven a
+  // ocultarse, no se muestran todas. Anchos y orden de columnas, los de
+  // `defaults` (sin ellos, `{}` y `[]`: anchos y orden de serie).
+  const reset = useCallback(() => {
+    const base = normalize(null)
+    persist(
+      { ...current(), hidden: base.hidden, widths: base.widths, order: base.order },
+      { debounce: false },
+    )
+  }, [persist, current, normalize])
 
   return {
     prefs,

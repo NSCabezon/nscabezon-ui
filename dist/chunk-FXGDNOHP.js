@@ -1718,10 +1718,13 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
     (order) => persist({ ...current(), order }, { debounce: false }),
     [persist, current]
   );
-  const reset = useCallback(
-    () => persist({ ...current(), hidden: [], widths: {}, order: [] }, { debounce: false }),
-    [persist, current]
-  );
+  const reset = useCallback(() => {
+    const base = normalize(null);
+    persist(
+      { ...current(), hidden: base.hidden, widths: base.widths, order: base.order },
+      { debounce: false }
+    );
+  }, [persist, current, normalize]);
   return {
     prefs,
     setHidden,
