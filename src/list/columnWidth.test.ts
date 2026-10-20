@@ -15,6 +15,14 @@ import {
 // efectivo, la de relleno la marca el consumidor y la tabla mide
 // máx(contenedor, suma).
 describe('resolveFillColumnKey', () => {
+  it('RESIZE-FILL-6: con ancho guardado en la de relleno no hay relleno (ni pasa a otra marcada)', () => {
+    const cols = [{ key: 'n' }, { key: 'desc', fill: true }, { key: 'x', fill: true }]
+    expect(resolveFillColumnKey(cols, { desc: 200 })).toBeUndefined()
+    expect(resolveFillColumnKey(cols, { n: 90 })).toBe('desc')
+    expect(resolveFillColumnKey(cols, {})).toBe('desc')
+    expect(resolveFillColumnKey(cols)).toBe('desc')
+  })
+
   it('la primera marcada con `fill`', () => {
     expect(
       resolveFillColumnKey([{ key: 'n', primary: true }, { key: 'desc', fill: true }, { key: 'x', fill: true }]),

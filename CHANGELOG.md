@@ -3,6 +3,37 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.9.3] - 2026-10-20
+
+### Corregido
+
+- **Arrastrar el borde de una columna la movía en vez de redimensionarla.** La
+  zona de agarre del asa (6 px) quedaba entera a la IZQUIERDA de la línea,
+  dentro de la `<th>` (que lleva `overflow-hidden`, así que no podía salir);
+  justo a la derecha empezaba la cabecera vecina, arrastrable desde v0.9.0
+  para reordenar, y fallar por 1 px la agarraba y la movía (o, con un clic,
+  ordenaba). Ahora cada cabecera salvo la primera lleva también la otra mitad
+  de la zona en su borde izquierdo (`data-column-resize-handle="start"`), que
+  redimensiona la columna ANTERIOR: la zona (~12 px) queda centrada en la
+  línea. No se pinta en la última `<th>` cuando va sin posicionar (menú de
+  columnas fuera del scroll, sin `stickyHeader`). `useColumnResize`:
+  `resizeHandle(key, edge?: 'end' | 'start')` (por defecto `'end'`, como
+  antes).
+- **La columna de relleno no se podía estrechar** mientras la tabla cabía: se
+  guardaba el ancho pero seguía estirada. Ahora, en cuanto el usuario la
+  arrastra deja de rellenar: su ancho guardado manda (más ancho o más
+  estrecho, en vivo durante el arrastre) y la tabla mide la suma exacta, con
+  hueco a la derecha como en Excel; las demás columnas no se mueven y, si
+  cabe, no hay scroll. Doble clic en su asa (cualquiera de las dos mitades) o
+  «Restablecer columnas» borran ese ancho y vuelve a ser el relleno.
+  `resolveFillColumnKey(columns, widths?)`: con ancho guardado en la columna
+  `fill`, `undefined`. El relleno **no** pasa a otra columna marcada `fill`
+  (empezaría a estirarse sola sin que nadie la tocara).
+
+> **Consumidores:** quien ya tuviera guardado un ancho de la columna de
+> relleno (se guardaba al arrastrarla desde v0.9.0) la verá fija con hueco a
+> la derecha; doble clic en su asa la devuelve a relleno.
+
 ## [0.9.2] - 2026-10-20
 
 ### Corregido

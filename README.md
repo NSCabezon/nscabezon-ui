@@ -293,16 +293,30 @@ const view = useListView('orders', {
   - Columna de **relleno**: una por tabla, marcada con `fill: true` (si hay
     varias, la primera). Si sobra sitio, se estira para ocuparlo; nunca baja
     de su ancho base (su `width`/guardado/160), que es el que cuenta en la
-    suma y el que se guarda si la arrastras. **Sin ninguna marcada no hay
-    relleno**: queda hueco a la derecha. No se elige sola: márcala en la
-    columna de texto principal (descripción, cliente…), nunca en un Nº.
-    `flex: true` (v0.5.0) sigue valiendo como alias deprecado.
+    suma. **Sin ninguna marcada no hay relleno**: queda hueco a la derecha.
+    No se elige sola: márcala en la columna de texto principal (descripción,
+    cliente…), nunca en un Nº. `flex: true` (v0.5.0) sigue valiendo como
+    alias deprecado.
+  - Relleno dimensionado a mano (v0.9.3): en cuanto el usuario arrastra la
+    columna de relleno deja de rellenar y manda su ancho guardado (se puede
+    estrechar); la tabla queda **sin relleno** (hueco a la derecha) y el
+    relleno no pasa a otra columna `fill`. Doble clic en su asa o
+    «Restablecer columnas» la devuelven a relleno
+    (`resolveFillColumnKey(columns, widths)`).
   - Suelo (`columnFloor`): `minWidth` de la columna o `MIN_COLUMN_WIDTH`
     (64 px; menos si su propio ancho por defecto es menor, p. ej. un icono).
     Un ancho guardado por debajo se pinta al suelo.
   - Al estrechar la ventana no cambia nada salvo que el relleno pierde su
     estiramiento; si no cabe, scroll. Doble clic en el asa y «Restablecer
-    columnas» devuelven los anchos de serie. La última columna no lleva asa.
+    columnas» devuelven los anchos de serie. La última columna no lleva asa
+    propia.
+  - Zona de agarre (v0.9.3): centrada en la línea. El asa de cada columna
+    (`data-column-resize-handle=""`, borde derecho de su `<th>`) más la otra
+    mitad en el borde izquierdo de la `<th>` siguiente
+    (`data-column-resize-handle="start"`, `resizeHandle(prevKey, 'start')`),
+    que redimensiona la anterior. Fallar el asa por 1 px ya no agarra la
+    cabecera vecina (que se arrastra para reordenar). En una tabla a mano,
+    pon las dos para el mismo efecto.
   - Técnica (`tableSizing`): `table-fixed` + `<colgroup>` con el ancho de
     cada columna en px. Con relleno, su `<col>` va **sin** ancho y la tabla
     lleva `width: 100%; min-width: <suma>px`: table-fixed da al relleno todo

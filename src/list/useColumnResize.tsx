@@ -47,11 +47,13 @@ type DragRef = {
  * - Todas las columnas tienen ancho efectivo (`resolveColumnWidth`): guardado,
  *   `width` o `DEFAULT_COLUMN_WIDTH`. `totalWidth` es su suma.
  * - La de relleno (`fill: true`, alias `flex`) tiene un ancho BASE como las
- *   demás (cuenta en la suma y se guarda al arrastrarla) y se estira encima
- *   si sobra sitio: su `<col>` va sin ancho (`colWidth` → `undefined`) y la
- *   tabla lleva `tableStyle` (`tableSizing`). Sin relleno, hueco a la derecha.
+ *   demás (cuenta en la suma) y se estira encima si sobra sitio: su `<col>`
+ *   va sin ancho (`colWidth` → `undefined`) y la tabla lleva `tableStyle`
+ *   (`tableSizing`). Sin relleno, hueco a la derecha.
  *   Al arrastrar la de relleno se parte de su ancho PINTADO (medido del
- *   `<th>`, estiramiento incluido), para que el asa siga al puntero.
+ *   `<th>`, estiramiento incluido), para que el asa siga al puntero. Desde
+ *   v0.9.3, en cuanto se arrastra deja de rellenar: su ancho guardado manda
+ *   (se puede estrechar; queda hueco a la derecha) hasta el doble clic.
  * Sin `columns` (tablas a mano antiguas): cambia la arrastrada, partiendo del
  * ancho guardado o, si no hay, del medido; suelo `MIN_COLUMN_WIDTH`.
  */
@@ -68,7 +70,12 @@ export function useColumnResize({
   const [drag, setDrag] = React.useState<DragState | null>(null)
   const dragRef = React.useRef<DragRef | null>(null)
 
-  const fillKey = columns ? resolveFillColumnKey(columns) : undefined
+  // Relleno «de reposo»: la columna `fill` mientras el usuario no le haya
+  // guardado un ancho (v0.9.3, ver `resolveFillColumnKey`). Mientras se
+  // ARRASTRA esa columna deja de rellenar ya (`fillKey` undefined): su `<col>`
+  // sigue al puntero en vivo también al estrecharla, como quedará al soltar.
+  const restingFillKey = columns ? resolveFillColumnKey(columns, columnWidths) : undefined
+  const fillKey = drag?.key === restingFillKey ? undefined : restingFillKey
   const colOf = (key: string) => columns?.find((c) => c.key === key)
 
   /** Ancho efectivo sin arrastre (con `columns`): guardado/`width`/defecto, con suelo. */
@@ -109,6 +116,22 @@ export function useColumnResize({
     return totalWidth == null ? undefined : tableSizing(totalWidth + extra, !!fillKey)
   }
 
+  /**
+   * `<th>` de `columnKey` (para medir su ancho pintado): la marcada con
+   * `COLUMN_WIDTH_KEY_ATTR` en la misma fila; si la tabla no la marca, la que
+   * contiene el asa (`'end'`) o la anterior a ella (`'start'`).
+   */
+  function headOf(handle: Element, columnKey: string, edge: 'end' | 'start'): Element | null {
+    const own = handle.parentElement
+    const row = handle.closest('tr')
+    if (row) {
+      for (const el of Array.from(row.querySelectorAll(`[${COLUMN_WIDTH_KEY_ATTR}]`))) {
+        if (el.getAttribute(COLUMN_WIDTH_KEY_ATTR) === columnKey) return el
+      }
+    }
+    return edge === 'start' ? (own?.previousElementSibling ?? null) : own
+  }
+
   function clamp(d: DragRef, clientX: number) {
     return Math.round(Math.max(d.min, d.startW + clientX - d.startX))
   }
@@ -124,23 +147,37 @@ export function useColumnResize({
    * Devuelve JSX, NO un componente: un componente declarado aquí cambiaría de
    * identidad en cada render del hook, así que React desmontaría el asa en
    * cuanto el arrastre actualiza el ancho — y con ella, la captura del puntero.
+   *
+   * `edge` (v0.9.3): `'end'` (por defecto) es el asa de siempre, en el borde
+   * derecho de la propia `<th>` de `columnKey`. `'start'` es la otra mitad de
+   * la zona de agarre: va en el borde IZQUIERDO de la `<th>` SIGUIENTE y
+   * redimensiona `columnKey` (la anterior). Hace falta porque la `<th>` lleva
+   * `overflow-hidden` (no se puede sacar el asa por fuera) y, desde que las
+   * cabeceras se arrastran para reordenar (v0.9.0), fallar el asa por 1 px a la
+   * derecha de la línea agarraba la cabecera vecina y la MOVÍA. Con las dos
+   * mitades la zona queda centrada en la línea, como en Excel. Sin línea
+   * propia (la pinta el asa `'end'`), solo se resalta al pasar por encima.
    */
-  function resizeHandle(columnKey: string) {
+  function resizeHandle(columnKey: string, edge: 'end' | 'start' = 'end') {
     return (
       <span
         role="presentation"
         // Gancho para `ResponsiveList`: arrastrar desde el asa redimensiona,
         // nunca reordena la columna.
-        data-column-resize-handle=""
-        className="absolute inset-y-0 right-0 w-1.5 cursor-col-resize touch-none select-none before:absolute before:inset-y-1.5 before:right-0 before:w-px before:bg-border before:content-[''] hover:before:inset-y-0 hover:before:w-0.5 hover:before:bg-muted-foreground"
+        data-column-resize-handle={edge === 'start' ? 'start' : ''}
+        className={
+          edge === 'start'
+            ? "absolute inset-y-0 left-0 w-1.5 cursor-col-resize touch-none select-none before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:content-[''] hover:before:bg-muted-foreground"
+            : "absolute inset-y-0 right-0 w-1.5 cursor-col-resize touch-none select-none before:absolute before:inset-y-1.5 before:right-0 before:w-px before:bg-border before:content-[''] hover:before:inset-y-0 hover:before:w-0.5 hover:before:bg-muted-foreground"
+        }
         onPointerDown={(e) => {
           if (e.button !== 0) return
-          const th = e.currentTarget.parentElement
+          const th = headOf(e.currentTarget, columnKey, edge)
           const measured = () => th?.getBoundingClientRect().width || undefined
           const col = colOf(columnKey)
           let startW: number
           if (!col) startW = columnWidths?.[columnKey] ?? measured() ?? 0
-          else if (columnKey === fillKey) {
+          else if (columnKey === restingFillKey) {
             startW = Math.max(measured() ?? 0, baseWidth(columnKey)!)
           } else startW = baseWidth(columnKey)!
           const d: DragRef = {

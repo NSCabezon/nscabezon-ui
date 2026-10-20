@@ -573,8 +573,12 @@ export function ResponsiveList<T>({
                     <span className="sr-only">{labels.selectColumn}</span>
                   </TableHead>
                 )}
-                {visibleColumns.map((col) => {
+                {visibleColumns.map((col, i) => {
                   const draggable = reorderable && !col.action
+                  // Columna anterior: su asa tiene la otra mitad de la zona de
+                  // agarre en el borde izquierdo de ESTA cabecera (ver
+                  // `resizeHandle(key, 'start')`).
+                  const prevKey = i > 0 ? visibleColumns[i - 1].key : undefined
                   const side = draggable ? dropSide(col.key) : null
                   const isLast = col.key === lastVisibleKey
                   // Sin `stickyHeader` la última <th> no puede ir posicionada
@@ -645,6 +649,13 @@ export function ResponsiveList<T>({
                           {columnsMenu}
                         </div>
                       )}
+                      {/* Mitad derecha de la zona de agarre del borde anterior:
+                          fallar el asa por 1 px ya no agarra (y mueve) esta
+                          cabecera. Después del asa propia a propósito (quien
+                          busque «el asa de la columna» encuentra antes la suya).
+                          No en una <th> sin posicionar (`staticHead`): el
+                          `absolute` se iría al envoltorio. */}
+                      {resizable && prevKey && !staticHead && resizeHandle(prevKey, 'start')}
                     </TableHead>
                   )
                 })}

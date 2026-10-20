@@ -124,8 +124,10 @@ var MIN_COLUMN_WIDTH = 64;
 function isFillColumn(col) {
   return !!(col.fill ?? col.flex);
 }
-function resolveFillColumnKey(columns) {
-  return columns.find(isFillColumn)?.key;
+function resolveFillColumnKey(columns, widths) {
+  const key = columns.find(isFillColumn)?.key;
+  if (key == null || widths?.[key] != null) return void 0;
+  return key;
 }
 function defaultWidthOf(col) {
   return col.width ?? (col.action && !col.header ? DEFAULT_ACTION_COLUMN_WIDTH : DEFAULT_COLUMN_WIDTH);

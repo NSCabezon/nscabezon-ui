@@ -135,8 +135,15 @@ declare function isFillColumn(col: {
  * (o `flex`) entre las visibles. Sin ninguna marcada, `undefined`: NO hay
  * relleno y, si las columnas no llegan al ancho del contenedor, queda hueco a
  * la derecha. Nunca se elige sola (ni la `primary`): la decide el consumidor.
+ *
+ * v0.9.3: con `widths` (los anchos guardados del usuario), si esa columna
+ * tiene ancho guardado deja de rellenar y la tabla queda SIN relleno (hueco a
+ * la derecha, como Excel): el usuario la ha dimensionado a mano y manda su
+ * ancho, también para estrecharla. NO pasa el relleno a otra columna marcada:
+ * una segunda `fill` empezaría a estirarse sola sin que nadie la tocara.
+ * Doble clic en su asa (se borra el guardado) la vuelve a hacer relleno.
  */
-declare function resolveFillColumnKey(columns: SizedColumn[]): string | undefined;
+declare function resolveFillColumnKey(columns: SizedColumn[], widths?: Record<string, number>): string | undefined;
 /**
  * Suelo de una columna: su `minWidth` si lo trae; si no, `MIN_COLUMN_WIDTH`
  * (64), salvo que su propio ancho por defecto sea menor (un icono de 40 o 56
@@ -201,11 +208,13 @@ declare const COLUMN_WIDTH_KEY_ATTR = "data-column-width-key";
  * - Todas las columnas tienen ancho efectivo (`resolveColumnWidth`): guardado,
  *   `width` o `DEFAULT_COLUMN_WIDTH`. `totalWidth` es su suma.
  * - La de relleno (`fill: true`, alias `flex`) tiene un ancho BASE como las
- *   demás (cuenta en la suma y se guarda al arrastrarla) y se estira encima
- *   si sobra sitio: su `<col>` va sin ancho (`colWidth` → `undefined`) y la
- *   tabla lleva `tableStyle` (`tableSizing`). Sin relleno, hueco a la derecha.
+ *   demás (cuenta en la suma) y se estira encima si sobra sitio: su `<col>`
+ *   va sin ancho (`colWidth` → `undefined`) y la tabla lleva `tableStyle`
+ *   (`tableSizing`). Sin relleno, hueco a la derecha.
  *   Al arrastrar la de relleno se parte de su ancho PINTADO (medido del
- *   `<th>`, estiramiento incluido), para que el asa siga al puntero.
+ *   `<th>`, estiramiento incluido), para que el asa siga al puntero. Desde
+ *   v0.9.3, en cuanto se arrastra deja de rellenar: su ancho guardado manda
+ *   (se puede estrechar; queda hueco a la derecha) hasta el doble clic.
  * Sin `columns` (tablas a mano antiguas): cambia la arrastrada, partiendo del
  * ancho guardado o, si no hay, del medido; suelo `MIN_COLUMN_WIDTH`.
  */
@@ -222,7 +231,7 @@ declare function useColumnResize({ columnWidths, onColumnWidthsChange, columns, 
     flexKey: string | undefined;
     totalWidth: number | undefined;
     tableStyle: (extra?: number) => React.CSSProperties | undefined;
-    resizeHandle: (columnKey: string) => React.JSX.Element;
+    resizeHandle: (columnKey: string, edge?: "end" | "start") => React.JSX.Element;
 };
 
 type OrderableColumn = {

@@ -469,8 +469,10 @@ var MIN_COLUMN_WIDTH = 64;
 function isFillColumn(col) {
   return !!(col.fill ?? col.flex);
 }
-function resolveFillColumnKey(columns) {
-  return columns.find(isFillColumn)?.key;
+function resolveFillColumnKey(columns, widths) {
+  const key = columns.find(isFillColumn)?.key;
+  if (key == null || widths?.[key] != null) return void 0;
+  return key;
 }
 function defaultWidthOf(col) {
   return col.width ?? (col.action && !col.header ? DEFAULT_ACTION_COLUMN_WIDTH : DEFAULT_COLUMN_WIDTH);
@@ -498,7 +500,8 @@ function useColumnResize({
 }) {
   const [drag, setDrag] = React4.useState(null);
   const dragRef = React4.useRef(null);
-  const fillKey = columns ? resolveFillColumnKey(columns) : void 0;
+  const restingFillKey = columns ? resolveFillColumnKey(columns, columnWidths) : void 0;
+  const fillKey = drag?.key === restingFillKey ? void 0 : restingFillKey;
   const colOf = (key) => columns?.find((c) => c.key === key);
   function baseWidth(key) {
     const col = colOf(key);
@@ -518,24 +521,34 @@ function useColumnResize({
   function tableStyle(extra = 0) {
     return totalWidth == null ? void 0 : tableSizing(totalWidth + extra, !!fillKey);
   }
+  function headOf(handle, columnKey, edge) {
+    const own = handle.parentElement;
+    const row = handle.closest("tr");
+    if (row) {
+      for (const el of Array.from(row.querySelectorAll(`[${COLUMN_WIDTH_KEY_ATTR}]`))) {
+        if (el.getAttribute(COLUMN_WIDTH_KEY_ATTR) === columnKey) return el;
+      }
+    }
+    return edge === "start" ? own?.previousElementSibling ?? null : own;
+  }
   function clamp(d, clientX) {
     return Math.round(Math.max(d.min, d.startW + clientX - d.startX));
   }
-  function resizeHandle(columnKey) {
+  function resizeHandle(columnKey, edge = "end") {
     return /* @__PURE__ */ jsx3(
       "span",
       {
         role: "presentation",
-        "data-column-resize-handle": "",
-        className: "absolute inset-y-0 right-0 w-1.5 cursor-col-resize touch-none select-none before:absolute before:inset-y-1.5 before:right-0 before:w-px before:bg-border before:content-[''] hover:before:inset-y-0 hover:before:w-0.5 hover:before:bg-muted-foreground",
+        "data-column-resize-handle": edge === "start" ? "start" : "",
+        className: edge === "start" ? "absolute inset-y-0 left-0 w-1.5 cursor-col-resize touch-none select-none before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:content-[''] hover:before:bg-muted-foreground" : "absolute inset-y-0 right-0 w-1.5 cursor-col-resize touch-none select-none before:absolute before:inset-y-1.5 before:right-0 before:w-px before:bg-border before:content-[''] hover:before:inset-y-0 hover:before:w-0.5 hover:before:bg-muted-foreground",
         onPointerDown: (e) => {
           if (e.button !== 0) return;
-          const th = e.currentTarget.parentElement;
+          const th = headOf(e.currentTarget, columnKey, edge);
           const measured = () => th?.getBoundingClientRect().width || void 0;
           const col = colOf(columnKey);
           let startW;
           if (!col) startW = columnWidths?.[columnKey] ?? measured() ?? 0;
-          else if (columnKey === fillKey) {
+          else if (columnKey === restingFillKey) {
             startW = Math.max(measured() ?? 0, baseWidth(columnKey));
           } else startW = baseWidth(columnKey);
           const d = {
@@ -915,8 +928,9 @@ function ResponsiveList({
             ] }),
             /* @__PURE__ */ jsx5(TableHeader, { className: cn(HEAD_INHERIT, stickyHeader && "[&_tr]:border-b-0"), children: /* @__PURE__ */ jsxs3(TableRow, { className: cn(HEAD_INHERIT, stickyHeader && "hover:bg-transparent"), children: [
               leading && /* @__PURE__ */ jsx5(TableHead, { className: cn("w-10", HEAD_INHERIT, stickyHeadClass), style: stickyHeadStyle, children: /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.selectColumn }) }),
-              visibleColumns.map((col) => {
+              visibleColumns.map((col, i) => {
                 const draggable = reorderable && !col.action;
+                const prevKey = i > 0 ? visibleColumns[i - 1].key : void 0;
                 const side = draggable ? dropSide(col.key) : null;
                 const isLast = col.key === lastVisibleKey;
                 const staticHead = isLast && menuOutsideScroll;
@@ -973,7 +987,8 @@ function ResponsiveList({
                           onDrop: (e) => e.stopPropagation(),
                           children: columnsMenu
                         }
-                      )
+                      ),
+                      resizable && prevKey && !staticHead && resizeHandle(prevKey, "start")
                     ]
                   },
                   col.key

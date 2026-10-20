@@ -210,8 +210,13 @@ describe('ResponsiveList (opt-in)', () => {
     const cols = Array.from(table().querySelectorAll('colgroup > col'))
     expect(cols).toHaveLength(3)
     expect(cols.some((c) => (c.getAttribute('style') ?? '').includes('44px'))).toBe(false)
-    const handles = heads().map((th) => th.querySelector('.cursor-col-resize'))
+    // Asa propia (borde derecho): todas menos la última.
+    const handles = heads().map((th) => th.querySelector('[data-column-resize-handle=""]'))
     expect(handles.map(Boolean)).toEqual([true, true, false])
+    // Con el menú fuera del scroll la última <th> va sin posicionar
+    // (`staticHead`): no lleva la mitad derecha de la zona (iría al envoltorio).
+    const starts = heads().map((th) => th.querySelector('[data-column-resize-handle="start"]'))
+    expect(starts.map(Boolean)).toEqual([false, true, false])
     // Las mediciones solo cuentan las <th> de datos.
     expect(table().querySelectorAll('[data-column-width-key]')).toHaveLength(3)
     expect(
@@ -406,8 +411,12 @@ describe('ResponsiveList (opt-in)', () => {
     expect(cols[1].getAttribute('style')).toContain('120px')
     // v0.9.0: sin `width` ni guardado, el ancho por defecto (sin relleno marcado).
     expect(cols[0].getAttribute('style')).toContain('160px')
-    const handles = heads().map((th) => th.querySelector('.cursor-col-resize'))
+    // Asa propia (borde derecho): todas menos la última. La última sí lleva la
+    // mitad derecha de la zona del borde anterior (RESIZE-EDGE, v0.9.3).
+    const handles = heads().map((th) => th.querySelector('[data-column-resize-handle=""]'))
     expect(handles.map(Boolean)).toEqual([true, true, false])
+    const starts = heads().map((th) => th.querySelector('[data-column-resize-handle="start"]'))
+    expect(starts.map(Boolean)).toEqual([false, true, true])
   })
 
   // Regresión C1 (bug de producción del 18/09, con captura): la primera card de
@@ -1007,6 +1016,49 @@ describe('ResponsiveList (orden de columnas)', () => {
     }
   })
 
+  it('RESIZE-EDGE-1: agarrar justo a la DERECHA de la línea (borde izquierdo de la vecina) no reordena', () => {
+    const setPointerCapture = Element.prototype.setPointerCapture
+    Element.prototype.setPointerCapture = vi.fn()
+    try {
+      const onColumnOrderChange = vi.fn()
+      const onColumnWidthsChange = vi.fn()
+      render(
+        <ResponsiveList
+          columns={columns}
+          data={rows}
+          rowKey={(r) => r.id}
+          resizable
+          onColumnWidthsChange={onColumnWidthsChange}
+          onColumnOrderChange={onColumnOrderChange}
+        />,
+      )
+      // La primera cabecera no tiene borde anterior: sin zona de inicio.
+      expect(heads()[0].querySelector('[data-column-resize-handle="start"]')).toBeNull()
+      const zone = heads()[1].querySelector('[data-column-resize-handle="start"]')!
+      expect(zone).not.toBeNull()
+      act(() => {
+        zone.dispatchEvent(new FakePointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 0 }))
+      })
+      const start = dnd('dragstart', heads()[1])
+      expect(start.defaultPrevented).toBe(true)
+      dnd('dragover', heads()[2])
+      dnd('drop', heads()[2])
+      expect(onColumnOrderChange).not.toHaveBeenCalled()
+      act(() => {
+        zone.dispatchEvent(new FakePointerEvent('pointermove', { bubbles: true, clientX: 30 }))
+      })
+      act(() => {
+        zone.dispatchEvent(new FakePointerEvent('pointerup', { bubbles: true, clientX: 30 }))
+      })
+      // Redimensiona la columna ANTERIOR (la de la línea), nunca la vecina.
+      expect(onColumnWidthsChange).toHaveBeenCalledTimes(1)
+      const saved = onColumnWidthsChange.mock.calls[0][0] as Record<string, number>
+      expect(Object.keys(saved)).toEqual([heads()[0].getAttribute('data-column-width-key')])
+    } finally {
+      Element.prototype.setPointerCapture = setPointerCapture
+    }
+  })
+
   it('v0.6.0: el botón del menú ni arrastra la cabecera ni es zona de soltar; la última <th> sigue recibiendo', () => {
     const onColumnOrderChange = vi.fn()
     render(
@@ -1230,6 +1282,32 @@ describe('ResponsiveList (como Excel + relleno)', () => {
     expect(onChange).toHaveBeenCalledWith({ desc: 400 })
   })
 
+  it('RESIZE-EDGE-2: el borde izquierdo de la cabecera siguiente redimensiona la anterior (también el relleno, desde su ancho pintado)', () => {
+    measured.desc = 500
+    const onChange = renderO()
+    const startZone = (key: string) =>
+      heads()
+        .find((th) => th.getAttribute('data-column-width-key') === key)!
+        .querySelector('[data-column-resize-handle="start"]')!
+    function dragStart(key: string, dx: number) {
+      const el = startZone(key)
+      act(() => {
+        el.dispatchEvent(new FakePointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 0 }))
+      })
+      act(() => {
+        el.dispatchEvent(new FakePointerEvent('pointermove', { bubbles: true, clientX: dx }))
+      })
+      act(() => {
+        el.dispatchEvent(new FakePointerEvent('pointerup', { bubbles: true, clientX: dx }))
+      })
+    }
+    // «Apertura» va tras el relleno: su borde izquierdo es el del relleno.
+    dragStart('opened', 40)
+    expect(onChange).toHaveBeenLastCalledWith({ desc: 540 })
+    dragStart('client', 30)
+    expect(onChange).toHaveBeenLastCalledWith({ num: 120 })
+  })
+
   it('suelo `minWidth`: ni un guardado viejo ni el arrastre bajan de él', () => {
     const onChange = renderO({
       columns: oColumns.map((c) => (c.key === 'opened' ? { ...c, minWidth: 110 } : c)),
@@ -1240,10 +1318,66 @@ describe('ResponsiveList (como Excel + relleno)', () => {
     expect(onChange).toHaveBeenCalledWith({ opened: 110 })
   })
 
-  it('prefs viejas con anchos raros se respetan (con suelo 64), también la base guardada del relleno', () => {
+  it('prefs viejas con anchos raros se respetan (con suelo 64); un guardado del relleno lo fija (v0.9.3)', () => {
     renderO({ columnWidths: { client: 999, status: 5, desc: 300 } })
-    expect(colWidths()).toEqual({ ...BASE, client: '999px', status: '64px' })
-    expect(tableStyle().minWidth).toBe(`${90 + 999 + 300 + 120 + 64 + 56}px`)
+    expect(colWidths()).toEqual({ ...BASE, client: '999px', status: '64px', desc: '300px' })
+    // Sin relleno: la suma exacta.
+    expect(tableStyle()).toEqual({ width: `${90 + 999 + 300 + 120 + 64 + 56}px`, minWidth: '' })
+  })
+
+  it('RESIZE-FILL-1: con ancho guardado el relleno deja de rellenar: su <col> lleva ese ancho y la tabla mide la suma (hueco a la derecha)', () => {
+    renderO({ columnWidths: { desc: 200 } })
+    // Las demás, idénticas (nadie se estira); la tabla, la suma exacta: sin
+    // `width: 100%` table-fixed no reparte el sobrante, y sin `min-width` de
+    // más no hay scroll si cabe.
+    expect(colWidths()).toEqual({ ...BASE, desc: '200px' })
+    expect(tableStyle()).toEqual({ width: `${SUM - 160 + 200}px`, minWidth: '' })
+  })
+
+  it('RESIZE-FILL-2: estrechar el relleno estirado se ve en vivo y se guarda (antes no encogía)', () => {
+    measured.desc = 500
+    const onChange = renderO()
+    dragHandle('desc', -150, { release: false })
+    // Durante el arrastre ya no rellena: su <col> sigue al puntero.
+    expect(colWidths().desc).toBe('350px')
+    expect(tableStyle()).toEqual({ width: `${SUM - 160 + 350}px`, minWidth: '' })
+    act(() => {
+      handleOf('desc').dispatchEvent(
+        new FakePointerEvent('pointerup', { bubbles: true, clientX: -150 }),
+      )
+    })
+    expect(onChange).toHaveBeenCalledWith({ desc: 350 })
+  })
+
+  it('RESIZE-FILL-3: doble clic en el asa del relleno (borde propio o el de la vecina) borra su ancho y vuelve a rellenar', () => {
+    const onChange = renderO({ columnWidths: { desc: 200, opened: 150 } })
+    act(() => {
+      handleOf('desc').dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+    })
+    expect(onChange).toHaveBeenLastCalledWith({ opened: 150 })
+    const startZone = heads()
+      .find((th) => th.getAttribute('data-column-width-key') === 'opened')!
+      .querySelector('[data-column-resize-handle="start"]')!
+    act(() => {
+      startZone.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+    })
+    expect(onChange).toHaveBeenCalledTimes(2)
+    expect(onChange).toHaveBeenLastCalledWith({ opened: 150 })
+  })
+
+  it('RESIZE-FILL-4: sin ancho guardado el relleno vuelve: <col> sin ancho y tabla 100 % con la suma de mínimo', () => {
+    renderO({ columnWidths: { opened: 150 } })
+    expect(colWidths()).toEqual({ ...BASE, opened: '150px' })
+    expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM - 120 + 150}px` })
+  })
+
+  it('RESIZE-FILL-5: con el relleno fijado, otra columna marcada `fill` NO pasa a rellenar', () => {
+    renderO({
+      columns: oColumns.map((c) => (c.key === 'opened' ? { ...c, fill: true } : c)),
+      columnWidths: { desc: 200 },
+    })
+    expect(colWidths()).toEqual({ ...BASE, desc: '200px' })
+    expect(tableStyle().width).toBe(`${SUM - 160 + 200}px`)
   })
 
   it('doble clic borra el ancho guardado de la columna', () => {
