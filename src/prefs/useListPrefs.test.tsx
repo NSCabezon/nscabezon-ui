@@ -13,7 +13,7 @@ import { LIST_PREFS_WIDTHS_DEBOUNCE_MS, __resetListPrefsCache, useListPrefs } fr
 const KEYS = ['number', 'client', 'status'] as const
 const SORT = { key: 'number', dir: 'desc' } as const
 const DEFAULTS = { sort: SORT }
-const DEFAULT_PREFS: ListPrefs = { hidden: [], widths: {}, sort: SORT, pageSize: 25 }
+const DEFAULT_PREFS: ListPrefs = { hidden: [], widths: {}, sort: SORT, pageSize: 25, compact: false }
 
 function fakeStore(row: unknown | null = null, userId: string | null = 'u1') {
   const save = vi.fn<ListPrefsStore['save']>(async () => {})
@@ -58,6 +58,7 @@ describe('useListPrefs', () => {
       widths: { status: 90 },
       sort: SORT,
       pageSize: 50,
+      compact: false,
     })
   })
 
@@ -136,6 +137,7 @@ describe('useListPrefs', () => {
       widths: {},
       sort: { key: 'status', dir: 'asc' },
       pageSize: 10,
+      compact: false,
     })
     expect(save).toHaveBeenCalledTimes(3)
     expect(JSON.parse(localStorage.getItem('list-prefs:orders')!).pageSize).toBe(10)
@@ -169,10 +171,11 @@ describe('useListPrefs', () => {
     expect(save).toHaveBeenCalledWith('orders', { ...DEFAULT_PREFS, widths: { client: 150 } })
   })
 
-  it('reset limpia ocultas y anchos pero conserva orden y tamaño de página', async () => {
+  it('reset limpia ocultas y anchos pero conserva orden, tamaño de página y compacto', async () => {
     const { result } = renderPrefs()
     act(() => result.current.setSort({ key: 'client', dir: 'asc' }))
     act(() => result.current.setPageSize(50))
+    act(() => result.current.setCompact(true))
     act(() => result.current.setHidden(['status']))
     act(() => result.current.setWidths({ number: 70 }))
     act(() => result.current.reset())
@@ -181,7 +184,28 @@ describe('useListPrefs', () => {
       widths: {},
       sort: { key: 'client', dir: 'asc' },
       pageSize: 50,
+      compact: true,
     })
+  })
+
+  it('setCompact se guarda al instante (local y remoto, sin debounce)', async () => {
+    const { store, save } = fakeStore(null)
+    const { result } = renderPrefs(store)
+    await waitFor(() => expect(result.current.isLoaded).toBe(true))
+    act(() => result.current.setCompact(true))
+    expect(result.current.prefs.compact).toBe(true)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(save).toHaveBeenLastCalledWith('orders', { ...DEFAULT_PREFS, compact: true })
+    expect(JSON.parse(localStorage.getItem('list-prefs:orders')!).compact).toBe(true)
+    act(() => result.current.setCompact(false))
+    expect(result.current.prefs.compact).toBe(false)
+    expect(save).toHaveBeenLastCalledWith('orders', DEFAULT_PREFS)
+  })
+
+  it('la fila del servidor trae el compacto guardado', async () => {
+    const { store } = fakeStore({ compact: true })
+    const { result } = renderPrefs(store)
+    await waitFor(() => expect(result.current.prefs.compact).toBe(true))
   })
 
   it('dos listas montadas con la misma clave se ven entre sí', () => {

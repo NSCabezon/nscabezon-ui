@@ -30,6 +30,10 @@ export type UseListViewOptions = {
   stickyHeader?: boolean
   // Almacén de preferencias (por defecto el del `UiProvider`, o solo local).
   store?: ListPrefsStore
+  // Ofrece «Modo compacto» en el menú de columnas (por defecto, no). Solo con
+  // esta opción `listProps`/`footerProps` llevan `compact` + `onCompactChange`;
+  // sin ella `compact` es siempre `false`, aunque haya uno guardado.
+  compactable?: boolean
 }
 
 // Props que `useListView` cablea en `ResponsiveList` (se hace spread tal cual).
@@ -50,6 +54,9 @@ export type ListViewListProps = {
   // sobrescríbelo tras el spread: `{...view.listProps} mobileColumnsMenu`.
   mobileColumnsMenu: boolean
   stickyHeader: boolean
+  // Solo con `compactable: true`.
+  compact?: boolean
+  onCompactChange?: (compact: boolean) => void
 }
 
 // Props que `useListView` cablea en `ListFooter` (faltan `total`, que sale de
@@ -63,6 +70,9 @@ export type ListViewFooterProps = {
   hidden: string[]
   onHiddenChange: (hidden: string[]) => void
   onReset: () => void
+  // Solo con `compactable: true` (casilla del menú de columnas del pie).
+  compact?: boolean
+  onCompactChange?: (compact: boolean) => void
 }
 
 type ListViewBase = {
@@ -70,6 +80,8 @@ type ListViewBase = {
   sort: ListSort | null
   listProps: ListViewListProps
   isLoaded: boolean
+  /** Modo compacto vigente (`false` si el listado no es `compactable`). */
+  compact: boolean
 }
 
 export type ListView = ListViewBase & {
@@ -89,7 +101,8 @@ export { resolveListDefaults }
 
 /**
  * Estado completo de un listado estándar: preferencias por usuario (orden,
- * anchos, columnas ocultas, tamaño de página — `useListPrefs`) + paginación
+ * anchos, columnas ocultas, tamaño de página y, con `compactable`, modo
+ * compacto — `useListPrefs`) + paginación
  * (`usePagination`) ya cableadas entre sí. Devuelve dos paquetes de props
  * listos para hacer spread: `listProps` → `ResponsiveList` (incluido el menú
  * de columnas de la cabecera) y `footerProps` → `ListFooter`; y lo que la
@@ -118,11 +131,13 @@ export function useListView(
     paginated = true,
     stickyHeader = true,
     store,
+    compactable = false,
   }: UseListViewOptions,
 ): ListView | UnpaginatedListView {
   const listPrefs = useListPrefs(listKey, { columnKeys, defaults, store })
-  const { prefs, setSort, setWidths, setHidden, setPageSize, reset } = listPrefs
+  const { prefs, setSort, setWidths, setHidden, setPageSize, setCompact, reset } = listPrefs
   const { sort, hidden, widths, pageSize } = prefs
+  const compact = compactable && prefs.compact
 
   // Siempre se llama (reglas de los hooks); sin paginación simplemente no se usa.
   const { page, setPage, from, to } = usePagination([...deps, sort], pageSize)
@@ -139,8 +154,22 @@ export function useListView(
       onColumnsReset: reset,
       mobileColumnsMenu: !paginated,
       stickyHeader,
+      ...(compactable ? { compact, onCompactChange: setCompact } : {}),
     }),
-    [sort, setSort, widths, setWidths, hidden, setHidden, reset, paginated, stickyHeader],
+    [
+      sort,
+      setSort,
+      widths,
+      setWidths,
+      hidden,
+      setHidden,
+      reset,
+      paginated,
+      stickyHeader,
+      compactable,
+      compact,
+      setCompact,
+    ],
   )
 
   const footerProps = useMemo<ListViewFooterProps>(
@@ -152,11 +181,18 @@ export function useListView(
       hidden,
       onHiddenChange: setHidden,
       onReset: reset,
+      ...(compactable ? { compact, onCompactChange: setCompact } : {}),
     }),
-    [page, pageSize, setPage, setPageSize, hidden, setHidden, reset],
+    [page, pageSize, setPage, setPageSize, hidden, setHidden, reset, compactable, compact, setCompact],
   )
 
-  const base: ListViewBase = { prefs, sort, listProps, isLoaded: listPrefs.isLoaded }
+  const base: ListViewBase = {
+    prefs,
+    sort,
+    listProps,
+    isLoaded: listPrefs.isLoaded,
+    compact,
+  }
   if (!paginated) return base
   return { ...base, pageSize, page, setPage, from, to, footerProps }
 }

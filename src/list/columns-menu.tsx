@@ -27,19 +27,28 @@ export type ColumnsMenuProps = {
   onHiddenChange: (hidden: string[]) => void
   onReset: () => void
   className?: string
-  /** Textos propios (`columnsMenu`, `columnsReset`); ganan al `UiProvider`. */
-  labels?: Partial<Pick<Labels, 'columnsMenu' | 'columnsReset'>>
+  /**
+   * Modo compacto (opt-in): con `onCompactChange`, el menú pinta la casilla
+   * «Modo compacto» encima de «Restablecer columnas». Sin él, nada cambia.
+   */
+  compact?: boolean
+  onCompactChange?: (compact: boolean) => void
+  /** Textos propios (`columnsMenu`, `columnsReset`, `compactMode`); ganan al `UiProvider`. */
+  labels?: Partial<Pick<Labels, 'columnsMenu' | 'columnsReset' | 'compactMode'>>
 }
 
 // Selector de columnas visibles de un `ResponsiveList` (prop `hiddenColumns`).
 // Botón icono + menú con un checkbox por columna y «Restablecer columnas», que
-// delega en `onReset` (el consumidor limpia ocultas Y anchos guardados).
+// delega en `onReset` (el consumidor limpia ocultas Y anchos guardados). Con
+// `onCompactChange`, además, la casilla «Modo compacto» (no la toca el reset).
 export function ColumnsMenu({
   columns,
   hidden,
   onHiddenChange,
   onReset,
   className,
+  compact,
+  onCompactChange,
   labels: labelsProp,
 }: ColumnsMenuProps) {
   const labels = useLabels(labelsProp)
@@ -80,6 +89,20 @@ export function ColumnsMenu({
               </DropdownMenuCheckboxItem>
             )
           })}
+        {onCompactChange && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem
+              checked={!!compact}
+              data-compact-toggle
+              // Igual que las casillas de columnas: alternar no cierra el menú.
+              onSelect={(e) => e.preventDefault()}
+              onCheckedChange={(checked) => onCompactChange(checked === true)}
+            >
+              {labels.compactMode}
+            </DropdownMenuCheckboxItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => onReset()}>{labels.columnsReset}</DropdownMenuItem>
       </DropdownMenuContent>

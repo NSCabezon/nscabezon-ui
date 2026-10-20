@@ -13,9 +13,9 @@ hay `prepare`: instalar no compila nada).
 | Área | Exportaciones |
 | --- | --- |
 | Integración | `UiProvider`, `useUi`, `useLabels`, `defaultLabels`, tipos `Labels`, `UiLinkProps` |
-| Listados | `ResponsiveList` (tabla en escritorio / tarjetas en móvil, orden servidor, anchos arrastrables, columnas ocultas, cabecera fija, filas teñidas, `rowHref`), `ColumnsMenu`, `useColumnResize`, `MIN_COLUMN_WIDTH`, `TOUCH_TEXT_LINK`, `rowTone`, `TINTED_ROW_CLASS`, `resolveColumnWidth`, `visibleColumnsOf`, `DEFAULT_ACTION_COLUMN_WIDTH` |
+| Listados | `ResponsiveList` (tabla en escritorio / tarjetas en móvil, orden servidor, anchos arrastrables, columnas ocultas, cabecera fija, filas teñidas, `rowHref`, modo compacto), `ColumnsMenu`, `useListCompact`, `useColumnResize`, `MIN_COLUMN_WIDTH`, `TOUCH_TEXT_LINK`, `rowTone`, `TINTED_ROW_CLASS`, `resolveColumnWidth`, `visibleColumnsOf`, `DEFAULT_ACTION_COLUMN_WIDTH` |
 | Paginación | `Pagination`, `usePagination`, `DEFAULT_PAGE_SIZE`, `ListFooter` |
-| Estado de listado | `useListView` (preferencias + paginación, `paginated: false` opcional), `useListColumns` (solo columnas), `useListPrefs` |
+| Estado de listado | `useListView` (preferencias + paginación, `paginated: false` y `compactable` opcionales), `useListColumns` (solo columnas), `useListPrefs` |
 | Preferencias | `ListPrefs`, `ListSort`, `normalizeListPrefs`, `listPrefsEqual`, `resolveListDefaults`, `LIST_PAGE_SIZES`, `DEFAULT_LIST_PAGE_SIZE`, `EMPTY_LIST_PREFS`, almacenes `useSupabaseListPrefsStore` (hook que sigue la sesión), `createSupabaseListPrefsStore` y `localOnlyListPrefsStore` |
 | Versión | `useVersionCheck`, `fetchVersionJson` |
 | Auth | `OAuthButtons` (Continuar con Google / Apple), `GoogleIcon`, `AppleIcon`, `getLastAuthMethod`, `setLastAuthMethod`, `DEFAULT_LAST_AUTH_METHOD_KEY`, tipos `AuthMethod`, `OAuthProvider`, `OAuthSignInClient` |
@@ -220,6 +220,14 @@ const view = useListView('orders', {
   pasa `mobileColumnsMenu={false}`; si usas `useListView` paginado sin
   `ListFooter`, pásalo a `true` después del spread
   (`{...view.listProps} mobileColumnsMenu`).
+- Modo compacto (opt-in): `useListView(key, { …, compactable: true })` añade
+  la casilla «Modo compacto» (`labels.compactMode`) al menú de columnas y
+  cablea `compact` + `onCompactChange` en `listProps` y `footerProps`;
+  `view.compact` dice el modo. Con él, cada fila va en una línea (celdas y
+  `<dd>` con elipsis, cabeceras sin envolver, acciones de tarjeta sin saltar)
+  y las celdas pueden adaptar su contenido con `useListCompact()`. Se guarda
+  en `ListPrefs.compact`; «Restablecer columnas» no lo toca. Sin
+  `compactable`, nada cambia.
 - Regla de anchos con `resizable`: como mucho UNA columna (lo normal, la
   `primary`) sin `width`; una `action` con botón de texto necesita `width` o
   `header` (sin ellos cae a 56 px).
@@ -228,8 +236,8 @@ const view = useListView('orders', {
 
 ```ts
 useListPrefs(listKey, { columnKeys, defaults?, store? }): {
-  prefs: ListPrefs            // { hidden, widths, sort, pageSize }
-  setHidden, setWidths, setSort, setPageSize, reset, isLoaded
+  prefs: ListPrefs            // { hidden, widths, sort, pageSize, compact }
+  setHidden, setWidths, setSort, setPageSize, setCompact, reset, isLoaded
 }
 ```
 
@@ -239,11 +247,11 @@ useListPrefs(listKey, { columnKeys, defaults?, store? }): {
   de hidratación); en una SPA el primer render ya la lee.
 - Remoto: la fila del almacén gana (una vez por usuario y lista); si no hay
   fila y la caché difiere del defecto, se sube la local.
-- Ocultas, orden y tamaño de página se guardan al instante; los anchos con
+- Ocultas, orden, tamaño de página y compacto se guardan al instante; los anchos con
   debounce de 400 ms y flush al desmontar.
 - Todo se normaliza contra las columnas de hoy: claves desconocidas fuera,
-  tamaño de página solo 10/25/50/100.
-- `reset()` limpia ocultas y anchos; conserva orden y tamaño de página.
+  tamaño de página solo 10/25/50/100, compacto solo booleano (si no, `false`).
+- `reset()` limpia ocultas y anchos; conserva orden, tamaño de página y compacto.
 
 ### Almacén de Supabase
 

@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 
 import { cn } from '../lib/cn'
 import { ColumnsMenu } from './columns-menu'
+import { ListCompactProvider } from './listCompact'
 import { useColumnResize } from './useColumnResize'
 import { TINTED_ROW_CLASS } from './rowTone'
 import { resolveColumnWidth, visibleColumnsOf } from './columnWidth'
@@ -134,6 +135,16 @@ export type ResponsiveListProps<T> = {
   // que ya pinta el menú en móvil (`useListView` paginado lo hace solo en
   // `listProps`).
   mobileColumnsMenu?: boolean
+  // Modo compacto (opt-in): cada fila en una línea. En escritorio las celdas
+  // (salvo `action`) no envuelven y recortan con elipsis, y las cabeceras no
+  // envuelven; en móvil cada valor de la tarjeta va en una línea (`truncate`)
+  // y las acciones no saltan de fila. Gana a un `cellClassName`/`headClassName`
+  // con `whitespace-normal`. Marca `data-compact` en la tabla y en cada
+  // tarjeta, y las celdas leen el modo con `useListCompact()`.
+  compact?: boolean
+  // Con este callback (y el menú de columnas activo) el `ColumnsMenu` pinta la
+  // casilla «Modo compacto».
+  onCompactChange?: (compact: boolean) => void
   // Pins the desktop table header (thead) at the top while the list scrolls. Intended
   // for a list rendered inside its own vertical scroll container (`overflow-y-auto`),
   // so the header sticks to that container's top. `stickyHeaderTop` overrides the CSS
@@ -184,6 +195,8 @@ export function ResponsiveList<T>({
   onHiddenColumnsChange,
   onColumnsReset,
   mobileColumnsMenu = true,
+  compact = false,
+  onCompactChange,
   stickyHeader,
   stickyHeaderTop,
   className,
@@ -325,9 +338,15 @@ export function ResponsiveList<T>({
         hidden={hiddenColumns ?? []}
         onHiddenChange={onHiddenColumnsChange}
         onReset={onColumnsReset}
+        compact={compact}
+        onCompactChange={onCompactChange}
         labels={labelsProp}
       />
     ) : null
+  // Compacto: una línea por celda. Va DESPUÉS de las clases del consumidor en
+  // `cn()` (tailwind-merge) para ganar a un `whitespace-normal` suyo.
+  const compactCellClass = compact ? 'whitespace-nowrap overflow-hidden text-ellipsis' : undefined
+  const compactHeadClass = compact ? 'whitespace-nowrap' : undefined
   // La celda del menú va `sticky right-0`: con `resizable` la tabla puede
   // scrollear a lo ancho y el botón se perdería fuera de pantalla. `z-20` para
   // quedar por encima del resto de la cabecera sticky (z-10), y fondo propio
@@ -343,291 +362,305 @@ export function ResponsiveList<T>({
     // siempre la columna de acciones, tras un scroll horizontal que nadie ve.
     // Midiendo el contenedor, una lista metida en una tarjeta estrecha también
     // acierta — el caso de las sedes en Ajustes → Taller, con 302 px.
-    <div className={cn('@container', className)}>
-      {/* Desktop: table */}
-      <div className="hidden @3xl:block">
-        <Table
-          containerClassName={stickyHeader ? 'overflow-visible' : undefined}
-          className={cn(
-            stickyHeader &&
-              'border-separate border-spacing-0 [&_tbody_td]:border-b [&_tbody_tr:last-child_td]:border-b-0',
-            resizable && 'table-fixed',
-          )}
-        >
-          {resizable && (
-            <colgroup>
-              {leading && <col style={{ width: 40 }} />}
-              {/* Regla para quien defina `columns`: como mucho UNA columna (lo
-                  suyo es que sea la `primary`) debe quedarse sin `width` — esa
-                  es la que absorbe el espacio sobrante de table-fixed. Pon
-                  `width` al resto de columnas de datos; las `action` sin
-                  cabecera (icono suelto) no lo necesitan, ya caen a
-                  DEFAULT_ACTION_COLUMN_WIDTH — pero una `action` CON cabecera
-                  (botón con texto, p.ej. «Presupuesto de venta») SÍ necesita
-                  su `width` explícito o se recorta. */}
-              {visibleColumns.map((col) => {
-                const width = colWidth(col)
-                return <col key={col.key} style={width ? { width } : undefined} />
-              })}
-              {columnsMenu && <col style={{ width: 44 }} />}
-            </colgroup>
-          )}
-          <TableHeader className={stickyHeader ? '[&_tr]:border-b-0' : undefined}>
-            <TableRow className={stickyHeader ? 'hover:bg-transparent' : undefined}>
-              {leading && (
-                <TableHead className={cn('w-10', stickyHeadClass)} style={stickyHeadStyle}>
-                  <span className="sr-only">{labels.selectColumn}</span>
-                </TableHead>
-              )}
-              {visibleColumns.map((col) => (
-                <TableHead
-                  key={col.key}
-                  className={cn(
-                    // `relative` ANTES de `sticky` (stickyHeadClass): con las
-                    // dos, tailwind-merge se queda con la última y sticky es
-                    // también contenedor del asa absoluta.
-                    resizable && 'relative',
-                    fixedCellClass,
-                    col.sortable && onSortChange && 'group',
-                    col.headClassName,
-                    stickyHeadClass,
-                  )}
-                  style={stickyHeadStyle}
-                  aria-sort={ariaSort(col)}
-                >
-                  {renderHead(col)}
-                  {/* Columna de acciones sin cabecera visible: un <th> vacío no
-                      tiene nombre accesible (axe empty-table-header). */}
-                  {col.action && !col.header && (
-                    <span className="sr-only">{labels.actionsColumn}</span>
-                  )}
-                  {resizable && col.key !== lastVisibleKey && resizeHandle(col.key)}
-                </TableHead>
-              ))}
-              {columnsMenu && (
-                <TableHead
-                  className={cn(
-                    'sticky z-20 w-11 bg-background p-0 text-center',
-                    stickyHeader && 'border-b',
-                  )}
-                  style={menuHeadStyle}
-                >
-                  {/* Nombre accesible de la columna: el botón es un icono. */}
-                  <span className="sr-only">{labels.columnsMenu}</span>
-                  {columnsMenu}
-                </TableHead>
-              )}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.map((row) => {
-              const href = rowHref?.(row)
-              const style = rowStyle?.(row)
-              return (
-                <TableRow
-                  key={rowKey(row)}
-                  className={cn(
-                    (href || onRowClick) &&
-                      (style ? 'cursor-pointer' : 'cursor-pointer hover:bg-muted/50'),
-                    style && TINTED_ROW_CLASS,
-                    rowClassName?.(row),
-                  )}
-                  style={style}
-                  data-state={isRowSelected?.(row) ? 'selected' : undefined}
-                  {...rowHoverProps?.(row)}
-                  // El camino de role="button" es solo para `onRowClick`: con
-                  // `rowHref` el elemento accesible es el <Link> de `primary` y
-                  // el <tr> sigue siendo una fila de tabla de verdad.
-                  {...(href
-                    ? rowNavProps(href)
-                    : { onClick: onRowClick ? () => onRowClick(row) : undefined })}
-                  role={!href && onRowClick ? 'button' : undefined}
-                  tabIndex={!href && onRowClick ? 0 : undefined}
-                  onKeyDown={
-                    !href && onRowClick
-                      ? (e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            onRowClick(row)
-                          }
-                        }
-                      : undefined
-                  }
-                >
-                  {leading && (
-                    // onAuxClick además de onClick: sin él, el click de rueda
-                    // sobre el checkbox de selección abría el detalle en una
-                    // pestaña nueva.
-                    <TableCell
-                      onClick={(e) => e.stopPropagation()}
-                      onAuxClick={(e) => e.stopPropagation()}
-                    >
-                      {leading(row)}
-                    </TableCell>
-                  )}
-                  {visibleColumns.map((col) => (
-                    <TableCell
-                      key={col.key}
-                      className={cn(
-                        // Las `action` quedan fuera del recorte con elipsis: son
-                        // botones (con o sin texto), no texto que deba acortarse.
-                        // Sin esto un botón «Presupuesto de venta» dentro de una
-                        // columna estrecha se recortaba a media palabra.
-                        fixedCellClass && !col.action && fixedCellClass,
-                        col.cellClassName,
-                      )}
-                    >
-                      {renderCell(col, row, href)}
-                    </TableCell>
-                  ))}
-                  {/* Celda vacía de la columna del menú: no es sticky a
-                      propósito — un fondo opaco fijo aquí se comería el hover
-                      de la fila y los tintes de `rowStyle`. Como está vacía, no
-                      hay nada que proteger del scroll horizontal. */}
-                  {columnsMenu && <TableCell className="p-0" />}
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Mobile: cards */}
-      <div className="space-y-2 @3xl:hidden">
-        {/* Sin cabecera de tabla en móvil: el menú de columnas va encima de
-            las tarjetas, a la derecha, salvo `mobileColumnsMenu={false}`
-            (listas con `ListFooter`, que ya lo pinta). */}
-        {mobileColumnsMenu && columnsMenu && (
-          <div className="flex justify-end" data-list-columns-menu>
-            {columnsMenu}
-          </div>
-        )}
-        {data.map((row) => {
-          const href = rowHref?.(row)
-          const style = rowStyle?.(row)
-          return (
-            <div
-              key={rowKey(row)}
-              className={cn(
-                // `bg-card` en su posición de siempre: sin `rowStyle` la cadena
-                // de clases queda idéntica a la de antes de existir esta prop.
-                'rounded-xl',
-                style ? TINTED_ROW_CLASS : 'bg-card',
-                'p-4 text-sm ring-1 ring-foreground/10',
-                (href || onRowClick) && 'cursor-pointer active:bg-muted/50',
-                isRowSelected?.(row) && 'ring-primary',
-                rowClassName?.(row),
-              )}
-              style={style}
-              {...rowHoverProps?.(row)}
-              {...(href
-                ? rowNavProps(href)
-                : { onClick: onRowClick ? () => onRowClick(row) : undefined })}
-              role={!href && onRowClick ? 'button' : undefined}
-              tabIndex={!href && onRowClick ? 0 : undefined}
-              onKeyDown={
-                !href && onRowClick
-                  ? (e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        onRowClick(row)
-                      }
-                    }
-                  : undefined
-              }
-            >
-              {/* Cabecera de la card: título + slot de acciones.
-                  `flex-wrap` + suelo de ancho para el título: el slot de
-                  acciones se pensó para algo compacto (badge, menú de fila),
-                  pero varias listas meten ahí 2-3 botones CON TEXTO (su `width`
-                  es de la tabla de escritorio, que es `table-fixed`). Al ser
-                  `shrink-0` no cedían y el título se quedaba en una tira de un
-                  carácter por línea (/sales/used en un móvil real, 18/09).
-                  Por qué así y no de otra forma:
-                  - El título lleva `flex-1` (base 0), así que por largo que sea
-                    NUNCA fuerza el salto: una card con badge o menú de fila
-                    sigue pintándose en una sola línea, exactamente igual que
-                    antes. Es el requisito de no tocar los ~40 listados.
-                  - `min-w-32` (128px ≈ 18 caracteres a `text-sm`) es el suelo
-                    que decide el salto: el algoritmo de flex-wrap acota el
-                    tamaño hipotético del título por su `min-width`, así que el
-                    bloque de acciones baja de línea justo cuando no caben los
-                    dos. En su propia línea ocupa el ancho entero y no aplasta
-                    nada.
-                  - Descartado un corte `@…` por tamaño de contenedor: el que
-                    manda aquí no es el ancho de la lista sino cuánto ocupan
-                    unas acciones que el componente no conoce; flex-wrap lo
-                    decide midiendo el contenido real, sin número mágico.
-                  `data-list-card-title`: gancho estable para tests e2e que
-                  vigilen justo este aplastamiento. */}
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="flex min-w-32 flex-1 items-center gap-2" data-list-card-title>
-                  {leading && (
-                    <span
-                      onClick={(e) => e.stopPropagation()}
-                      onAuxClick={(e) => e.stopPropagation()}
-                    >
-                      {leading(row)}
-                    </span>
-                  )}
-                  {primary && renderCardTitle(primary, row, href)}
-                </div>
-                {actions.length > 0 && (
-                  // `shrink-0` se queda: dentro de SU línea las acciones no se
-                  // encogen (un botón a medio recortar no sirve). Lo que evita
-                  // el aplastamiento es el salto de línea de arriba. `flex-wrap`
-                  // por si en su propia línea siguen sin caber (3 botones con
-                  // texto a 390px): envuelven en dos filas en vez de salirse, y
-                  // `max-w-full` acota el bloque al ancho de la card para que
-                  // ese `shrink-0` no lo deje asomar por el borde.
-                  <div className="flex max-w-full shrink-0 flex-wrap items-center gap-1">
-                    {actions.map((col) => (
-                      <span key={col.key}>{col.cell(row)}</span>
-                    ))}
-                  </div>
+    <ListCompactProvider value={compact}>
+      <div className={cn('@container', className)}>
+        {/* Desktop: table */}
+        <div className="hidden @3xl:block">
+          <Table
+            containerClassName={stickyHeader ? 'overflow-visible' : undefined}
+            data-compact={compact ? '' : undefined}
+            className={cn(
+              stickyHeader &&
+                'border-separate border-spacing-0 [&_tbody_td]:border-b [&_tbody_tr:last-child_td]:border-b-0',
+              resizable && 'table-fixed',
+            )}
+          >
+            {resizable && (
+              <colgroup>
+                {leading && <col style={{ width: 40 }} />}
+                {/* Regla para quien defina `columns`: como mucho UNA columna (lo
+                    suyo es que sea la `primary`) debe quedarse sin `width` — esa
+                    es la que absorbe el espacio sobrante de table-fixed. Pon
+                    `width` al resto de columnas de datos; las `action` sin
+                    cabecera (icono suelto) no lo necesitan, ya caen a
+                    DEFAULT_ACTION_COLUMN_WIDTH — pero una `action` CON cabecera
+                    (botón con texto, p.ej. «Presupuesto de venta») SÍ necesita
+                    su `width` explícito o se recorta. */}
+                {visibleColumns.map((col) => {
+                  const width = colWidth(col)
+                  return <col key={col.key} style={width ? { width } : undefined} />
+                })}
+                {columnsMenu && <col style={{ width: 44 }} />}
+              </colgroup>
+            )}
+            <TableHeader className={stickyHeader ? '[&_tr]:border-b-0' : undefined}>
+              <TableRow className={stickyHeader ? 'hover:bg-transparent' : undefined}>
+                {leading && (
+                  <TableHead className={cn('w-10', stickyHeadClass)} style={stickyHeadStyle}>
+                    <span className="sr-only">{labels.selectColumn}</span>
+                  </TableHead>
                 )}
-              </div>
-              {body.length > 0 && (
-                <dl className="mt-2 space-y-1">
-                  {body
-                    .filter((col) => !col.mobileHideWhen?.(row))
-                    .map((col) => (
-                      <div
+                {visibleColumns.map((col) => (
+                  <TableHead
+                    key={col.key}
+                    className={cn(
+                      // `relative` ANTES de `sticky` (stickyHeadClass): con las
+                      // dos, tailwind-merge se queda con la última y sticky es
+                      // también contenedor del asa absoluta.
+                      resizable && 'relative',
+                      fixedCellClass,
+                      col.sortable && onSortChange && 'group',
+                      col.headClassName,
+                      compactHeadClass,
+                      stickyHeadClass,
+                    )}
+                    style={stickyHeadStyle}
+                    aria-sort={ariaSort(col)}
+                  >
+                    {renderHead(col)}
+                    {/* Columna de acciones sin cabecera visible: un <th> vacío no
+                        tiene nombre accesible (axe empty-table-header). */}
+                    {col.action && !col.header && (
+                      <span className="sr-only">{labels.actionsColumn}</span>
+                    )}
+                    {resizable && col.key !== lastVisibleKey && resizeHandle(col.key)}
+                  </TableHead>
+                ))}
+                {columnsMenu && (
+                  <TableHead
+                    className={cn(
+                      'sticky z-20 w-11 bg-background p-0 text-center',
+                      stickyHeader && 'border-b',
+                    )}
+                    style={menuHeadStyle}
+                  >
+                    {/* Nombre accesible de la columna: el botón es un icono. */}
+                    <span className="sr-only">{labels.columnsMenu}</span>
+                    {columnsMenu}
+                  </TableHead>
+                )}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.map((row) => {
+                const href = rowHref?.(row)
+                const style = rowStyle?.(row)
+                return (
+                  <TableRow
+                    key={rowKey(row)}
+                    className={cn(
+                      (href || onRowClick) &&
+                        (style ? 'cursor-pointer' : 'cursor-pointer hover:bg-muted/50'),
+                      style && TINTED_ROW_CLASS,
+                      rowClassName?.(row),
+                    )}
+                    style={style}
+                    data-state={isRowSelected?.(row) ? 'selected' : undefined}
+                    {...rowHoverProps?.(row)}
+                    // El camino de role="button" es solo para `onRowClick`: con
+                    // `rowHref` el elemento accesible es el <Link> de `primary` y
+                    // el <tr> sigue siendo una fila de tabla de verdad.
+                    {...(href
+                      ? rowNavProps(href)
+                      : { onClick: onRowClick ? () => onRowClick(row) : undefined })}
+                    role={!href && onRowClick ? 'button' : undefined}
+                    tabIndex={!href && onRowClick ? 0 : undefined}
+                    onKeyDown={
+                      !href && onRowClick
+                        ? (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              onRowClick(row)
+                            }
+                          }
+                        : undefined
+                    }
+                  >
+                    {leading && (
+                      // onAuxClick además de onClick: sin él, el click de rueda
+                      // sobre el checkbox de selección abría el detalle en una
+                      // pestaña nueva.
+                      <TableCell
+                        onClick={(e) => e.stopPropagation()}
+                        onAuxClick={(e) => e.stopPropagation()}
+                      >
+                        {leading(row)}
+                      </TableCell>
+                    )}
+                    {visibleColumns.map((col) => (
+                      <TableCell
                         key={col.key}
                         className={cn(
-                          col.mobileFullWidth ? 'space-y-1' : 'flex justify-between gap-3',
+                          // Las `action` quedan fuera del recorte con elipsis: son
+                          // botones (con o sin texto), no texto que deba acortarse.
+                          // Sin esto un botón «Presupuesto de venta» dentro de una
+                          // columna estrecha se recortaba a media palabra.
+                          fixedCellClass && !col.action && fixedCellClass,
+                          col.cellClassName,
+                          !col.action && compactCellClass,
                         )}
                       >
-                        {!col.mobileHideLabel && col.header && (
-                          <dt
-                            className={cn(
-                              'text-muted-foreground',
-                              col.mobileFullWidth
-                                ? 'text-xs font-medium uppercase tracking-wide'
-                                : 'shrink-0',
-                            )}
-                          >
-                            {col.header}
-                          </dt>
-                        )}
-                        {/* min-w-0 + break-words: valores largos sin espacios (emails,
-                          IBANs) rompen línea en vez de ensanchar la card a >390px. */}
-                        <dd
+                        {renderCell(col, row, href)}
+                      </TableCell>
+                    ))}
+                    {/* Celda vacía de la columna del menú: no es sticky a
+                        propósito — un fondo opaco fijo aquí se comería el hover
+                        de la fila y los tintes de `rowStyle`. Como está vacía, no
+                        hay nada que proteger del scroll horizontal. */}
+                    {columnsMenu && <TableCell className="p-0" />}
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Mobile: cards */}
+        <div className="space-y-2 @3xl:hidden">
+          {/* Sin cabecera de tabla en móvil: el menú de columnas va encima de
+              las tarjetas, a la derecha, salvo `mobileColumnsMenu={false}`
+              (listas con `ListFooter`, que ya lo pinta). */}
+          {mobileColumnsMenu && columnsMenu && (
+            <div className="flex justify-end" data-list-columns-menu>
+              {columnsMenu}
+            </div>
+          )}
+          {data.map((row) => {
+            const href = rowHref?.(row)
+            const style = rowStyle?.(row)
+            return (
+              <div
+                key={rowKey(row)}
+                className={cn(
+                  // `bg-card` en su posición de siempre: sin `rowStyle` la cadena
+                  // de clases queda idéntica a la de antes de existir esta prop.
+                  'rounded-xl',
+                  style ? TINTED_ROW_CLASS : 'bg-card',
+                  'p-4 text-sm ring-1 ring-foreground/10',
+                  (href || onRowClick) && 'cursor-pointer active:bg-muted/50',
+                  isRowSelected?.(row) && 'ring-primary',
+                  rowClassName?.(row),
+                )}
+                style={style}
+                data-compact={compact ? '' : undefined}
+                {...rowHoverProps?.(row)}
+                {...(href
+                  ? rowNavProps(href)
+                  : { onClick: onRowClick ? () => onRowClick(row) : undefined })}
+                role={!href && onRowClick ? 'button' : undefined}
+                tabIndex={!href && onRowClick ? 0 : undefined}
+                onKeyDown={
+                  !href && onRowClick
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          onRowClick(row)
+                        }
+                      }
+                    : undefined
+                }
+              >
+                {/* Cabecera de la card: título + slot de acciones.
+                    `flex-wrap` + suelo de ancho para el título: el slot de
+                    acciones se pensó para algo compacto (badge, menú de fila),
+                    pero varias listas meten ahí 2-3 botones CON TEXTO (su `width`
+                    es de la tabla de escritorio, que es `table-fixed`). Al ser
+                    `shrink-0` no cedían y el título se quedaba en una tira de un
+                    carácter por línea (/sales/used en un móvil real, 18/09).
+                    Por qué así y no de otra forma:
+                    - El título lleva `flex-1` (base 0), así que por largo que sea
+                      NUNCA fuerza el salto: una card con badge o menú de fila
+                      sigue pintándose en una sola línea, exactamente igual que
+                      antes. Es el requisito de no tocar los ~40 listados.
+                    - `min-w-32` (128px ≈ 18 caracteres a `text-sm`) es el suelo
+                      que decide el salto: el algoritmo de flex-wrap acota el
+                      tamaño hipotético del título por su `min-width`, así que el
+                      bloque de acciones baja de línea justo cuando no caben los
+                      dos. En su propia línea ocupa el ancho entero y no aplasta
+                      nada.
+                    - Descartado un corte `@…` por tamaño de contenedor: el que
+                      manda aquí no es el ancho de la lista sino cuánto ocupan
+                      unas acciones que el componente no conoce; flex-wrap lo
+                      decide midiendo el contenido real, sin número mágico.
+                    `data-list-card-title`: gancho estable para tests e2e que
+                    vigilen justo este aplastamiento. */}
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="flex min-w-32 flex-1 items-center gap-2" data-list-card-title>
+                    {leading && (
+                      <span
+                        onClick={(e) => e.stopPropagation()}
+                        onAuxClick={(e) => e.stopPropagation()}
+                      >
+                        {leading(row)}
+                      </span>
+                    )}
+                    {primary && renderCardTitle(primary, row, href)}
+                  </div>
+                  {actions.length > 0 && (
+                    // `shrink-0` se queda: dentro de SU línea las acciones no se
+                    // encogen (un botón a medio recortar no sirve). Lo que evita
+                    // el aplastamiento es el salto de línea de arriba. `flex-wrap`
+                    // por si en su propia línea siguen sin caber (3 botones con
+                    // texto a 390px): envuelven en dos filas en vez de salirse, y
+                    // `max-w-full` acota el bloque al ancho de la card para que
+                    // ese `shrink-0` no lo deje asomar por el borde.
+                    // Compacto: en una sola fila; lo que no quepa se recorta.
+                    <div
+                      className={cn(
+                        'flex max-w-full shrink-0 items-center gap-1',
+                        compact ? 'flex-nowrap overflow-hidden' : 'flex-wrap',
+                      )}
+                    >
+                      {actions.map((col) => (
+                        <span key={col.key}>{col.cell(row)}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {body.length > 0 && (
+                  <dl className="mt-2 space-y-1">
+                    {body
+                      .filter((col) => !col.mobileHideWhen?.(row))
+                      .map((col) => (
+                        <div
+                          key={col.key}
                           className={cn(
-                            'min-w-0 break-words',
-                            col.mobileFullWidth ? 'text-left' : 'text-right',
+                            col.mobileFullWidth ? 'space-y-1' : 'flex justify-between gap-3',
                           )}
                         >
-                          {col.cell(row)}
-                        </dd>
-                      </div>
-                    ))}
-                </dl>
-              )}
-            </div>
-          )
-        })}
+                          {!col.mobileHideLabel && col.header && (
+                            <dt
+                              className={cn(
+                                'text-muted-foreground',
+                                col.mobileFullWidth
+                                  ? 'text-xs font-medium uppercase tracking-wide'
+                                  : 'shrink-0',
+                              )}
+                            >
+                              {col.header}
+                            </dt>
+                          )}
+                          {/* min-w-0 + break-words: valores largos sin espacios (emails,
+                            IBANs) rompen línea en vez de ensanchar la card a >390px.
+                            En compacto, una línea con elipsis (`truncate`). */}
+                          <dd
+                            className={cn(
+                              'min-w-0',
+                              compact ? 'truncate' : 'break-words',
+                              col.mobileFullWidth ? 'text-left' : 'text-right',
+                            )}
+                          >
+                            {col.cell(row)}
+                          </dd>
+                        </div>
+                      ))}
+                  </dl>
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
-    </div>
+    </ListCompactProvider>
   )
 }

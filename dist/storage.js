@@ -44,7 +44,8 @@ function normalizeListPrefs(raw, knownKeys, defaults) {
     hidden: defaults.hidden.filter((k) => known.has(k)),
     widths: cleanWidths(defaults.widths, known),
     sort: cleanSort(defaults.sort, known),
-    pageSize: isListPageSize(defaults.pageSize) ? defaults.pageSize : DEFAULT_LIST_PAGE_SIZE
+    pageSize: isListPageSize(defaults.pageSize) ? defaults.pageSize : DEFAULT_LIST_PAGE_SIZE,
+    compact: typeof defaults.compact === "boolean" ? defaults.compact : false
   };
   if (!isRecord(raw)) return base;
   const hidden = Array.isArray(raw.hidden) ? Array.from(
@@ -53,7 +54,8 @@ function normalizeListPrefs(raw, knownKeys, defaults) {
   const widths = isRecord(raw.widths) ? cleanWidths(raw.widths, known) : base.widths;
   const sort = "sort" in raw ? cleanSort(raw.sort, known) ?? base.sort : base.sort;
   const pageSize = isListPageSize(raw.pageSize) ? raw.pageSize : base.pageSize;
-  return { hidden, widths, sort, pageSize };
+  const compact = typeof raw.compact === "boolean" ? raw.compact : base.compact;
+  return { hidden, widths, sort, pageSize, compact };
 }
 function cleanWidths(raw, known) {
   const out = {};
@@ -79,6 +81,7 @@ function listPrefsEqual(a, b) {
   const bw = Object.entries(b.widths);
   if (aw.length !== bw.length || aw.some(([k, v]) => b.widths[k] !== v)) return false;
   if (a.pageSize !== b.pageSize) return false;
+  if (a.compact !== b.compact) return false;
   if (a.sort === null || b.sort === null) return a.sort === b.sort;
   return a.sort.key === b.sort.key && a.sort.dir === b.sort.dir;
 }
@@ -87,14 +90,16 @@ function resolveListDefaults(defaults = {}) {
     hidden: defaults.hidden ?? [],
     widths: defaults.widths ?? {},
     sort: defaults.sort ?? null,
-    pageSize: defaults.pageSize ?? DEFAULT_LIST_PAGE_SIZE
+    pageSize: defaults.pageSize ?? DEFAULT_LIST_PAGE_SIZE,
+    compact: defaults.compact ?? false
   };
 }
 var EMPTY_LIST_PREFS = Object.freeze({
   hidden: [],
   widths: {},
   sort: null,
-  pageSize: DEFAULT_LIST_PAGE_SIZE
+  pageSize: DEFAULT_LIST_PAGE_SIZE,
+  compact: false
 });
 
 // src/list/columnWidth.ts

@@ -7,7 +7,7 @@ import {
 import {
   useLabels,
   useUi
-} from "./chunk-NU4QW2R5.js";
+} from "./chunk-XYPFQI2E.js";
 
 // src/list/responsive-list.tsx
 import "react";
@@ -119,13 +119,15 @@ function DropdownMenuSeparator({
 }
 
 // src/list/columns-menu.tsx
-import { jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
+import { Fragment, jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
 function ColumnsMenu({
   columns,
   hidden,
   onHiddenChange,
   onReset,
   className,
+  compact,
+  onCompactChange,
   labels: labelsProp
 }) {
   const labels = useLabels(labelsProp);
@@ -159,22 +161,43 @@ function ColumnsMenu({
           col.key
         );
       }),
+      onCompactChange && /* @__PURE__ */ jsxs2(Fragment, { children: [
+        /* @__PURE__ */ jsx2(DropdownMenuSeparator, {}),
+        /* @__PURE__ */ jsx2(
+          DropdownMenuCheckboxItem,
+          {
+            checked: !!compact,
+            "data-compact-toggle": true,
+            onSelect: (e) => e.preventDefault(),
+            onCheckedChange: (checked) => onCompactChange(checked === true),
+            children: labels.compactMode
+          }
+        )
+      ] }),
       /* @__PURE__ */ jsx2(DropdownMenuSeparator, {}),
       /* @__PURE__ */ jsx2(DropdownMenuItem, { onSelect: () => onReset(), children: labels.columnsReset })
     ] })
   ] });
 }
 
-// src/list/useColumnResize.tsx
+// src/list/listCompact.ts
 import * as React3 from "react";
+var ListCompactContext = React3.createContext(false);
+var ListCompactProvider = ListCompactContext.Provider;
+function useListCompact() {
+  return React3.useContext(ListCompactContext);
+}
+
+// src/list/useColumnResize.tsx
+import * as React4 from "react";
 import { jsx as jsx3 } from "react/jsx-runtime";
 var MIN_COLUMN_WIDTH = 64;
 function useColumnResize({
   columnWidths,
   onColumnWidthsChange
 }) {
-  const [drag, setDrag] = React3.useState(null);
-  const dragRef = React3.useRef(null);
+  const [drag, setDrag] = React4.useState(null);
+  const dragRef = React4.useRef(null);
   function widthOf(key) {
     return drag?.key === key ? drag.px : columnWidths?.[key];
   }
@@ -349,6 +372,8 @@ function ResponsiveList({
   onHiddenColumnsChange,
   onColumnsReset,
   mobileColumnsMenu = true,
+  compact = false,
+  onCompactChange,
   stickyHeader,
   stickyHeaderTop,
   className,
@@ -440,9 +465,13 @@ function ResponsiveList({
       hidden: hiddenColumns ?? [],
       onHiddenChange: onHiddenColumnsChange,
       onReset: onColumnsReset,
+      compact,
+      onCompactChange,
       labels: labelsProp
     }
   ) : null;
+  const compactCellClass = compact ? "whitespace-nowrap overflow-hidden text-ellipsis" : void 0;
+  const compactHeadClass = compact ? "whitespace-nowrap" : void 0;
   const menuHeadStyle = { ...stickyHeadStyle, right: 0 };
   return (
     // @container + @3xl (48rem, el mismo valor que `md`) en vez de `md:`: el
@@ -452,11 +481,12 @@ function ResponsiveList({
     // siempre la columna de acciones, tras un scroll horizontal que nadie ve.
     // Midiendo el contenedor, una lista metida en una tarjeta estrecha también
     // acierta — el caso de las sedes en Ajustes → Taller, con 302 px.
-    /* @__PURE__ */ jsxs3("div", { className: cn("@container", className), children: [
+    /* @__PURE__ */ jsx5(ListCompactProvider, { value: compact, children: /* @__PURE__ */ jsxs3("div", { className: cn("@container", className), children: [
       /* @__PURE__ */ jsx5("div", { className: "hidden @3xl:block", children: /* @__PURE__ */ jsxs3(
         Table,
         {
           containerClassName: stickyHeader ? "overflow-visible" : void 0,
+          "data-compact": compact ? "" : void 0,
           className: cn(
             stickyHeader && "border-separate border-spacing-0 [&_tbody_td]:border-b [&_tbody_tr:last-child_td]:border-b-0",
             resizable && "table-fixed"
@@ -483,6 +513,7 @@ function ResponsiveList({
                     fixedCellClass,
                     col.sortable && onSortChange && "group",
                     col.headClassName,
+                    compactHeadClass,
                     stickyHeadClass
                   ),
                   style: stickyHeadStyle,
@@ -554,7 +585,8 @@ function ResponsiveList({
                           // Sin esto un botón «Presupuesto de venta» dentro de una
                           // columna estrecha se recortaba a media palabra.
                           fixedCellClass && !col.action && fixedCellClass,
-                          col.cellClassName
+                          col.cellClassName,
+                          !col.action && compactCellClass
                         ),
                         children: renderCell(col, row, href)
                       },
@@ -588,6 +620,7 @@ function ResponsiveList({
                 rowClassName?.(row)
               ),
               style,
+              "data-compact": compact ? "" : void 0,
               ...rowHoverProps?.(row),
               ...href ? rowNavProps(href) : { onClick: onRowClick ? () => onRowClick(row) : void 0 },
               role: !href && onRowClick ? "button" : void 0,
@@ -618,7 +651,17 @@ function ResponsiveList({
                   // texto a 390px): envuelven en dos filas en vez de salirse, y
                   // `max-w-full` acota el bloque al ancho de la card para que
                   // ese `shrink-0` no lo deje asomar por el borde.
-                  /* @__PURE__ */ jsx5("div", { className: "flex max-w-full shrink-0 flex-wrap items-center gap-1", children: actions.map((col) => /* @__PURE__ */ jsx5("span", { children: col.cell(row) }, col.key)) })
+                  // Compacto: en una sola fila; lo que no quepa se recorta.
+                  /* @__PURE__ */ jsx5(
+                    "div",
+                    {
+                      className: cn(
+                        "flex max-w-full shrink-0 items-center gap-1",
+                        compact ? "flex-nowrap overflow-hidden" : "flex-wrap"
+                      ),
+                      children: actions.map((col) => /* @__PURE__ */ jsx5("span", { children: col.cell(row) }, col.key))
+                    }
+                  )
                 ] }),
                 body.length > 0 && /* @__PURE__ */ jsx5("dl", { className: "mt-2 space-y-1", children: body.filter((col) => !col.mobileHideWhen?.(row)).map((col) => /* @__PURE__ */ jsxs3(
                   "div",
@@ -641,7 +684,8 @@ function ResponsiveList({
                         "dd",
                         {
                           className: cn(
-                            "min-w-0 break-words",
+                            "min-w-0",
+                            compact ? "truncate" : "break-words",
                             col.mobileFullWidth ? "text-left" : "text-right"
                           ),
                           children: col.cell(row)
@@ -657,7 +701,7 @@ function ResponsiveList({
           );
         })
       ] })
-    ] })
+    ] }) })
   );
 }
 
@@ -756,7 +800,8 @@ function normalizeListPrefs(raw, knownKeys, defaults) {
     hidden: defaults.hidden.filter((k) => known.has(k)),
     widths: cleanWidths(defaults.widths, known),
     sort: cleanSort(defaults.sort, known),
-    pageSize: isListPageSize(defaults.pageSize) ? defaults.pageSize : DEFAULT_LIST_PAGE_SIZE
+    pageSize: isListPageSize(defaults.pageSize) ? defaults.pageSize : DEFAULT_LIST_PAGE_SIZE,
+    compact: typeof defaults.compact === "boolean" ? defaults.compact : false
   };
   if (!isRecord(raw)) return base;
   const hidden = Array.isArray(raw.hidden) ? Array.from(
@@ -765,7 +810,8 @@ function normalizeListPrefs(raw, knownKeys, defaults) {
   const widths = isRecord(raw.widths) ? cleanWidths(raw.widths, known) : base.widths;
   const sort = "sort" in raw ? cleanSort(raw.sort, known) ?? base.sort : base.sort;
   const pageSize = isListPageSize(raw.pageSize) ? raw.pageSize : base.pageSize;
-  return { hidden, widths, sort, pageSize };
+  const compact = typeof raw.compact === "boolean" ? raw.compact : base.compact;
+  return { hidden, widths, sort, pageSize, compact };
 }
 function cleanWidths(raw, known) {
   const out = {};
@@ -791,6 +837,7 @@ function listPrefsEqual(a, b) {
   const bw = Object.entries(b.widths);
   if (aw.length !== bw.length || aw.some(([k, v]) => b.widths[k] !== v)) return false;
   if (a.pageSize !== b.pageSize) return false;
+  if (a.compact !== b.compact) return false;
   if (a.sort === null || b.sort === null) return a.sort === b.sort;
   return a.sort.key === b.sort.key && a.sort.dir === b.sort.dir;
 }
@@ -799,14 +846,16 @@ function resolveListDefaults(defaults = {}) {
     hidden: defaults.hidden ?? [],
     widths: defaults.widths ?? {},
     sort: defaults.sort ?? null,
-    pageSize: defaults.pageSize ?? DEFAULT_LIST_PAGE_SIZE
+    pageSize: defaults.pageSize ?? DEFAULT_LIST_PAGE_SIZE,
+    compact: defaults.compact ?? false
   };
 }
 var EMPTY_LIST_PREFS = Object.freeze({
   hidden: [],
   widths: {},
   sort: null,
-  pageSize: DEFAULT_LIST_PAGE_SIZE
+  pageSize: DEFAULT_LIST_PAGE_SIZE,
+  compact: false
 });
 
 // src/list/usePagination.ts
@@ -953,7 +1002,7 @@ function SelectScrollDownButton({
 }
 
 // src/list/ListFooter.tsx
-import { Fragment, jsx as jsx8, jsxs as jsxs6 } from "react/jsx-runtime";
+import { Fragment as Fragment2, jsx as jsx8, jsxs as jsxs6 } from "react/jsx-runtime";
 function ListFooter({
   page,
   pageSize,
@@ -963,6 +1012,8 @@ function ListFooter({
   hidden,
   onHiddenChange,
   onReset,
+  compact,
+  onCompactChange,
   columns,
   truncated,
   loading,
@@ -1006,7 +1057,7 @@ function ListFooter({
               {
                 "aria-live": "polite",
                 className: "inline-flex size-4 shrink-0 items-center justify-center",
-                children: loading && /* @__PURE__ */ jsxs6(Fragment, { children: [
+                children: loading && /* @__PURE__ */ jsxs6(Fragment2, { children: [
                   /* @__PURE__ */ jsx8(Loader2, { className: "size-4 animate-spin text-muted-foreground" }),
                   /* @__PURE__ */ jsx8("span", { className: "sr-only", children: labels.loading })
                 ] })
@@ -1022,6 +1073,8 @@ function ListFooter({
                 hidden,
                 onHiddenChange,
                 onReset,
+                compact,
+                onCompactChange,
                 labels: labelsProp
               }
             ),
@@ -1243,6 +1296,10 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
     (pageSize) => persist({ ...current(), pageSize }, { debounce: false }),
     [persist, current]
   );
+  const setCompact = useCallback(
+    (compact) => persist({ ...current(), compact }, { debounce: false }),
+    [persist, current]
+  );
   const reset = useCallback(
     () => persist({ ...current(), hidden: [], widths: {} }, { debounce: false }),
     [persist, current]
@@ -1253,6 +1310,7 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
     setWidths,
     setSort,
     setPageSize,
+    setCompact,
     reset,
     isLoaded: !userId || query.isSuccess || query.isError
   };
@@ -1265,11 +1323,13 @@ function useListView(listKey, {
   deps = [],
   paginated = true,
   stickyHeader = true,
-  store
+  store,
+  compactable = false
 }) {
   const listPrefs = useListPrefs(listKey, { columnKeys, defaults, store });
-  const { prefs, setSort, setWidths, setHidden, setPageSize, reset } = listPrefs;
+  const { prefs, setSort, setWidths, setHidden, setPageSize, setCompact, reset } = listPrefs;
   const { sort, hidden, widths, pageSize } = prefs;
+  const compact = compactable && prefs.compact;
   const { page, setPage, from, to } = usePagination([...deps, sort], pageSize);
   const listProps = useMemo2(
     () => ({
@@ -1282,9 +1342,23 @@ function useListView(listKey, {
       onHiddenColumnsChange: setHidden,
       onColumnsReset: reset,
       mobileColumnsMenu: !paginated,
-      stickyHeader
+      stickyHeader,
+      ...compactable ? { compact, onCompactChange: setCompact } : {}
     }),
-    [sort, setSort, widths, setWidths, hidden, setHidden, reset, paginated, stickyHeader]
+    [
+      sort,
+      setSort,
+      widths,
+      setWidths,
+      hidden,
+      setHidden,
+      reset,
+      paginated,
+      stickyHeader,
+      compactable,
+      compact,
+      setCompact
+    ]
   );
   const footerProps = useMemo2(
     () => ({
@@ -1294,11 +1368,18 @@ function useListView(listKey, {
       onPageSizeChange: setPageSize,
       hidden,
       onHiddenChange: setHidden,
-      onReset: reset
+      onReset: reset,
+      ...compactable ? { compact, onCompactChange: setCompact } : {}
     }),
-    [page, pageSize, setPage, setPageSize, hidden, setHidden, reset]
+    [page, pageSize, setPage, setPageSize, hidden, setHidden, reset, compactable, compact, setCompact]
   );
-  const base = { prefs, sort, listProps, isLoaded: listPrefs.isLoaded };
+  const base = {
+    prefs,
+    sort,
+    listProps,
+    isLoaded: listPrefs.isLoaded,
+    compact
+  };
   if (!paginated) return base;
   return { ...base, pageSize, page, setPage, from, to, footerProps };
 }
@@ -1356,6 +1437,7 @@ function useSupabaseListPrefsStore(client, { table, onError } = {}) {
 
 export {
   ColumnsMenu,
+  useListCompact,
   MIN_COLUMN_WIDTH,
   useColumnResize,
   TINTED_ROW_CLASS,

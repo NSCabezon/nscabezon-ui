@@ -6,6 +6,7 @@ import { jsx } from "react/jsx-runtime";
 var defaultLabels = {
   columnsMenu: "Columnas",
   columnsReset: "Restablecer columnas",
+  compactMode: "Modo compacto",
   paginationFirst: "Primera p\xE1gina",
   paginationPrev: "P\xE1gina anterior",
   paginationNext: "P\xE1gina siguiente",

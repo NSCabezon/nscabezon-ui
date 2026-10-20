@@ -24,14 +24,15 @@ import {
   rowTone,
   useColumnResize,
   useListColumns,
+  useListCompact,
   useListPrefs,
   useListView,
   usePagination,
   useSupabaseListPrefsStore,
   visibleColumnsOf
-} from "./chunk-U2DB22ST.js";
+} from "./chunk-WSH25OMW.js";
 import "./chunk-6CXBNIIA.js";
-import "./chunk-NU4QW2R5.js";
+import "./chunk-XYPFQI2E.js";
 export {
   ColumnsMenu,
   DEFAULT_ACTION_COLUMN_WIDTH,
@@ -57,6 +58,7 @@ export {
   rowTone,
   useColumnResize,
   useListColumns,
+  useListCompact,
   useListPrefs,
   useListView,
   usePagination,

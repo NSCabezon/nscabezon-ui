@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createSupabaseListPrefsStore, localOnlyListPrefsStore } from './stores'
 import type { ListPrefs } from './listPrefs'
 
-const PREFS: ListPrefs = { hidden: ['a'], widths: {}, sort: null, pageSize: 25 }
+const PREFS: ListPrefs = { hidden: ['a'], widths: {}, sort: null, pageSize: 25, compact: false }
 
 // Cliente falso con la cadena que usa el almacén: from().select().eq().eq().maybeSingle()
 // y from().upsert().

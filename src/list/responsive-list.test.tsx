@@ -10,6 +10,7 @@ import {
   type ListSort,
   type ResponsiveColumn,
 } from './responsive-list'
+import { useListCompact } from './listCompact'
 import { UiProvider, type UiLinkProps } from '../context/UiProvider'
 
 // Las capacidades nuevas de ResponsiveList (orden, anchos, fila coloreada,
@@ -633,5 +634,102 @@ describe('ResponsiveList (opt-in)', () => {
     expect(labels(0)).toEqual([])
     expect(labels(1)).toEqual(['Total'])
     expect(table().querySelectorAll('tbody tr')[0].querySelectorAll('td')[1].textContent).toBe('10')
+  })
+})
+
+describe('ResponsiveList (modo compacto)', () => {
+  const wrapCols: ResponsiveColumn<Row>[] = [
+    { ...columns[0], cellClassName: 'whitespace-normal', headClassName: 'whitespace-normal' },
+    columns[1],
+    { key: 'menu', cell: () => <button type="button">Menú</button>, action: true },
+  ]
+
+  it('sin `compact` no cambia el markup (ni data-compact ni clases)', () => {
+    render(<ResponsiveList columns={wrapCols} data={rows} rowKey={(r) => r.id} />)
+    const base = container.innerHTML
+    expect(container.querySelector('[data-compact]')).toBeNull()
+    render(<ResponsiveList columns={wrapCols} data={rows} rowKey={(r) => r.id} compact={false} />)
+    expect(container.innerHTML).toBe(base)
+  })
+
+  it('escritorio: data-compact en la tabla, celdas no-acción en una línea con elipsis que ganan al consumidor', () => {
+    render(<ResponsiveList columns={wrapCols} data={rows} rowKey={(r) => r.id} compact />)
+    expect(table().hasAttribute('data-compact')).toBe(true)
+    const tds = Array.from(table().querySelectorAll('tbody tr')[0].querySelectorAll('td'))
+    // El `whitespace-normal` del consumidor pierde (tailwind-merge, va después).
+    expect(tds[0].className).toContain('whitespace-nowrap')
+    expect(tds[0].className).not.toContain('whitespace-normal')
+    for (const cls of ['overflow-hidden', 'text-ellipsis']) {
+      expect(tds[0].className).toContain(cls)
+      expect(tds[1].className).toContain(cls)
+    }
+    // La columna `action` no se recorta.
+    expect(tds[2].className).not.toContain('text-ellipsis')
+    // Cabeceras sin envolver, también contra `headClassName`.
+    expect(heads()[0].className).toContain('whitespace-nowrap')
+    expect(heads()[0].className).not.toContain('whitespace-normal')
+  })
+
+  it('móvil: data-compact en cada tarjeta, <dd> con truncate y acciones sin flex-wrap', () => {
+    render(<ResponsiveList columns={wrapCols} data={rows} rowKey={(r) => r.id} compact />)
+    for (const card of cards()) {
+      expect(card.hasAttribute('data-compact')).toBe(true)
+      const dd = card.querySelector('dd')!
+      expect(dd.className).toContain('truncate')
+      expect(dd.className).not.toContain('break-words')
+      const actionsBox = card.querySelector('button')!.parentElement!.parentElement!
+      expect(actionsBox.className).toContain('flex-nowrap')
+      expect(actionsBox.className).toContain('overflow-hidden')
+      expect(actionsBox.classList.contains('flex-wrap')).toBe(false)
+    }
+    // Sin compacto, como siempre.
+    render(<ResponsiveList columns={wrapCols} data={rows} rowKey={(r) => r.id} />)
+    const dd = cards()[0].querySelector('dd')!
+    expect(dd.className).toContain('break-words')
+    expect(cards()[0].querySelector('button')!.parentElement!.parentElement!.className).toContain(
+      'flex-wrap',
+    )
+  })
+
+  it('useListCompact() da el modo a las celdas (tabla y tarjetas)', () => {
+    function Mode() {
+      return <>{useListCompact() ? 'C' : 'N'}</>
+    }
+    const cols: ResponsiveColumn<Row>[] = [
+      { key: 'name', header: 'Nombre', cell: (r) => r.name, primary: true },
+      { key: 'mode', header: 'Modo', cell: () => <Mode /> },
+    ]
+    render(<ResponsiveList columns={cols} data={rows} rowKey={(r) => r.id} compact />)
+    expect(table().querySelector('tbody td:nth-child(2)')!.textContent).toBe('C')
+    expect(cards()[0].querySelector('dd')!.textContent).toBe('C')
+    render(<ResponsiveList columns={cols} data={rows} rowKey={(r) => r.id} />)
+    expect(table().querySelector('tbody td:nth-child(2)')!.textContent).toBe('N')
+  })
+
+  it('compact/onCompactChange llegan al ColumnsMenu (casilla «Modo compacto»)', async () => {
+    const { fireEvent, screen } = await import('@testing-library/react')
+    const onCompactChange = vi.fn()
+    render(
+      <ResponsiveList
+        columns={columns}
+        data={rows}
+        rowKey={(r) => r.id}
+        onHiddenColumnsChange={() => {}}
+        onColumnsReset={() => {}}
+        mobileColumnsMenu={false}
+        compact
+        onCompactChange={onCompactChange}
+      />,
+    )
+    const trigger = heads()[heads().length - 1].querySelector('button')!
+    act(() => {
+      fireEvent.keyDown(trigger, { key: 'Enter' })
+    })
+    const item = screen.getByRole('menuitemcheckbox', { name: 'Modo compacto' })
+    expect(item.getAttribute('aria-checked')).toBe('true')
+    act(() => {
+      fireEvent.click(item)
+    })
+    expect(onCompactChange).toHaveBeenCalledWith(false)
   })
 })

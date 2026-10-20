@@ -107,7 +107,12 @@ export type UseListPrefsResult = {
   setWidths: (widths: Record<string, number>) => void
   setSort: (sort: ListSort | null) => void
   setPageSize: (pageSize: number) => void
-  /** «Restablecer columnas»: ocultas y anchos fuera; orden y tamaño de página se conservan. */
+  /** Modo compacto (al instante, sin debounce). */
+  setCompact: (compact: boolean) => void
+  /**
+   * «Restablecer columnas»: ocultas y anchos fuera; orden, tamaño de página y
+   * modo compacto se conservan (la densidad no es una columna).
+   */
   reset: () => void
   /** Ya se reconcilió con el servidor (o no hay nada remoto que esperar). */
   isLoaded: boolean
@@ -115,14 +120,14 @@ export type UseListPrefsResult = {
 
 /**
  * Preferencias de un listado configurable (orden, anchos, columnas ocultas,
- * filas por página), por usuario y sincronizadas entre dispositivos.
+ * filas por página, modo compacto), por usuario y sincronizadas entre dispositivos.
  *
  * - Lectura: `list-prefs:<listKey>` de localStorage (vía `safeStorage`), sin
  *   salto en el primer render de una SPA y sin error de hidratación en Next.
  *   Cuando llega la fila del almacén remoto, GANA (una vez por usuario y
  *   lista). Si el almacén no tiene fila y la caché local trae algo distinto del
  *   defecto, se sube la local para que el siguiente dispositivo la encuentre.
- * - Escritura: orden, ocultas y tamaño de página al instante; anchos con
+ * - Escritura: orden, ocultas, tamaño de página y compacto al instante; anchos con
  *   debounce de 400 ms y flush al desmontar. La caché local se actualiza
  *   siempre, sin esperar al servidor.
  *
@@ -257,6 +262,10 @@ export function useListPrefs(
     (pageSize: number) => persist({ ...current(), pageSize }, { debounce: false }),
     [persist, current],
   )
+  const setCompact = useCallback(
+    (compact: boolean) => persist({ ...current(), compact }, { debounce: false }),
+    [persist, current],
+  )
   const reset = useCallback(
     () => persist({ ...current(), hidden: [], widths: {} }, { debounce: false }),
     [persist, current],
@@ -268,6 +277,7 @@ export function useListPrefs(
     setWidths,
     setSort,
     setPageSize,
+    setCompact,
     reset,
     isLoaded: !userId || query.isSuccess || query.isError,
   }

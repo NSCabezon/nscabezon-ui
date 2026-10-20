@@ -13,6 +13,7 @@ const DEFAULTS: ListPrefs = {
   widths: {},
   sort: { key: 'number', dir: 'desc' },
   pageSize: 25,
+  compact: false,
 }
 
 describe('normalizeListPrefs', () => {
@@ -97,13 +98,29 @@ describe('normalizeListPrefs', () => {
       widths: { ghost: 100, client: 90 },
       sort: { key: 'ghost', dir: 'asc' },
       pageSize: 999,
+      compact: 'yes' as unknown as boolean,
     }
     expect(normalizeListPrefs(null, KNOWN, stale)).toEqual({
       hidden: [],
       widths: { client: 90 },
       sort: null,
       pageSize: 25,
+      compact: false,
     })
+  })
+
+  it('accepts only a boolean as compact and falls back to the default otherwise', () => {
+    expect(normalizeListPrefs({ compact: true }, KNOWN, DEFAULTS).compact).toBe(true)
+    expect(normalizeListPrefs({ compact: false }, KNOWN, DEFAULTS).compact).toBe(false)
+    for (const bad of ['true', 1, 0, null, {}, undefined]) {
+      expect(normalizeListPrefs({ compact: bad }, KNOWN, DEFAULTS).compact).toBe(false)
+    }
+    // Rows saved before compact existed take the list default.
+    expect(normalizeListPrefs({ hidden: [] }, KNOWN, { ...DEFAULTS, compact: true }).compact).toBe(
+      true,
+    )
+    // compact is not a column key: knownKeys never filters it out.
+    expect(normalizeListPrefs({ compact: true }, [], DEFAULTS).compact).toBe(true)
   })
 
   it('merges a full valid object untouched', () => {
@@ -112,6 +129,7 @@ describe('normalizeListPrefs', () => {
       widths: { client: 140, status: 200 },
       sort: { key: 'status', dir: 'desc' },
       pageSize: 50,
+      compact: true,
     }
     expect(normalizeListPrefs(raw, KNOWN, DEFAULTS)).toEqual(raw)
   })
@@ -124,9 +142,11 @@ describe('listPrefsEqual', () => {
       widths: { x: 1 },
       sort: { key: 'x', dir: 'asc' },
       pageSize: 25,
+      compact: false,
     }
     expect(listPrefsEqual(a, { ...a, widths: { x: 1 } })).toBe(true)
     expect(listPrefsEqual(a, { ...a, pageSize: 50 })).toBe(false)
+    expect(listPrefsEqual(a, { ...a, compact: true })).toBe(false)
     expect(listPrefsEqual(a, { ...a, widths: { x: 2 } })).toBe(false)
     expect(listPrefsEqual(a, { ...a, hidden: [] })).toBe(false)
     expect(listPrefsEqual(a, { ...a, sort: { key: 'x', dir: 'desc' } })).toBe(false)
@@ -136,11 +156,24 @@ describe('listPrefsEqual', () => {
 })
 
 describe('resolveListDefaults', () => {
-  it('fills the optional fields: no sort, no hidden, no widths, 25 per page', () => {
-    expect(resolveListDefaults()).toEqual({ hidden: [], widths: {}, sort: null, pageSize: 25 })
+  it('fills the optional fields: no sort, no hidden, no widths, 25 per page, not compact', () => {
+    expect(resolveListDefaults()).toEqual({
+      hidden: [],
+      widths: {},
+      sort: null,
+      pageSize: 25,
+      compact: false,
+    })
     expect(resolveListDefaults({})).toEqual(EMPTY_LIST_PREFS)
     expect(
       resolveListDefaults({ sort: { key: 'a', dir: 'asc' }, hidden: ['a'], widths: { a: 90 }, pageSize: 10 }),
-    ).toEqual({ hidden: ['a'], widths: { a: 90 }, sort: { key: 'a', dir: 'asc' }, pageSize: 10 })
+    ).toEqual({
+      hidden: ['a'],
+      widths: { a: 90 },
+      sort: { key: 'a', dir: 'asc' },
+      pageSize: 10,
+      compact: false,
+    })
+    expect(resolveListDefaults({ compact: true }).compact).toBe(true)
   })
 })

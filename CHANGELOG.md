@@ -3,6 +3,33 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.3.0] - 2026-10-20
+
+### Añadido
+
+- Modo compacto de listado (opt-in por listado): cada fila en una línea.
+  - `ListPrefs.compact` (booleano, por defecto `false`; también en
+    `ListPrefsDefaults`, `EMPTY_LIST_PREFS` y `listPrefsEqual`).
+    `normalizeListPrefs` descarta lo que no sea booleano. Viaja en el jsonb de
+    `user_list_prefs`: sin migración.
+  - `useListPrefs`: `setCompact(v)`, al instante (sin debounce). `reset()`
+    («Restablecer columnas») no lo toca.
+  - `ColumnsMenu`: props `compact` / `onCompactChange`; con el callback pinta
+    la casilla «Modo compacto» encima de «Restablecer columnas», sin cerrar el
+    menú. Texto nuevo `Labels.compactMode` («Modo compacto»).
+  - `ResponsiveList`: props `compact` / `onCompactChange` (llegan al menú de
+    la cabecera y al de móvil). Con `compact`, `data-compact` en la tabla y en
+    cada tarjeta; en escritorio las celdas no-`action` van `whitespace-nowrap
+    overflow-hidden text-ellipsis` y las cabeceras `whitespace-nowrap` (ganan a
+    un `cellClassName`/`headClassName` con `whitespace-normal`); en móvil los
+    `<dd>` van con `truncate` y las acciones de la tarjeta sin `flex-wrap`.
+  - `useListCompact()`: hook para que una `cell` sepa si su lista va en
+    compacto (lo provee `ResponsiveList`).
+  - `ListFooter`: props `compact` / `onCompactChange` para su menú de columnas.
+  - `useListView`: opción `compactable` (por defecto `false`). Solo con ella
+    `listProps` y `footerProps` llevan `compact` + `onCompactChange`; el
+    resultado expone `compact` (`false` si el listado no es compactable).
+
 ## [0.2.2] - 2026-10-20
 
 ### Añadido

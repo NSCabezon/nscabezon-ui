@@ -137,7 +137,7 @@ describe('useSupabaseListPrefsStore', () => {
     await f.resolveInitial()
     act(() => root.render(<Harness client={f.client} onError={second} />))
     f.upsert.mockResolvedValueOnce({ error: 'boom' as never })
-    const prefs = { hidden: [], widths: {}, sort: null, pageSize: 25 as const }
+    const prefs = { hidden: [], widths: {}, sort: null, pageSize: 25 as const, compact: false }
     await latest().save('orders', prefs)
     expect(f.client.from).toHaveBeenCalledWith('user_list_prefs')
     expect(f.upsert).toHaveBeenCalledWith({ user_id: 'u1', list_key: 'orders', prefs })

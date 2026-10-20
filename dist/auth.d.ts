@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { b as Labels } from './UiProvider-C6Dw1ncb.js';
+import { b as Labels } from './UiProvider-C1Q_YNXN.js';
 
 type OAuthProvider = 'google' | 'apple';
 type AuthMethod = 'email' | OAuthProvider;

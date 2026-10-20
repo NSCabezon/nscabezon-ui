@@ -12,6 +12,8 @@ export type Labels = {
   columnsMenu: string
   /** Última opción del menú de columnas. */
   columnsReset: string
+  /** Casilla «Modo compacto» del menú de columnas (listados con `compactable`). */
+  compactMode: string
   paginationFirst: string
   paginationPrev: string
   paginationNext: string
@@ -53,6 +55,7 @@ export type Labels = {
 export const defaultLabels: Labels = {
   columnsMenu: 'Columnas',
   columnsReset: 'Restablecer columnas',
+  compactMode: 'Modo compacto',
   paginationFirst: 'Primera página',
   paginationPrev: 'Página anterior',
   paginationNext: 'Página siguiente',

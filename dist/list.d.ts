@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { CSSProperties } from 'react';
-import { g as ListSort, b as Labels, d as ListPrefs, e as ListPrefsDefaults, f as ListPrefsStore, h as SupabaseLikeClient, i as SupabaseListPrefsStoreOptions } from './UiProvider-C6Dw1ncb.js';
-export { D as DEFAULT_LIST_PAGE_SIZE, E as EMPTY_LIST_PREFS, L as LIST_PAGE_SIZES, a as LIST_PREFS_STORAGE_PREFIX, c as ListPageSize, S as SortDir, m as createSupabaseListPrefsStore, o as isListPageSize, p as listPrefsEqual, q as localOnlyListPrefsStore, r as normalizeListPrefs, s as resolveListDefaults } from './UiProvider-C6Dw1ncb.js';
+import { g as ListSort, b as Labels, d as ListPrefs, e as ListPrefsDefaults, f as ListPrefsStore, h as SupabaseLikeClient, i as SupabaseListPrefsStoreOptions } from './UiProvider-C1Q_YNXN.js';
+export { D as DEFAULT_LIST_PAGE_SIZE, E as EMPTY_LIST_PREFS, L as LIST_PAGE_SIZES, a as LIST_PREFS_STORAGE_PREFIX, c as ListPageSize, S as SortDir, m as createSupabaseListPrefsStore, o as isListPageSize, p as listPrefsEqual, q as localOnlyListPrefsStore, r as normalizeListPrefs, s as resolveListDefaults } from './UiProvider-C1Q_YNXN.js';
 
 type ResponsiveColumn<T> = {
     key: string;
@@ -42,13 +42,15 @@ type ResponsiveListProps<T> = {
     onHiddenColumnsChange?: (hidden: string[]) => void;
     onColumnsReset?: () => void;
     mobileColumnsMenu?: boolean;
+    compact?: boolean;
+    onCompactChange?: (compact: boolean) => void;
     stickyHeader?: boolean;
     stickyHeaderTop?: number;
     className?: string;
     labels?: Partial<Labels>;
 };
 declare const TOUCH_TEXT_LINK = "pointer-coarse:-my-3 pointer-coarse:min-h-11 pointer-coarse:py-3 pointer-coarse:-mx-3 pointer-coarse:min-w-11 pointer-coarse:px-3";
-declare function ResponsiveList<T>({ columns, data, rowKey, rowHref, onRowClick, rowHoverProps, leading, isRowSelected, rowClassName, rowStyle, sort, onSortChange, resizable, columnWidths, onColumnWidthsChange, hiddenColumns, onHiddenColumnsChange, onColumnsReset, mobileColumnsMenu, stickyHeader, stickyHeaderTop, className, labels: labelsProp, }: ResponsiveListProps<T>): React.JSX.Element;
+declare function ResponsiveList<T>({ columns, data, rowKey, rowHref, onRowClick, rowHoverProps, leading, isRowSelected, rowClassName, rowStyle, sort, onSortChange, resizable, columnWidths, onColumnWidthsChange, hiddenColumns, onHiddenColumnsChange, onColumnsReset, mobileColumnsMenu, compact, onCompactChange, stickyHeader, stickyHeaderTop, className, labels: labelsProp, }: ResponsiveListProps<T>): React.JSX.Element;
 
 type ColumnsMenuColumn = {
     key: string;
@@ -61,10 +63,19 @@ type ColumnsMenuProps = {
     onHiddenChange: (hidden: string[]) => void;
     onReset: () => void;
     className?: string;
-    /** Textos propios (`columnsMenu`, `columnsReset`); ganan al `UiProvider`. */
-    labels?: Partial<Pick<Labels, 'columnsMenu' | 'columnsReset'>>;
+    /**
+     * Modo compacto (opt-in): con `onCompactChange`, el menú pinta la casilla
+     * «Modo compacto» encima de «Restablecer columnas». Sin él, nada cambia.
+     */
+    compact?: boolean;
+    onCompactChange?: (compact: boolean) => void;
+    /** Textos propios (`columnsMenu`, `columnsReset`, `compactMode`); ganan al `UiProvider`. */
+    labels?: Partial<Pick<Labels, 'columnsMenu' | 'columnsReset' | 'compactMode'>>;
 };
-declare function ColumnsMenu({ columns, hidden, onHiddenChange, onReset, className, labels: labelsProp, }: ColumnsMenuProps): React.JSX.Element;
+declare function ColumnsMenu({ columns, hidden, onHiddenChange, onReset, className, compact, onCompactChange, labels: labelsProp, }: ColumnsMenuProps): React.JSX.Element;
+
+/** `true` dentro de un `ResponsiveList` en modo compacto; `false` fuera o en modo normal. */
+declare function useListCompact(): boolean;
 
 /** Ancho mínimo de una columna arrastrable, en px. */
 declare const MIN_COLUMN_WIDTH = 64;
@@ -167,6 +178,7 @@ type UseListViewOptions = {
     paginated?: boolean;
     stickyHeader?: boolean;
     store?: ListPrefsStore;
+    compactable?: boolean;
 };
 type ListViewListProps = {
     sort: ListSort | null;
@@ -179,6 +191,8 @@ type ListViewListProps = {
     onColumnsReset: () => void;
     mobileColumnsMenu: boolean;
     stickyHeader: boolean;
+    compact?: boolean;
+    onCompactChange?: (compact: boolean) => void;
 };
 type ListViewFooterProps = {
     page: number;
@@ -188,12 +202,16 @@ type ListViewFooterProps = {
     hidden: string[];
     onHiddenChange: (hidden: string[]) => void;
     onReset: () => void;
+    compact?: boolean;
+    onCompactChange?: (compact: boolean) => void;
 };
 type ListViewBase = {
     prefs: ListPrefs;
     sort: ListSort | null;
     listProps: ListViewListProps;
     isLoaded: boolean;
+    /** Modo compacto vigente (`false` si el listado no es `compactable`). */
+    compact: boolean;
 };
 type ListView = ListViewBase & {
     pageSize: number;
@@ -209,7 +227,8 @@ type UnpaginatedListView = ListViewBase;
 
 /**
  * Estado completo de un listado estándar: preferencias por usuario (orden,
- * anchos, columnas ocultas, tamaño de página — `useListPrefs`) + paginación
+ * anchos, columnas ocultas, tamaño de página y, con `compactable`, modo
+ * compacto — `useListPrefs`) + paginación
  * (`usePagination`) ya cableadas entre sí. Devuelve dos paquetes de props
  * listos para hacer spread: `listProps` → `ResponsiveList` (incluido el menú
  * de columnas de la cabecera) y `footerProps` → `ListFooter`; y lo que la
@@ -297,7 +316,7 @@ type ListFooterProps = ListViewFooterProps & {
  * esconde el selector de filas por página, que no gobierna nada visible y
  * quedaba solo, clavado al fondo del visor.
  */
-declare function ListFooter({ page, pageSize, total, onPageChange, onPageSizeChange, hidden, onHiddenChange, onReset, columns, truncated, loading, className, labels: labelsProp, }: ListFooterProps): React.JSX.Element;
+declare function ListFooter({ page, pageSize, total, onPageChange, onPageSizeChange, hidden, onHiddenChange, onReset, compact, onCompactChange, columns, truncated, loading, className, labels: labelsProp, }: ListFooterProps): React.JSX.Element;
 
 /**
  * Solo las columnas configurables de un `ResponsiveList` (sin orden ni
@@ -341,21 +360,26 @@ type UseListPrefsResult = {
     setWidths: (widths: Record<string, number>) => void;
     setSort: (sort: ListSort | null) => void;
     setPageSize: (pageSize: number) => void;
-    /** «Restablecer columnas»: ocultas y anchos fuera; orden y tamaño de página se conservan. */
+    /** Modo compacto (al instante, sin debounce). */
+    setCompact: (compact: boolean) => void;
+    /**
+     * «Restablecer columnas»: ocultas y anchos fuera; orden, tamaño de página y
+     * modo compacto se conservan (la densidad no es una columna).
+     */
     reset: () => void;
     /** Ya se reconcilió con el servidor (o no hay nada remoto que esperar). */
     isLoaded: boolean;
 };
 /**
  * Preferencias de un listado configurable (orden, anchos, columnas ocultas,
- * filas por página), por usuario y sincronizadas entre dispositivos.
+ * filas por página, modo compacto), por usuario y sincronizadas entre dispositivos.
  *
  * - Lectura: `list-prefs:<listKey>` de localStorage (vía `safeStorage`), sin
  *   salto en el primer render de una SPA y sin error de hidratación en Next.
  *   Cuando llega la fila del almacén remoto, GANA (una vez por usuario y
  *   lista). Si el almacén no tiene fila y la caché local trae algo distinto del
  *   defecto, se sube la local para que el siguiente dispositivo la encuentre.
- * - Escritura: orden, ocultas y tamaño de página al instante; anchos con
+ * - Escritura: orden, ocultas, tamaño de página y compacto al instante; anchos con
  *   debounce de 400 ms y flush al desmontar. La caché local se actualiza
  *   siempre, sin esperar al servidor.
  *
@@ -406,4 +430,4 @@ type SupabaseLikeAuthClient = SupabaseLikeClient & {
  */
 declare function useSupabaseListPrefsStore(client: SupabaseLikeAuthClient, { table, onError }?: SupabaseListPrefsStoreOptions): ListPrefsStore;
 
-export { ColumnsMenu, type ColumnsMenuColumn, type ColumnsMenuProps, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_PAGE_SIZE, LIST_PREFS_WIDTHS_DEBOUNCE_MS, ListFooter, type ListFooterProps, ListPrefs, ListPrefsDefaults, ListPrefsStore, ListSort, type ListView, type ListViewDefaults, type ListViewFooterProps, type ListViewListProps, MIN_COLUMN_WIDTH, Pagination, type PaginationProps, type ResponsiveColumn, ResponsiveList, type ResponsiveListProps, type SupabaseLikeAuthClient, SupabaseLikeClient, SupabaseListPrefsStoreOptions, TINTED_ROW_CLASS, TOUCH_TEXT_LINK, type UnpaginatedListView, type UseListPrefsOptions, type UseListPrefsResult, type UseListViewOptions, resolveColumnWidth, rowTone, useColumnResize, useListColumns, useListPrefs, useListView, usePagination, useSupabaseListPrefsStore, visibleColumnsOf };
+export { ColumnsMenu, type ColumnsMenuColumn, type ColumnsMenuProps, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_PAGE_SIZE, LIST_PREFS_WIDTHS_DEBOUNCE_MS, ListFooter, type ListFooterProps, ListPrefs, ListPrefsDefaults, ListPrefsStore, ListSort, type ListView, type ListViewDefaults, type ListViewFooterProps, type ListViewListProps, MIN_COLUMN_WIDTH, Pagination, type PaginationProps, type ResponsiveColumn, ResponsiveList, type ResponsiveListProps, type SupabaseLikeAuthClient, SupabaseLikeClient, SupabaseListPrefsStoreOptions, TINTED_ROW_CLASS, TOUCH_TEXT_LINK, type UnpaginatedListView, type UseListPrefsOptions, type UseListPrefsResult, type UseListViewOptions, resolveColumnWidth, rowTone, useColumnResize, useListColumns, useListCompact, useListPrefs, useListView, usePagination, useSupabaseListPrefsStore, visibleColumnsOf };

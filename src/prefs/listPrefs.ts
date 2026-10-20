@@ -13,6 +13,10 @@ export type ListPrefs = {
   // Filas por página del listado (selector del ListFooter). Siempre uno de
   // LIST_PAGE_SIZES: cualquier otro valor guardado vuelve al defecto.
   pageSize: number
+  // Modo compacto (opt-in por listado, ver `useListView({ compactable })`):
+  // cada fila en una línea, con elipsis. Cualquier valor no booleano guardado
+  // vuelve al defecto (`false`).
+  compact: boolean
 }
 
 // Tamaños de página que ofrece el selector. Si se cambia esta lista, las
@@ -42,6 +46,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * - Tamaño de página: solo uno de LIST_PAGE_SIZES; si no, el de `defaults`
  *   (y si ese tampoco vale, DEFAULT_LIST_PAGE_SIZE). No es una clave de
  *   columna: `knownKeys` no le afecta.
+ * - Compacto: solo un booleano; si no, el de `defaults` (y si ese tampoco lo
+ *   es, `false`).
  *
  * Una columna renombrada o eliminada deja de aparecer sin romper nada, y un
  * `prefs` corrupto vuelve a los valores por defecto.
@@ -57,6 +63,7 @@ export function normalizeListPrefs(
     widths: cleanWidths(defaults.widths, known),
     sort: cleanSort(defaults.sort, known),
     pageSize: isListPageSize(defaults.pageSize) ? defaults.pageSize : DEFAULT_LIST_PAGE_SIZE,
+    compact: typeof defaults.compact === 'boolean' ? defaults.compact : false,
   }
   if (!isRecord(raw)) return base
 
@@ -72,7 +79,9 @@ export function normalizeListPrefs(
 
   const pageSize = isListPageSize(raw.pageSize) ? raw.pageSize : base.pageSize
 
-  return { hidden, widths, sort, pageSize }
+  const compact = typeof raw.compact === 'boolean' ? raw.compact : base.compact
+
+  return { hidden, widths, sort, pageSize, compact }
 }
 
 function cleanWidths(raw: Record<string, unknown>, known: Set<string>): Record<string, number> {
@@ -102,19 +111,21 @@ export function listPrefsEqual(a: ListPrefs, b: ListPrefs): boolean {
   const bw = Object.entries(b.widths)
   if (aw.length !== bw.length || aw.some(([k, v]) => b.widths[k] !== v)) return false
   if (a.pageSize !== b.pageSize) return false
+  if (a.compact !== b.compact) return false
   if (a.sort === null || b.sort === null) return a.sort === b.sort
   return a.sort.key === b.sort.key && a.sort.dir === b.sort.dir
 }
 
 /**
  * Valores por defecto de un listado tal como los escribe una página: todo es
- * opcional (sin orden, sin ocultas, sin anchos, 25 por página).
+ * opcional (sin orden, sin ocultas, sin anchos, 25 por página, sin compacto).
  */
 export type ListPrefsDefaults = {
   sort?: ListSort | null
   hidden?: string[]
   widths?: Record<string, number>
   pageSize?: number
+  compact?: boolean
 }
 
 /** Rellena los opcionales de unos defaults para obtener unas `ListPrefs`. */
@@ -124,13 +135,15 @@ export function resolveListDefaults(defaults: ListPrefsDefaults = {}): ListPrefs
     widths: defaults.widths ?? {},
     sort: defaults.sort ?? null,
     pageSize: defaults.pageSize ?? DEFAULT_LIST_PAGE_SIZE,
+    compact: defaults.compact ?? false,
   }
 }
 
-/** Preferencias vacías: sin ocultas, sin anchos, sin orden, 25 por página. */
+/** Preferencias vacías: sin ocultas, sin anchos, sin orden, 25 por página, sin compacto. */
 export const EMPTY_LIST_PREFS: ListPrefs = Object.freeze({
   hidden: [],
   widths: {},
   sort: null,
   pageSize: DEFAULT_LIST_PAGE_SIZE,
+  compact: false,
 }) as ListPrefs

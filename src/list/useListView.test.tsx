@@ -78,12 +78,13 @@ afterEach(() => {
 })
 
 describe('resolveListDefaults', () => {
-  it('fills the optional fields: no hidden, no widths, 25 per page', () => {
+  it('fills the optional fields: no hidden, no widths, 25 per page, not compact', () => {
     expect(resolveListDefaults({ sort: SORT })).toEqual({
       hidden: [],
       widths: {},
       sort: SORT,
       pageSize: 25,
+      compact: false,
     })
     expect(
       resolveListDefaults({ sort: null, hidden: ['a'], widths: { a: 90 }, pageSize: 10 }),
@@ -92,6 +93,7 @@ describe('resolveListDefaults', () => {
       widths: { a: 90 },
       sort: null,
       pageSize: 10,
+      compact: false,
     })
   })
 })
@@ -220,6 +222,59 @@ describe('useListView (paginated: false)', () => {
     })
     expect('footerProps' in view!).toBe(false)
     expect('page' in view!).toBe(false)
+  })
+})
+
+describe('useListView (compactable)', () => {
+  function mountWith(options: { compactable?: boolean }, key = 'compact-list') {
+    let view: View | undefined
+    function H() {
+      const v = useListView(key, {
+        columnKeys: COLUMN_KEYS,
+        defaults: { sort: SORT },
+        ...options,
+      })
+      React.useEffect(() => {
+        view = v
+      })
+      return null
+    }
+    act(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <H />
+        </QueryClientProvider>,
+      )
+    })
+    return () => view!
+  }
+
+  it('sin `compactable` no hay compact en listProps ni footerProps (sin casilla) y compact es false', () => {
+    localStorage.setItem('list-prefs:compact-list', JSON.stringify({ compact: true }))
+    const view = mountWith({})
+    expect('compact' in view().listProps).toBe(false)
+    expect('onCompactChange' in view().listProps).toBe(false)
+    expect('compact' in view().footerProps).toBe(false)
+    expect('onCompactChange' in view().footerProps).toBe(false)
+    // Aunque haya uno guardado, un listado no compactable nunca va en compacto.
+    expect(view().compact).toBe(false)
+  })
+
+  it('con `compactable` cablea compact + onCompactChange en los dos paquetes y lo persiste', () => {
+    const view = mountWith({ compactable: true })
+    expect(view().compact).toBe(false)
+    expect(view().listProps.compact).toBe(false)
+    expect(view().footerProps.compact).toBe(false)
+    act(() => view().listProps.onCompactChange!(true))
+    expect(view().compact).toBe(true)
+    expect(view().listProps.compact).toBe(true)
+    expect(view().footerProps.compact).toBe(true)
+    expect(JSON.parse(localStorage.getItem('list-prefs:compact-list')!).compact).toBe(true)
+    // «Restablecer columnas» no lo toca.
+    act(() => view().listProps.onColumnsReset())
+    expect(view().compact).toBe(true)
+    act(() => view().footerProps.onCompactChange!(false))
+    expect(view().compact).toBe(false)
   })
 })
 

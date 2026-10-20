@@ -7,6 +7,7 @@ export {
   type ResponsiveListProps,
 } from './list/responsive-list'
 export { ColumnsMenu, type ColumnsMenuColumn, type ColumnsMenuProps } from './list/columns-menu'
+export { useListCompact } from './list/listCompact'
 export { MIN_COLUMN_WIDTH, useColumnResize } from './list/useColumnResize'
 export {
   DEFAULT_ACTION_COLUMN_WIDTH,

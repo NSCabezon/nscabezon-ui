@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ListFooter } from './ListFooter'
 import type { ColumnsMenuColumn } from './columns-menu'
 import { UiProvider } from '../context/UiProvider'
+import { fireEvent, screen } from '@testing-library/react'
 
 // El pie del listado sustituye a la fila de toolbar que iba ENCIMA de cada
 // listado (costaba ~40px de alto en los ~40 listados). Reglas que fija esta
@@ -277,5 +278,25 @@ describe('ListFooter (textos)', () => {
     expect(container.querySelector('[role="status"]')!.textContent).toBe('60 results')
     expect(pageSizeTrigger().getAttribute('aria-label')).toBe('Filas')
     expect(pageSizeTrigger().textContent).toContain('25 por página')
+  })
+
+  it('compact/onCompactChange llegan al menú de columnas del pie (y sin ellos no hay casilla)', () => {
+    const onCompactChange = vi.fn()
+    renderFooter({ compact: false, onCompactChange })
+    act(() => {
+      fireEvent.keyDown(columnsButton()!, { key: 'Enter' })
+    })
+    const item = screen.getByRole('menuitemcheckbox', { name: 'Modo compacto' })
+    expect(item.getAttribute('aria-checked')).toBe('false')
+    act(() => {
+      fireEvent.click(item)
+    })
+    expect(onCompactChange).toHaveBeenCalledWith(true)
+
+    renderFooter()
+    act(() => {
+      fireEvent.keyDown(columnsButton()!, { key: 'Enter' })
+    })
+    expect(screen.queryByRole('menuitemcheckbox', { name: 'Modo compacto' })).toBeNull()
   })
 })

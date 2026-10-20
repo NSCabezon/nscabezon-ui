@@ -21,6 +21,7 @@ type ListPrefs = {
     widths: Record<string, number>;
     sort: ListSort | null;
     pageSize: number;
+    compact: boolean;
 };
 declare const LIST_PAGE_SIZES: readonly [10, 25, 50, 100];
 type ListPageSize = (typeof LIST_PAGE_SIZES)[number];
@@ -38,6 +39,8 @@ declare const LIST_PREFS_STORAGE_PREFIX = "list-prefs:";
  * - Tamaño de página: solo uno de LIST_PAGE_SIZES; si no, el de `defaults`
  *   (y si ese tampoco vale, DEFAULT_LIST_PAGE_SIZE). No es una clave de
  *   columna: `knownKeys` no le afecta.
+ * - Compacto: solo un booleano; si no, el de `defaults` (y si ese tampoco lo
+ *   es, `false`).
  *
  * Una columna renombrada o eliminada deja de aparecer sin romper nada, y un
  * `prefs` corrupto vuelve a los valores por defecto.
@@ -47,17 +50,18 @@ declare function normalizeListPrefs(raw: unknown, knownKeys: string[], defaults:
 declare function listPrefsEqual(a: ListPrefs, b: ListPrefs): boolean;
 /**
  * Valores por defecto de un listado tal como los escribe una página: todo es
- * opcional (sin orden, sin ocultas, sin anchos, 25 por página).
+ * opcional (sin orden, sin ocultas, sin anchos, 25 por página, sin compacto).
  */
 type ListPrefsDefaults = {
     sort?: ListSort | null;
     hidden?: string[];
     widths?: Record<string, number>;
     pageSize?: number;
+    compact?: boolean;
 };
 /** Rellena los opcionales de unos defaults para obtener unas `ListPrefs`. */
 declare function resolveListDefaults(defaults?: ListPrefsDefaults): ListPrefs;
-/** Preferencias vacías: sin ocultas, sin anchos, sin orden, 25 por página. */
+/** Preferencias vacías: sin ocultas, sin anchos, sin orden, 25 por página, sin compacto. */
 declare const EMPTY_LIST_PREFS: ListPrefs;
 
 declare const DEFAULT_ACTION_COLUMN_WIDTH = 56;

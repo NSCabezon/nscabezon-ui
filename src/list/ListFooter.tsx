@@ -98,6 +98,8 @@ export function ListFooter({
   hidden,
   onHiddenChange,
   onReset,
+  compact,
+  onCompactChange,
   columns,
   truncated,
   loading,
@@ -178,6 +180,8 @@ export function ListFooter({
             hidden={hidden}
             onHiddenChange={onHiddenChange}
             onReset={onReset}
+            compact={compact}
+            onCompactChange={onCompactChange}
             labels={labelsProp}
           />
           {!isEmpty && (
