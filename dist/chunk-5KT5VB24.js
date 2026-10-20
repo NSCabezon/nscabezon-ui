@@ -7,7 +7,7 @@ import {
 import {
   useLabels,
   useUi
-} from "./chunk-QPTTCNNI.js";
+} from "./chunk-CH6JC77L.js";
 
 // src/list/responsive-list.tsx
 import * as React6 from "react";
@@ -24,6 +24,11 @@ import { CheckIcon, ChevronRightIcon } from "lucide-react";
 import { jsx, jsxs } from "react/jsx-runtime";
 function DropdownMenu({ ...props }) {
   return /* @__PURE__ */ jsx(DropdownMenuPrimitive.Root, { "data-slot": "dropdown-menu", ...props });
+}
+function DropdownMenuPortal({
+  ...props
+}) {
+  return /* @__PURE__ */ jsx(DropdownMenuPrimitive.Portal, { "data-slot": "dropdown-menu-portal", ...props });
 }
 function DropdownMenuTrigger({
   ...props
@@ -104,6 +109,41 @@ function DropdownMenuCheckboxItem({
     }
   );
 }
+function DropdownMenuRadioGroup({
+  ...props
+}) {
+  return /* @__PURE__ */ jsx(DropdownMenuPrimitive.RadioGroup, { "data-slot": "dropdown-menu-radio-group", ...props });
+}
+function DropdownMenuRadioItem({
+  className,
+  children,
+  inset,
+  ...props
+}) {
+  return /* @__PURE__ */ jsxs(
+    DropdownMenuPrimitive.RadioItem,
+    {
+      "data-slot": "dropdown-menu-radio-item",
+      "data-inset": inset,
+      className: cn(
+        "relative flex cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-inset:pl-7 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        className
+      ),
+      ...props,
+      children: [
+        /* @__PURE__ */ jsx(
+          "span",
+          {
+            className: "pointer-events-none absolute right-2 flex items-center justify-center",
+            "data-slot": "dropdown-menu-radio-item-indicator",
+            children: /* @__PURE__ */ jsx(DropdownMenuPrimitive.ItemIndicator, { children: /* @__PURE__ */ jsx(CheckIcon, {}) })
+          }
+        ),
+        children
+      ]
+    }
+  );
+}
 function DropdownMenuSeparator({
   className,
   ...props
@@ -117,6 +157,137 @@ function DropdownMenuSeparator({
     }
   );
 }
+function DropdownMenuSub({ ...props }) {
+  return /* @__PURE__ */ jsx(DropdownMenuPrimitive.Sub, { "data-slot": "dropdown-menu-sub", ...props });
+}
+function DropdownMenuSubTrigger({
+  className,
+  inset,
+  children,
+  ...props
+}) {
+  return /* @__PURE__ */ jsxs(
+    DropdownMenuPrimitive.SubTrigger,
+    {
+      "data-slot": "dropdown-menu-sub-trigger",
+      "data-inset": inset,
+      className: cn(
+        "flex cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-inset:pl-7 data-open:bg-accent data-open:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        className
+      ),
+      ...props,
+      children: [
+        children,
+        /* @__PURE__ */ jsx(ChevronRightIcon, { className: "ml-auto" })
+      ]
+    }
+  );
+}
+function DropdownMenuSubContent({
+  className,
+  ...props
+}) {
+  return /* @__PURE__ */ jsx(
+    DropdownMenuPrimitive.SubContent,
+    {
+      "data-slot": "dropdown-menu-sub-content",
+      className: cn(
+        "z-50 min-w-[96px] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-lg bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+        className
+      ),
+      ...props
+    }
+  );
+}
+
+// src/prefs/listPrefs.ts
+var LIST_PAGE_SIZES = [10, 25, 50, 100];
+var DEFAULT_LIST_PAGE_SIZE = 25;
+function isListPageSize(value) {
+  return LIST_PAGE_SIZES.includes(value);
+}
+var LIST_PREFS_STORAGE_PREFIX = "list-prefs:";
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function normalizeListPrefs(raw, knownKeys, defaults) {
+  const known = new Set(knownKeys);
+  const base = {
+    hidden: defaults.hidden.filter((k) => known.has(k)),
+    widths: cleanWidths(defaults.widths, known),
+    sort: cleanSort(defaults.sort, known),
+    pageSize: isListPageSize(defaults.pageSize) ? defaults.pageSize : DEFAULT_LIST_PAGE_SIZE,
+    compact: typeof defaults.compact === "boolean" ? defaults.compact : false,
+    order: cleanOrder(defaults.order, knownKeys)
+  };
+  if (!isRecord(raw)) return base;
+  const hidden = Array.isArray(raw.hidden) ? Array.from(
+    new Set(raw.hidden.filter((k) => typeof k === "string" && known.has(k)))
+  ) : base.hidden;
+  const widths = isRecord(raw.widths) ? cleanWidths(raw.widths, known) : base.widths;
+  const sort = "sort" in raw ? cleanSort(raw.sort, known) ?? base.sort : base.sort;
+  const pageSize = isListPageSize(raw.pageSize) ? raw.pageSize : base.pageSize;
+  const compact = typeof raw.compact === "boolean" ? raw.compact : base.compact;
+  const order = Array.isArray(raw.order) ? cleanOrder(raw.order, knownKeys) : base.order;
+  return { hidden, widths, sort, pageSize, compact, order };
+}
+function cleanOrder(raw, knownKeys) {
+  if (!Array.isArray(raw)) return [];
+  const known = new Set(knownKeys);
+  const kept = Array.from(
+    new Set(raw.filter((k) => typeof k === "string" && known.has(k)))
+  );
+  if (kept.length === 0) return [];
+  const seen = new Set(kept);
+  return [...kept, ...knownKeys.filter((k) => !seen.has(k))];
+}
+function cleanWidths(raw, known) {
+  const out = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!known.has(key)) continue;
+    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) continue;
+    out[key] = Math.round(value);
+  }
+  return out;
+}
+function cleanSort(raw, known) {
+  if (!isRecord(raw)) return null;
+  const { key, dir } = raw;
+  if (typeof key !== "string" || !known.has(key)) return null;
+  if (dir !== "asc" && dir !== "desc") return null;
+  return { key, dir };
+}
+function listPrefsEqual(a, b) {
+  if (a.hidden.length !== b.hidden.length || a.hidden.some((k, i) => k !== b.hidden[i])) {
+    return false;
+  }
+  const aw = Object.entries(a.widths);
+  const bw = Object.entries(b.widths);
+  if (aw.length !== bw.length || aw.some(([k, v]) => b.widths[k] !== v)) return false;
+  if (a.pageSize !== b.pageSize) return false;
+  if (a.compact !== b.compact) return false;
+  if (a.order.length !== b.order.length || a.order.some((k, i) => k !== b.order[i])) return false;
+  if (a.sort === null || b.sort === null) return a.sort === b.sort;
+  return a.sort.key === b.sort.key && a.sort.dir === b.sort.dir;
+}
+function resolveListDefaults(defaults = {}) {
+  return {
+    hidden: defaults.hidden ?? [],
+    widths: defaults.widths ?? {},
+    sort: defaults.sort ?? null,
+    pageSize: defaults.pageSize ?? DEFAULT_LIST_PAGE_SIZE,
+    compact: defaults.compact ?? false,
+    order: defaults.order ?? []
+  };
+}
+var EMPTY_LIST_PREFS = Object.freeze({
+  hidden: [],
+  widths: {},
+  sort: null,
+  pageSize: DEFAULT_LIST_PAGE_SIZE,
+  compact: false,
+  order: []
+});
 
 // src/list/columnOrder.ts
 function orderColumns(columns, order) {
@@ -165,6 +336,8 @@ function ColumnsMenu({
   onCompactChange,
   columnOrder,
   onColumnOrderChange,
+  pageSize,
+  onPageSizeChange,
   labels: labelsProp
 }) {
   const labels = useLabels(labelsProp);
@@ -249,6 +422,28 @@ function ColumnsMenu({
             children: labels.compactMode
           }
         )
+      ] }),
+      onPageSizeChange && /* @__PURE__ */ jsxs2(Fragment, { children: [
+        /* @__PURE__ */ jsx2(DropdownMenuSeparator, {}),
+        /* @__PURE__ */ jsxs2(DropdownMenuSub, { children: [
+          /* @__PURE__ */ jsx2(DropdownMenuSubTrigger, { "data-page-size-menu": true, children: labels.pageSizeMenu }),
+          /* @__PURE__ */ jsx2(DropdownMenuPortal, { children: /* @__PURE__ */ jsx2(DropdownMenuSubContent, { collisionPadding: 8, children: /* @__PURE__ */ jsx2(
+            DropdownMenuRadioGroup,
+            {
+              value: pageSize === void 0 ? void 0 : String(pageSize),
+              onValueChange: (v) => onPageSizeChange(Number(v)),
+              children: LIST_PAGE_SIZES.map((size) => /* @__PURE__ */ jsx2(
+                DropdownMenuRadioItem,
+                {
+                  value: String(size),
+                  className: "tabular-nums",
+                  children: size
+                },
+                size
+              ))
+            }
+          ) }) })
+        ] })
       ] }),
       /* @__PURE__ */ jsx2(DropdownMenuSeparator, {}),
       /* @__PURE__ */ jsx2(DropdownMenuItem, { onSelect: () => onReset(), children: labels.columnsReset })
@@ -541,6 +736,8 @@ function ResponsiveList({
   onCompactChange,
   columnOrder,
   onColumnOrderChange,
+  pageSize,
+  onPageSizeChange,
   stickyHeader,
   stickyHeaderTop,
   className,
@@ -638,6 +835,8 @@ function ResponsiveList({
       onCompactChange,
       columnOrder,
       onColumnOrderChange,
+      pageSize,
+      onPageSizeChange,
       labels: labelsProp
     }
   ) : null;
@@ -979,7 +1178,7 @@ function Pagination({
       Button,
       {
         variant: "outline",
-        size: "sm",
+        size: "icon-sm",
         disabled: page <= 1,
         onClick: () => onPageChange(1),
         "aria-label": labels.paginationFirst,
@@ -991,7 +1190,7 @@ function Pagination({
       Button,
       {
         variant: "outline",
-        size: "sm",
+        size: "icon-sm",
         disabled: page <= 1,
         onClick: () => onPageChange(page - 1),
         "aria-label": labels.paginationPrev,
@@ -1004,7 +1203,7 @@ function Pagination({
       Button,
       {
         variant: "outline",
-        size: "sm",
+        size: "icon-sm",
         disabled: page >= lastPage,
         onClick: () => onPageChange(page + 1),
         "aria-label": labels.paginationNext,
@@ -1016,7 +1215,7 @@ function Pagination({
       Button,
       {
         variant: "outline",
-        size: "sm",
+        size: "icon-sm",
         disabled: page >= lastPage,
         onClick: () => onPageChange(lastPage),
         "aria-label": labels.paginationLast,
@@ -1029,97 +1228,6 @@ function Pagination({
 
 // src/list/usePagination.ts
 import { useState as useState3 } from "react";
-
-// src/prefs/listPrefs.ts
-var LIST_PAGE_SIZES = [10, 25, 50, 100];
-var DEFAULT_LIST_PAGE_SIZE = 25;
-function isListPageSize(value) {
-  return LIST_PAGE_SIZES.includes(value);
-}
-var LIST_PREFS_STORAGE_PREFIX = "list-prefs:";
-function isRecord(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function normalizeListPrefs(raw, knownKeys, defaults) {
-  const known = new Set(knownKeys);
-  const base = {
-    hidden: defaults.hidden.filter((k) => known.has(k)),
-    widths: cleanWidths(defaults.widths, known),
-    sort: cleanSort(defaults.sort, known),
-    pageSize: isListPageSize(defaults.pageSize) ? defaults.pageSize : DEFAULT_LIST_PAGE_SIZE,
-    compact: typeof defaults.compact === "boolean" ? defaults.compact : false,
-    order: cleanOrder(defaults.order, knownKeys)
-  };
-  if (!isRecord(raw)) return base;
-  const hidden = Array.isArray(raw.hidden) ? Array.from(
-    new Set(raw.hidden.filter((k) => typeof k === "string" && known.has(k)))
-  ) : base.hidden;
-  const widths = isRecord(raw.widths) ? cleanWidths(raw.widths, known) : base.widths;
-  const sort = "sort" in raw ? cleanSort(raw.sort, known) ?? base.sort : base.sort;
-  const pageSize = isListPageSize(raw.pageSize) ? raw.pageSize : base.pageSize;
-  const compact = typeof raw.compact === "boolean" ? raw.compact : base.compact;
-  const order = Array.isArray(raw.order) ? cleanOrder(raw.order, knownKeys) : base.order;
-  return { hidden, widths, sort, pageSize, compact, order };
-}
-function cleanOrder(raw, knownKeys) {
-  if (!Array.isArray(raw)) return [];
-  const known = new Set(knownKeys);
-  const kept = Array.from(
-    new Set(raw.filter((k) => typeof k === "string" && known.has(k)))
-  );
-  if (kept.length === 0) return [];
-  const seen = new Set(kept);
-  return [...kept, ...knownKeys.filter((k) => !seen.has(k))];
-}
-function cleanWidths(raw, known) {
-  const out = {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (!known.has(key)) continue;
-    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) continue;
-    out[key] = Math.round(value);
-  }
-  return out;
-}
-function cleanSort(raw, known) {
-  if (!isRecord(raw)) return null;
-  const { key, dir } = raw;
-  if (typeof key !== "string" || !known.has(key)) return null;
-  if (dir !== "asc" && dir !== "desc") return null;
-  return { key, dir };
-}
-function listPrefsEqual(a, b) {
-  if (a.hidden.length !== b.hidden.length || a.hidden.some((k, i) => k !== b.hidden[i])) {
-    return false;
-  }
-  const aw = Object.entries(a.widths);
-  const bw = Object.entries(b.widths);
-  if (aw.length !== bw.length || aw.some(([k, v]) => b.widths[k] !== v)) return false;
-  if (a.pageSize !== b.pageSize) return false;
-  if (a.compact !== b.compact) return false;
-  if (a.order.length !== b.order.length || a.order.some((k, i) => k !== b.order[i])) return false;
-  if (a.sort === null || b.sort === null) return a.sort === b.sort;
-  return a.sort.key === b.sort.key && a.sort.dir === b.sort.dir;
-}
-function resolveListDefaults(defaults = {}) {
-  return {
-    hidden: defaults.hidden ?? [],
-    widths: defaults.widths ?? {},
-    sort: defaults.sort ?? null,
-    pageSize: defaults.pageSize ?? DEFAULT_LIST_PAGE_SIZE,
-    compact: defaults.compact ?? false,
-    order: defaults.order ?? []
-  };
-}
-var EMPTY_LIST_PREFS = Object.freeze({
-  hidden: [],
-  widths: {},
-  sort: null,
-  pageSize: DEFAULT_LIST_PAGE_SIZE,
-  compact: false,
-  order: []
-});
-
-// src/list/usePagination.ts
 var DEFAULT_PAGE_SIZE = DEFAULT_LIST_PAGE_SIZE;
 function usePagination(deps = [], pageSize = DEFAULT_PAGE_SIZE) {
   const [page, setPage] = useState3(1);
@@ -1287,6 +1395,7 @@ function ListFooter({
   const label = labels.pageSizeLabel;
   const showCountOnly = total > 0 && total <= pageSize;
   const isEmpty = total === 0;
+  const hasColumnsMenu = !!onHiddenChange && !!onReset;
   const status = isEmpty ? labels.noResults : truncated ? labels.countTruncated(total) : labels.count(total);
   return (
     // El `@container` va aquí y el layout en el hijo: un elemento no puede
@@ -1295,7 +1404,9 @@ function ListFooter({
       "div",
       {
         className: cn(
-          "flex flex-wrap items-center justify-between gap-2 pt-2",
+          // v0.7.0: pie más bajo (pt-2 → pt-1, separación vertical al
+          // envolver gap-y-1). En táctil los botones siguen midiendo 44 px.
+          "flex flex-wrap items-center justify-between gap-x-2 gap-y-1 pt-1",
           "@2xl:grid @2xl:grid-cols-[1fr_auto_1fr]"
         ),
         children: [
@@ -1328,22 +1439,24 @@ function ListFooter({
             )
           ] }),
           /* @__PURE__ */ jsxs6("div", { className: "ml-auto flex items-center gap-2 @2xl:ml-0 @2xl:justify-self-end", children: [
-            /* @__PURE__ */ jsx8(
+            hasColumnsMenu && /* @__PURE__ */ jsx8(
               ColumnsMenu,
               {
-                className: isEmpty ? void 0 : "@3xl:hidden",
-                columns,
-                hidden,
+                className: cn("size-7", !isEmpty && "@3xl:hidden"),
+                columns: columns ?? [],
+                hidden: hidden ?? [],
                 onHiddenChange,
                 onReset,
                 compact,
                 onCompactChange,
                 columnOrder,
                 onColumnOrderChange,
+                pageSize,
+                onPageSizeChange: isEmpty ? void 0 : onPageSizeChange,
                 labels: labelsProp
               }
             ),
-            !isEmpty && /* @__PURE__ */ jsxs6(Select, { value: String(pageSize), onValueChange: (v) => onPageSizeChange(Number(v)), children: [
+            !isEmpty && !hasColumnsMenu && /* @__PURE__ */ jsxs6(Select, { value: String(pageSize), onValueChange: (v) => onPageSizeChange(Number(v)), children: [
               /* @__PURE__ */ jsxs6(
                 SelectTrigger,
                 {
@@ -1615,11 +1728,14 @@ function useListView(listKey, {
       stickyHeader,
       columnOrder: order,
       onColumnOrderChange: setOrder,
-      ...compactable ? { compact, onCompactChange: setCompact } : {}
+      ...compactable ? { compact, onCompactChange: setCompact } : {},
+      ...paginated ? { pageSize, onPageSizeChange: setPageSize } : {}
     }),
     [
       order,
       setOrder,
+      pageSize,
+      setPageSize,
       sort,
       setSort,
       widths,
@@ -1731,6 +1847,14 @@ function useSupabaseListPrefsStore(client, { table, onError } = {}) {
 }
 
 export {
+  LIST_PAGE_SIZES,
+  DEFAULT_LIST_PAGE_SIZE,
+  isListPageSize,
+  LIST_PREFS_STORAGE_PREFIX,
+  normalizeListPrefs,
+  listPrefsEqual,
+  resolveListDefaults,
+  EMPTY_LIST_PREFS,
   orderColumns,
   moveColumn,
   ColumnsMenu,
@@ -1749,14 +1873,6 @@ export {
   TOUCH_TEXT_LINK,
   ResponsiveList,
   Pagination,
-  LIST_PAGE_SIZES,
-  DEFAULT_LIST_PAGE_SIZE,
-  isListPageSize,
-  LIST_PREFS_STORAGE_PREFIX,
-  normalizeListPrefs,
-  listPrefsEqual,
-  resolveListDefaults,
-  EMPTY_LIST_PREFS,
   DEFAULT_PAGE_SIZE,
   usePagination,
   ListFooter,

@@ -167,6 +167,11 @@ export type ResponsiveListProps<T> = {
   // todas las claves de `columns` en el orden nuevo.
   columnOrder?: string[]
   onColumnOrderChange?: (order: string[]) => void
+  // Filas por página (opt-in, v0.7.0): con `onPageSizeChange` (y el menú de
+  // columnas activo) el `ColumnsMenu` pinta el submenú «Filas por página».
+  // `useListView` paginado lo cablea en `listProps`.
+  pageSize?: number
+  onPageSizeChange?: (pageSize: number) => void
   // Pins the desktop table header (thead) at the top while the list scrolls. Intended
   // for a list rendered inside its own vertical scroll container (`overflow-y-auto`),
   // so the header sticks to that container's top. `stickyHeaderTop` overrides the CSS
@@ -221,6 +226,8 @@ export function ResponsiveList<T>({
   onCompactChange,
   columnOrder,
   onColumnOrderChange,
+  pageSize,
+  onPageSizeChange,
   stickyHeader,
   stickyHeaderTop,
   className,
@@ -368,6 +375,8 @@ export function ResponsiveList<T>({
         onCompactChange={onCompactChange}
         columnOrder={columnOrder}
         onColumnOrderChange={onColumnOrderChange}
+        pageSize={pageSize}
+        onPageSizeChange={onPageSizeChange}
         labels={labelsProp}
       />
     ) : null

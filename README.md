@@ -163,6 +163,7 @@ export function AppUiProvider({ children }: { children: React.ReactNode }) {
       countTruncated: (count) => t('pagination.countTruncated', { count }),
       pageSizeLabel: t('pagination.pageSizeLabel'),
       pageSizeValue: (count) => t('pagination.pageSizeValue', { count }),
+      pageSizeMenu: t('pagination.pageSizeLabel'), // submenú del menú de columnas (v0.7.0)
       noResults: t('list.noResults'),
       loading: t('states.loading'),
       versionMessage: t('versionCheck.message'),
@@ -245,6 +246,25 @@ const view = useListView('orders', {
   puede ir en cualquier posición de la tabla, pero en móvil sigue siendo el
   título de la tarjeta (el `<dl>` sí sigue el orden). `view.order` da el orden
   guardado; `orderColumns(columns, order)` lo aplica en una tabla a mano.
+- Filas por página (desde v0.7.0): vive en el **menú de columnas**, como
+  submenú «Filas por página» › 10 · 25 · 50 · 100 (`LIST_PAGE_SIZES`, radio
+  con el actual marcado), entre «Modo compacto» y «Restablecer columnas».
+  `ColumnsMenu` lo pinta solo con `onPageSizeChange` (+ `pageSize`); texto
+  `labels.pageSizeMenu` (por defecto «Filas por página»; cada opción es solo
+  el número). `useListView` paginado lo cablea en `listProps` (menú de la
+  cabecera, escritorio) y en `footerProps` (menú del pie: móvil y lista
+  vacía); cambiarlo vuelve a la página 1. Con `paginated: false` no aparece.
+  Se navega con teclado (→/Enter/Espacio abre, ↑↓ elige, ← vuelve) y en
+  táctil abre con un toque: no hay variante plana para móvil.
+  - Regla del pie: `ListFooter` **no** pinta selector de filas cuando tiene
+    menú de columnas (`onHiddenChange` + `onReset`, lo normal con
+    `useListView`). Sin ellos (pie sin menú de columnas; `hidden`, `columns`,
+    `onHiddenChange` y `onReset` son opcionales) el selector se queda en el
+    pie como antes. Si montas el `ResponsiveList` a mano con `ListFooter`,
+    pásale `pageSize`/`onPageSizeChange` o en escritorio no habrá dónde
+    cambiar el tamaño.
+  - Pie compacto (v0.7.0): fila con `pt-1` y flechas de `Pagination` de
+    28 px (`icon-sm`); en táctil todo sigue a 44 px (`pointer-coarse:`).
 - Regla de anchos con `resizable`: la tabla llena siempre el ancho (sin
   scroll lateral) y el espacio que sobra o falta lo absorbe UNA columna, la
   **flexible**. Al arrastrar el borde de una columna solo cambian ella y la

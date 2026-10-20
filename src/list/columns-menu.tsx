@@ -7,10 +7,17 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '../primitives/dropdown-menu'
 import { useLabels, type Labels } from '../context/UiProvider'
+import { LIST_PAGE_SIZES } from '../prefs/listPrefs'
 import { moveColumn, orderColumns } from './columnOrder'
 
 export type ColumnsMenuColumn = {
@@ -44,9 +51,20 @@ export type ColumnsMenuProps = {
    */
   columnOrder?: string[]
   onColumnOrderChange?: (order: string[]) => void
+  /**
+   * Filas por página (opt-in, v0.7.0): con `onPageSizeChange`, el menú pinta
+   * el submenú «Filas por página» › 10 · 25 · 50 · 100 (`LIST_PAGE_SIZES`,
+   * radio con `pageSize` marcado) entre «Modo compacto» y «Restablecer
+   * columnas». Sin él, nada cambia. Elegir un tamaño cierra el menú.
+   */
+  pageSize?: number
+  onPageSizeChange?: (pageSize: number) => void
   /** Textos propios; ganan al `UiProvider`. */
   labels?: Partial<
-    Pick<Labels, 'columnsMenu' | 'columnsReset' | 'compactMode' | 'columnMoveUp' | 'columnMoveDown'>
+    Pick<
+      Labels,
+      'columnsMenu' | 'columnsReset' | 'compactMode' | 'columnMoveUp' | 'columnMoveDown' | 'pageSizeMenu'
+    >
   >
 }
 
@@ -67,7 +85,15 @@ function nodeText(node: React.ReactNode): string {
 // delega en `onReset` (el consumidor limpia ocultas Y anchos guardados). Con
 // `onCompactChange`, además, la casilla «Modo compacto» (no la toca el reset).
 // Con `onColumnOrderChange`, «Subir»/«Bajar» por columna: la vía de teclado
-// para reordenar (en escritorio también se arrastra la cabecera).
+// para reordenar (en escritorio también se arrastra la cabecera). Con
+// `onPageSizeChange`, el submenú «Filas por página» (v0.7.0: el selector salió
+// del pie del listado para vivir aquí).
+//
+// Submenú también en táctil: el `SubTrigger` de Radix abre con `click` (un
+// toque lo dispara) además de con hover de ratón y con →/Enter/Espacio, así que
+// no hace falta un grupo de radio plano para móvil. El `SubContent` va en un
+// portal (sale del `overflow` del menú padre) y con `collisionPadding`: a 390 px
+// no cabe a la derecha del menú y Radix lo voltea a la izquierda.
 export function ColumnsMenu({
   columns,
   hidden,
@@ -78,6 +104,8 @@ export function ColumnsMenu({
   onCompactChange,
   columnOrder,
   onColumnOrderChange,
+  pageSize,
+  onPageSizeChange,
   labels: labelsProp,
 }: ColumnsMenuProps) {
   const labels = useLabels(labelsProp)
@@ -179,6 +207,32 @@ export function ColumnsMenu({
             >
               {labels.compactMode}
             </DropdownMenuCheckboxItem>
+          </>
+        )}
+        {onPageSizeChange && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger data-page-size-menu>{labels.pageSizeMenu}</DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent collisionPadding={8}>
+                  <DropdownMenuRadioGroup
+                    value={pageSize === undefined ? undefined : String(pageSize)}
+                    onValueChange={(v) => onPageSizeChange(Number(v))}
+                  >
+                    {LIST_PAGE_SIZES.map((size) => (
+                      <DropdownMenuRadioItem
+                        key={size}
+                        value={String(size)}
+                        className="tabular-nums"
+                      >
+                        {size}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
           </>
         )}
         <DropdownMenuSeparator />

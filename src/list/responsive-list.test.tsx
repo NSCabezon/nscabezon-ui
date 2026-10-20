@@ -787,6 +787,37 @@ describe('ResponsiveList (modo compacto)', () => {
     })
     expect(onCompactChange).toHaveBeenCalledWith(false)
   })
+
+  it('v0.7.0: pageSize/onPageSizeChange llegan al menú de la cabecera (submenú «Filas por página»)', async () => {
+    const { fireEvent, screen } = await import('@testing-library/react')
+    const onPageSizeChange = vi.fn()
+    render(
+      <ResponsiveList
+        columns={columns}
+        data={rows}
+        rowKey={(r) => r.id}
+        onHiddenColumnsChange={() => {}}
+        onColumnsReset={() => {}}
+        mobileColumnsMenu={false}
+        pageSize={10}
+        onPageSizeChange={onPageSizeChange}
+      />,
+    )
+    const trigger = heads()[heads().length - 1].querySelector('button')!
+    act(() => {
+      fireEvent.keyDown(trigger, { key: 'Enter' })
+    })
+    act(() => {
+      fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Filas por página' }), {
+        key: 'ArrowRight',
+      })
+    })
+    expect(screen.getByRole('menuitemradio', { name: '10' }).getAttribute('aria-checked')).toBe('true')
+    act(() => {
+      fireEvent.click(screen.getByRole('menuitemradio', { name: '100' }))
+    })
+    expect(onPageSizeChange).toHaveBeenCalledWith(100)
+  })
 })
 
 describe('ResponsiveList (orden de columnas)', () => {

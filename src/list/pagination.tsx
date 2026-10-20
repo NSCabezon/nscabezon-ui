@@ -20,6 +20,9 @@ export type PaginationProps = {
 
 // Server-side pagination footer: first/prev, centered "from–to of total" range, next/last.
 // Renders nothing when everything fits on a single page.
+// Flechas `icon-sm` (28×28 px, v0.7.0; antes `sm`, igual de altas y más
+// anchas): con ratón el pie queda bajo; en táctil `buttonVariants` les pone el
+// suelo de 44×44 px.
 export function Pagination({
   page,
   pageSize,
@@ -50,7 +53,7 @@ export function Pagination({
     <div className={cn('flex items-center justify-center gap-1 pt-2', className)}>
       <Button
         variant="outline"
-        size="sm"
+        size="icon-sm"
         disabled={page <= 1}
         onClick={() => onPageChange(1)}
         aria-label={labels.paginationFirst}
@@ -60,7 +63,7 @@ export function Pagination({
       </Button>
       <Button
         variant="outline"
-        size="sm"
+        size="icon-sm"
         disabled={page <= 1}
         onClick={() => onPageChange(page - 1)}
         aria-label={labels.paginationPrev}
@@ -75,7 +78,7 @@ export function Pagination({
       </span>
       <Button
         variant="outline"
-        size="sm"
+        size="icon-sm"
         disabled={page >= lastPage}
         onClick={() => onPageChange(page + 1)}
         aria-label={labels.paginationNext}
@@ -85,7 +88,7 @@ export function Pagination({
       </Button>
       <Button
         variant="outline"
-        size="sm"
+        size="icon-sm"
         disabled={page >= lastPage}
         onClick={() => onPageChange(lastPage)}
         aria-label={labels.paginationLast}

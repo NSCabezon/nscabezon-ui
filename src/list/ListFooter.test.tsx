@@ -53,6 +53,10 @@ function renderFooter(props: Partial<React.ComponentProps<typeof ListFooter>> = 
   })
 }
 
+// Sin menú de columnas (consumidor que no pasa `onHiddenChange`/`onReset`):
+// el selector de filas por página se queda en el pie.
+const noMenu = { onHiddenChange: undefined, onReset: undefined, columns: undefined }
+
 // La navegación es lo que pinta `Pagination`: su fila usa `gap-1`, distinto
 // del `gap-2` del bloque contenedor y del grupo de la derecha.
 const nav = () => container.querySelector('.gap-1')
@@ -75,7 +79,7 @@ const countText = () =>
 
 describe('ListFooter', () => {
   it('con una sola página no pinta navegación, pero sí el selector de filas y el total', () => {
-    renderFooter({ total: 10, pageSize: 25 })
+    renderFooter({ ...noMenu, total: 10, pageSize: 25 })
     expect(nav()).toBeNull()
     // La fila se pinta igual (homogeneiza el alto de todos los listados).
     expect(row().className).toContain('flex')
@@ -105,7 +109,7 @@ describe('ListFooter', () => {
   })
 
   it('el selector va el último (trailing) y conserva su etiqueta accesible', () => {
-    renderFooter({ total: 60 })
+    renderFooter({ ...noMenu, total: 60 })
     const trailing = row().lastElementChild!
     expect(trailing.lastElementChild).toBe(pageSizeTrigger().closest('[role="combobox"]'))
     expect(pageSizeTrigger().hasAttribute('aria-label')).toBe(true)
@@ -192,7 +196,7 @@ describe('ListFooter (auditoría 06/09)', () => {
   })
 
   it('L1: la etiqueta larga del selector también conmuta por contenedor', () => {
-    renderFooter({ total: 60 })
+    renderFooter({ ...noMenu, total: 60 })
     const trigger = pageSizeTrigger()
     const labels = Array.from(trigger.querySelectorAll('span'))
     expect(labels.some((s) => s.className.includes('@md:hidden'))).toBe(true)
@@ -210,10 +214,13 @@ describe('ListFooter (auditoría 06/09)', () => {
     expect(container.querySelector('[role="combobox"]')).toBeNull()
   })
 
-  it('L2/L8: con resultados vuelve el selector y el menú se repliega al corte de contenedor', () => {
+  it('L2/L8: con resultados el menú se repliega al corte de contenedor (y sin menú vuelve el selector)', () => {
     renderFooter({ total: 60 })
-    expect(container.querySelector('[role="combobox"]')).not.toBeNull()
     expect(menuButton()!.className).toContain('@3xl:hidden')
+    // Con menú de columnas el tamaño va en su submenú (v0.7.0): sin selector.
+    expect(container.querySelector('[role="combobox"]')).toBeNull()
+    renderFooter({ ...noMenu, total: 60 })
+    expect(container.querySelector('[role="combobox"]')).not.toBeNull()
   })
 
   it('L2/L8: con 0 resultados Pagination sigue montada (auto-clamp)', () => {
@@ -241,7 +248,7 @@ describe('ListFooter (auditoría 06/09)', () => {
 
 describe('ListFooter (táctil)', () => {
   it('A11Y-7b: el selector de filas por página mide 44 px en puntero táctil', () => {
-    renderFooter({ total: 100, pageSize: 25, page: 1 })
+    renderFooter({ ...noMenu, total: 100, pageSize: 25, page: 1 })
     const cls = pageSizeTrigger().className
     expect(cls).toContain('pointer-coarse:min-h-11')
     expect(cls).toContain('pointer-coarse:min-w-11')
@@ -265,10 +272,6 @@ describe('ListFooter (textos)', () => {
             total={60}
             onPageChange={() => {}}
             onPageSizeChange={() => {}}
-            hidden={[]}
-            onHiddenChange={() => {}}
-            onReset={() => {}}
-            columns={columns}
             labels={{ pageSizeLabel: 'Filas' }}
           />
         </UiProvider>,
@@ -314,5 +317,61 @@ describe('ListFooter (textos)', () => {
       fireEvent.click(screen.getByRole('menuitem', { name: 'Subir Nombre' }))
     })
     expect(onColumnOrderChange).toHaveBeenCalledWith(['name', 'total'])
+  })
+})
+
+describe('ListFooter (filas por página en el menú de columnas, v0.7.0)', () => {
+  it('con menú de columnas no hay selector en el pie y el submenú del menú del pie cambia el tamaño', () => {
+    const onPageSizeChange = vi.fn()
+    renderFooter({ total: 60, pageSize: 25, onPageSizeChange })
+    expect(container.querySelector('[role="combobox"]')).toBeNull()
+    act(() => {
+      fireEvent.keyDown(menuButton()!, { key: 'Enter' })
+    })
+    const sub = screen.getByRole('menuitem', { name: 'Filas por página' })
+    expect(sub.getAttribute('aria-haspopup')).toBe('menu')
+    act(() => {
+      fireEvent.keyDown(sub, { key: 'ArrowRight' })
+    })
+    const radios = screen.getAllByRole('menuitemradio')
+    expect(radios.map((r) => r.textContent)).toEqual(['10', '25', '50', '100'])
+    expect(screen.getByRole('menuitemradio', { name: '25' }).getAttribute('aria-checked')).toBe('true')
+    act(() => {
+      fireEvent.click(screen.getByRole('menuitemradio', { name: '50' }))
+    })
+    expect(onPageSizeChange).toHaveBeenCalledWith(50)
+  })
+
+  it('sin menú de columnas no pinta el botón del menú y el selector sigue en el pie', () => {
+    renderFooter({ ...noMenu, total: 60 })
+    expect(menuButton()).toBeUndefined()
+    expect(container.querySelector('[role="combobox"]')).not.toBeNull()
+  })
+
+  it('con 0 resultados el menú del pie no ofrece filas por página', () => {
+    renderFooter({ total: 0 })
+    act(() => {
+      fireEvent.keyDown(menuButton()!, { key: 'Enter' })
+    })
+    expect(screen.queryByRole('menuitem', { name: 'Filas por página' })).toBeNull()
+  })
+})
+
+describe('ListFooter (pie compacto, v0.7.0)', () => {
+  it('la fila usa poco aire vertical y alinea recuento y botones al centro', () => {
+    renderFooter({ total: 60 })
+    expect(row().className).toContain('pt-1')
+    expect(row().className).not.toContain('pt-2')
+    expect(row().className).toContain('items-center')
+  })
+
+  it('flechas y botón del menú miden 28 px con ratón y conservan el suelo táctil de 44 px', () => {
+    renderFooter({ total: 60, page: 2 })
+    const buttons = [...nav()!.querySelectorAll('button'), menuButton()!]
+    for (const b of buttons) {
+      expect(b.className).toContain('size-7')
+      expect(b.className).toContain('pointer-coarse:min-h-11')
+      expect(b.className).toContain('pointer-coarse:min-w-11')
+    }
   })
 })

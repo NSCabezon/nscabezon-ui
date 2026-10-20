@@ -152,6 +152,19 @@ describe('useListView', () => {
     expect(latest.footerProps.pageSize).toBe(50)
   })
 
+  it('v0.7.0: pageSize/onPageSizeChange viajan en listProps (menú de la cabecera) y en footerProps; cambiarlo vuelve a la página 1', () => {
+    mount()
+    expect(latest.listProps.pageSize).toBe(25)
+    expect(latest.footerProps.pageSize).toBe(25)
+    expect(latest.listProps.onPageSizeChange).toBe(latest.footerProps.onPageSizeChange)
+    act(() => latest.setPage(3))
+    act(() => latest.listProps.onPageSizeChange!(100))
+    expect(latest.page).toBe(1)
+    expect(latest.pageSize).toBe(100)
+    expect(latest.listProps.pageSize).toBe(100)
+    expect(latest.footerProps.pageSize).toBe(100)
+  })
+
   it('changing the sort or a dep goes back to page 1', () => {
     mount()
     act(() => latest.setPage(2))
@@ -224,6 +237,9 @@ describe('useListView (paginated: false)', () => {
     })
     expect('footerProps' in view!).toBe(false)
     expect('page' in view!).toBe(false)
+    // Sin paginación no hay tamaño de página que ofrecer en el menú.
+    expect('pageSize' in view!.listProps).toBe(false)
+    expect('onPageSizeChange' in view!.listProps).toBe(false)
   })
 })
 

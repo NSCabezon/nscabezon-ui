@@ -225,3 +225,157 @@ describe('ColumnsMenu — orden de columnas', () => {
     expect(moveItem('Move Total down')).not.toBeNull()
   })
 })
+
+describe('ColumnsMenu — filas por página (v0.7.0)', () => {
+  function PageSizeHarness({
+    onPageSizeChange,
+    withPageSize = true,
+    onCompactChange,
+  }: {
+    onPageSizeChange?: (n: number) => void
+    withPageSize?: boolean
+    onCompactChange?: (v: boolean) => void
+  }) {
+    const [pageSize, setPageSize] = React.useState(25)
+    const [compact, setCompact] = React.useState(false)
+    const [order, setOrder] = React.useState<string[]>([])
+    return (
+      <ColumnsMenu
+        columns={columns}
+        hidden={[]}
+        onHiddenChange={() => {}}
+        onReset={() => {}}
+        compact={compact}
+        onCompactChange={(v) => {
+          setCompact(v)
+          onCompactChange?.(v)
+        }}
+        columnOrder={order}
+        onColumnOrderChange={setOrder}
+        {...(withPageSize
+          ? {
+              pageSize,
+              onPageSizeChange: (n: number) => {
+                setPageSize(n)
+                onPageSizeChange?.(n)
+              },
+            }
+          : {})}
+      />
+    )
+  }
+
+  const subTrigger = () => screen.queryByRole('menuitem', { name: 'Filas por página' })
+  function openSub() {
+    act(() => {
+      fireEvent.keyDown(subTrigger()!, { key: 'ArrowRight' })
+    })
+  }
+
+  it('sin `onPageSizeChange` no hay submenú', () => {
+    render(<PageSizeHarness withPageSize={false} />)
+    openMenu()
+    expect(subTrigger()).toBeNull()
+  })
+
+  it('con la prop, el submenú va entre «Modo compacto» y «Restablecer columnas»', () => {
+    render(<PageSizeHarness />)
+    openMenu()
+    const sub = subTrigger()!
+    expect(sub.getAttribute('aria-haspopup')).toBe('menu')
+    expect(sub.getAttribute('aria-expanded')).toBe('false')
+    const compact = screen.getByRole('menuitemcheckbox', { name: 'Modo compacto' })
+    const reset = screen.getByRole('menuitem', { name: 'Restablecer columnas' })
+    expect(compact.compareDocumentPosition(sub) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(sub.compareDocumentPosition(reset) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // Separador justo antes del submenú (y otro antes del reset).
+    expect(sub.previousElementSibling?.getAttribute('role')).toBe('separator')
+    expect(reset.previousElementSibling?.getAttribute('role')).toBe('separator')
+  })
+
+  it('→ abre el submenú: 10 · 25 · 50 · 100 con el actual marcado', () => {
+    render(<PageSizeHarness />)
+    openMenu()
+    openSub()
+    expect(subTrigger()!.getAttribute('aria-expanded')).toBe('true')
+    const radios = screen.getAllByRole('menuitemradio')
+    expect(radios.map((r) => r.textContent)).toEqual(['10', '25', '50', '100'])
+    expect(radios.map((r) => r.getAttribute('aria-checked'))).toEqual([
+      'false',
+      'true',
+      'false',
+      'false',
+    ])
+    // ← lo cierra y devuelve el foco al disparador (navegación de Radix).
+    act(() => {
+      fireEvent.keyDown(screen.getByRole('menu', { name: 'Filas por página' }), {
+        key: 'ArrowLeft',
+      })
+    })
+    expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0)
+  })
+
+  it('un toque (click) en el disparador también abre el submenú', () => {
+    render(<PageSizeHarness />)
+    openMenu()
+    act(() => {
+      fireEvent.click(subTrigger()!)
+    })
+    expect(screen.getAllByRole('menuitemradio')).toHaveLength(4)
+  })
+
+  it('elegir un tamaño llama a `onPageSizeChange` con el número (Enter también)', () => {
+    const onPageSizeChange = vi.fn()
+    render(<PageSizeHarness onPageSizeChange={onPageSizeChange} />)
+    openMenu()
+    openSub()
+    act(() => {
+      fireEvent.click(screen.getByRole('menuitemradio', { name: '50' }))
+    })
+    expect(onPageSizeChange).toHaveBeenLastCalledWith(50)
+    openMenu()
+    openSub()
+    expect(screen.getByRole('menuitemradio', { name: '50' }).getAttribute('aria-checked')).toBe(
+      'true',
+    )
+    act(() => {
+      fireEvent.keyDown(screen.getByRole('menuitemradio', { name: '10' }), { key: 'Enter' })
+    })
+    expect(onPageSizeChange).toHaveBeenLastCalledWith(10)
+  })
+
+  it('no rompe compacto ni Subir/Bajar', () => {
+    const onCompactChange = vi.fn()
+    render(<PageSizeHarness onCompactChange={onCompactChange} />)
+    openMenu()
+    act(() => {
+      fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Modo compacto' }))
+    })
+    expect(onCompactChange).toHaveBeenCalledWith(true)
+    act(() => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Bajar Nombre' }))
+    })
+    expect(screen.getAllByRole('menuitemcheckbox').slice(0, 2).map((el) => el.textContent)).toEqual([
+      'Total',
+      'Nombre',
+    ])
+    expect(subTrigger()).not.toBeNull()
+  })
+
+  it('el texto sale de `labels.pageSizeMenu` (UiProvider y prop)', () => {
+    render(
+      <UiProvider labels={{ pageSizeMenu: 'Rows per page' }}>
+        <ColumnsMenu
+          columns={columns}
+          hidden={[]}
+          onHiddenChange={() => {}}
+          onReset={() => {}}
+          pageSize={25}
+          onPageSizeChange={() => {}}
+        />
+      </UiProvider>,
+    )
+    openMenu()
+    expect(screen.getByRole('menuitem', { name: 'Rows per page' })).not.toBeNull()
+  })
+})

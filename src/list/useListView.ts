@@ -60,6 +60,10 @@ export type ListViewListProps = {
   // Orden de columnas del usuario (arrastre de cabeceras + «Subir»/«Bajar»).
   columnOrder: string[]
   onColumnOrderChange: (order: string[]) => void
+  // Solo en modo paginado (v0.7.0): submenú «Filas por página» del menú de
+  // columnas de la cabecera. Cambiarlo vuelve a la página 1.
+  pageSize?: number
+  onPageSizeChange?: (pageSize: number) => void
 }
 
 // Props que `useListView` cablea en `ListFooter` (faltan `total`, que sale de
@@ -166,10 +170,13 @@ export function useListView(
       columnOrder: order,
       onColumnOrderChange: setOrder,
       ...(compactable ? { compact, onCompactChange: setCompact } : {}),
+      ...(paginated ? { pageSize, onPageSizeChange: setPageSize } : {}),
     }),
     [
       order,
       setOrder,
+      pageSize,
+      setPageSize,
       sort,
       setSort,
       widths,

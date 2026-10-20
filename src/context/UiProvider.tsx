@@ -34,6 +34,8 @@ export type Labels = {
   pageSizeLabel: string
   /** «25 por página». */
   pageSizeValue: (count: number) => string
+  /** Submenú «Filas por página» del menú de columnas (v0.7.0). */
+  pageSizeMenu: string
   /** Anuncio sr-only con 0 resultados. */
   noResults: string
   /** Texto sr-only del spinner de carga del pie. */
@@ -73,6 +75,7 @@ export const defaultLabels: Labels = {
     count === 1 ? 'solo el primer resultado' : `solo los primeros ${count} resultados`,
   pageSizeLabel: 'Filas por página',
   pageSizeValue: (count) => `${count} por página`,
+  pageSizeMenu: 'Filas por página',
   noResults: 'Sin resultados',
   loading: 'Cargando…',
   versionMessage: 'Hay una versión nueva de la aplicación',

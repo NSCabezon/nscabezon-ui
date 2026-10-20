@@ -140,6 +140,8 @@ type Labels = {
     pageSizeLabel: string;
     /** «25 por página». */
     pageSizeValue: (count: number) => string;
+    /** Submenú «Filas por página» del menú de columnas (v0.7.0). */
+    pageSizeMenu: string;
     /** Anuncio sr-only con 0 resultados. */
     noResults: string;
     /** Texto sr-only del spinner de carga del pie. */

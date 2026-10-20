@@ -3,6 +3,37 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.7.0] - 2026-10-20
+
+### Añadido
+
+- `ColumnsMenu`: submenú «Filas por página» › 10 · 25 · 50 · 100
+  (`DropdownMenuSub` + `DropdownMenuRadioGroup`, el actual marcado) entre
+  «Modo compacto» y «Restablecer columnas», con separadores. Opt-in con las
+  props nuevas `pageSize?: number` y `onPageSizeChange?: (n) => void`. El
+  submenú va en portal con `collisionPadding` (a 390 px se voltea a la
+  izquierda) y abre con toque, hover, →, Enter o Espacio.
+- `ResponsiveList`: props `pageSize`/`onPageSizeChange`, que pasan al menú de
+  columnas de la cabecera.
+- `useListView` (paginado): `listProps` lleva `pageSize` + `onPageSizeChange`;
+  `footerProps` los pasa también al menú del pie. Cambiar el tamaño vuelve a
+  la página 1, como antes. Con `paginated: false`, nada.
+- Label `pageSizeMenu` en `UiProvider` (por defecto «Filas por página»).
+
+### Cambiado
+
+- `ListFooter`: con menú de columnas (`onHiddenChange` + `onReset`) **ya no
+  pinta el selector de filas por página**: el tamaño se cambia en el submenú
+  del menú de columnas. Sin menú de columnas el selector se queda en el pie.
+  `hidden`, `onHiddenChange`, `onReset` y `columns` pasan a ser opcionales en
+  `ListFooterProps` (sin los dos callbacks no se pinta el menú). Con 0
+  resultados el menú del pie no ofrece el submenú (como antes el selector).
+- Pie del listado más bajo: la fila pasa de `pt-2` a `pt-1` (y `gap-y-1` al
+  envolver), las flechas de `Pagination` de `size="sm"` a `icon-sm` (28×28
+  px) y el botón del menú de columnas del pie a `size-7`. En táctil siguen a
+  44 px (`pointer-coarse:min-h-11 min-w-11` de `buttonVariants`). Recuento y
+  botones siguen centrados en vertical.
+
 ## [0.6.0] - 2026-10-20
 
 ### Cambiado

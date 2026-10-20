@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { CSSProperties } from 'react';
-import { g as ListSort, b as Labels, d as ListPrefs, e as ListPrefsDefaults, f as ListPrefsStore, h as SupabaseLikeClient, i as SupabaseListPrefsStoreOptions } from './UiProvider-gOxGS0QJ.js';
-export { D as DEFAULT_LIST_PAGE_SIZE, E as EMPTY_LIST_PREFS, L as LIST_PAGE_SIZES, a as LIST_PREFS_STORAGE_PREFIX, c as ListPageSize, S as SortDir, m as createSupabaseListPrefsStore, o as isListPageSize, p as listPrefsEqual, q as localOnlyListPrefsStore, r as normalizeListPrefs, s as resolveListDefaults } from './UiProvider-gOxGS0QJ.js';
+import { g as ListSort, b as Labels, d as ListPrefs, e as ListPrefsDefaults, f as ListPrefsStore, h as SupabaseLikeClient, i as SupabaseListPrefsStoreOptions } from './UiProvider-mbEqs2yd.js';
+export { D as DEFAULT_LIST_PAGE_SIZE, E as EMPTY_LIST_PREFS, L as LIST_PAGE_SIZES, a as LIST_PREFS_STORAGE_PREFIX, c as ListPageSize, S as SortDir, m as createSupabaseListPrefsStore, o as isListPageSize, p as listPrefsEqual, q as localOnlyListPrefsStore, r as normalizeListPrefs, s as resolveListDefaults } from './UiProvider-mbEqs2yd.js';
 
 type ResponsiveColumn<T> = {
     key: string;
@@ -48,13 +48,15 @@ type ResponsiveListProps<T> = {
     onCompactChange?: (compact: boolean) => void;
     columnOrder?: string[];
     onColumnOrderChange?: (order: string[]) => void;
+    pageSize?: number;
+    onPageSizeChange?: (pageSize: number) => void;
     stickyHeader?: boolean;
     stickyHeaderTop?: number;
     className?: string;
     labels?: Partial<Labels>;
 };
 declare const TOUCH_TEXT_LINK = "pointer-coarse:-my-3 pointer-coarse:min-h-11 pointer-coarse:py-3 pointer-coarse:-mx-3 pointer-coarse:min-w-11 pointer-coarse:px-3";
-declare function ResponsiveList<T>({ columns, data, rowKey, rowHref, onRowClick, rowHoverProps, leading, isRowSelected, rowClassName, rowStyle, sort, onSortChange, resizable, columnWidths, onColumnWidthsChange, hiddenColumns, onHiddenColumnsChange, onColumnsReset, mobileColumnsMenu, compact, onCompactChange, columnOrder, onColumnOrderChange, stickyHeader, stickyHeaderTop, className, labels: labelsProp, }: ResponsiveListProps<T>): React.JSX.Element;
+declare function ResponsiveList<T>({ columns, data, rowKey, rowHref, onRowClick, rowHoverProps, leading, isRowSelected, rowClassName, rowStyle, sort, onSortChange, resizable, columnWidths, onColumnWidthsChange, hiddenColumns, onHiddenColumnsChange, onColumnsReset, mobileColumnsMenu, compact, onCompactChange, columnOrder, onColumnOrderChange, pageSize, onPageSizeChange, stickyHeader, stickyHeaderTop, className, labels: labelsProp, }: ResponsiveListProps<T>): React.JSX.Element;
 
 type ColumnsMenuColumn = {
     key: string;
@@ -82,10 +84,18 @@ type ColumnsMenuProps = {
      */
     columnOrder?: string[];
     onColumnOrderChange?: (order: string[]) => void;
+    /**
+     * Filas por página (opt-in, v0.7.0): con `onPageSizeChange`, el menú pinta
+     * el submenú «Filas por página» › 10 · 25 · 50 · 100 (`LIST_PAGE_SIZES`,
+     * radio con `pageSize` marcado) entre «Modo compacto» y «Restablecer
+     * columnas». Sin él, nada cambia. Elegir un tamaño cierra el menú.
+     */
+    pageSize?: number;
+    onPageSizeChange?: (pageSize: number) => void;
     /** Textos propios; ganan al `UiProvider`. */
-    labels?: Partial<Pick<Labels, 'columnsMenu' | 'columnsReset' | 'compactMode' | 'columnMoveUp' | 'columnMoveDown'>>;
+    labels?: Partial<Pick<Labels, 'columnsMenu' | 'columnsReset' | 'compactMode' | 'columnMoveUp' | 'columnMoveDown' | 'pageSizeMenu'>>;
 };
-declare function ColumnsMenu({ columns, hidden, onHiddenChange, onReset, className, compact, onCompactChange, columnOrder, onColumnOrderChange, labels: labelsProp, }: ColumnsMenuProps): React.JSX.Element;
+declare function ColumnsMenu({ columns, hidden, onHiddenChange, onReset, className, compact, onCompactChange, columnOrder, onColumnOrderChange, pageSize, onPageSizeChange, labels: labelsProp, }: ColumnsMenuProps): React.JSX.Element;
 
 /** `true` dentro de un `ResponsiveList` en modo compacto; `false` fuera o en modo normal. */
 declare function useListCompact(): boolean;
@@ -273,6 +283,8 @@ type ListViewListProps = {
     onCompactChange?: (compact: boolean) => void;
     columnOrder: string[];
     onColumnOrderChange: (order: string[]) => void;
+    pageSize?: number;
+    onPageSizeChange?: (pageSize: number) => void;
 };
 type ListViewFooterProps = {
     page: number;
@@ -329,9 +341,9 @@ declare function useListView(listKey: string, options: UseListViewOptions & {
     paginated?: true;
 }): ListView;
 
-type ListFooterProps = ListViewFooterProps & {
+type ListFooterProps = Omit<ListViewFooterProps, 'hidden' | 'onHiddenChange' | 'onReset'> & Partial<Pick<ListViewFooterProps, 'hidden' | 'onHiddenChange' | 'onReset'>> & {
     total: number;
-    columns: ColumnsMenuColumn[];
+    columns?: ColumnsMenuColumn[];
     truncated?: boolean;
     loading?: boolean;
     className?: string;
@@ -340,9 +352,20 @@ type ListFooterProps = ListViewFooterProps & {
 };
 /**
  * Pie estándar de un listado (debajo del `ResponsiveList`):
- * recuento/navegación a la izquierda y, al fondo a la derecha, el selector de
- * filas por página. La fila se pinta SIEMPRE, aunque no haya navegación, para
- * que todos los listados midan lo mismo.
+ * recuento/navegación a la izquierda y, al fondo a la derecha, el menú de
+ * columnas (móvil) o el selector de filas por página. La fila se pinta
+ * SIEMPRE, aunque no haya navegación, para que todos los listados midan lo
+ * mismo.
+ *
+ * FILAS POR PÁGINA (v0.7.0): con menú de columnas (`onHiddenChange` +
+ * `onReset`, lo normal con `useListView`) el pie NO pinta selector: el tamaño
+ * vive en el submenú «Filas por página» del `ColumnsMenu` —el de la cabecera
+ * de la tabla en escritorio (`listProps.pageSize`/`onPageSizeChange`) y el del
+ * pie en móvil o con 0 resultados—. Sin menú de columnas (un consumidor que
+ * usa `ListFooter` sin `onHiddenChange`/`onReset`) el selector sigue en el pie
+ * como antes. Ojo si montas el `ResponsiveList` a mano: sin pasarle
+ * `pageSize`/`onPageSizeChange`, en escritorio no habría dónde cambiar el
+ * tamaño.
  *
  * A la izquierda: con más de una página, la propia `Pagination` (rango +
  * flechas); con una sola página, `Pagination` no pinta nada
@@ -397,8 +420,8 @@ type ListFooterProps = ListViewFooterProps & {
  * su `EmptyState` en lugar de la tabla, así que el menú incrustado no existe a
  * ningún ancho y quien ocultó columnas se queda sin «Restablecer columnas». El
  * pie pasa a ser el único acceso y lo enseña a CUALQUIER ancho; a cambio se
- * esconde el selector de filas por página, que no gobierna nada visible y
- * quedaba solo, clavado al fondo del visor.
+ * esconde el control de filas por página (selector o submenú), que no
+ * gobierna nada visible.
  */
 declare function ListFooter({ page, pageSize, total, onPageChange, onPageSizeChange, hidden, onHiddenChange, onReset, compact, onCompactChange, columnOrder, onColumnOrderChange, columns, truncated, loading, className, labels: labelsProp, }: ListFooterProps): React.JSX.Element;
 

@@ -36,9 +36,9 @@ import {
   usePagination,
   useSupabaseListPrefsStore,
   visibleColumnsOf
-} from "./chunk-MJCHTPB6.js";
+} from "./chunk-5KT5VB24.js";
 import "./chunk-6CXBNIIA.js";
-import "./chunk-QPTTCNNI.js";
+import "./chunk-CH6JC77L.js";
 export {
   COLUMN_WIDTH_KEY_ATTR,
   ColumnsMenu,

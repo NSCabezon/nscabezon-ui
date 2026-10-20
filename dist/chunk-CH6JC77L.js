@@ -19,6 +19,7 @@ var defaultLabels = {
   countTruncated: (count) => count === 1 ? "solo el primer resultado" : `solo los primeros ${count} resultados`,
   pageSizeLabel: "Filas por p\xE1gina",
   pageSizeValue: (count) => `${count} por p\xE1gina`,
+  pageSizeMenu: "Filas por p\xE1gina",
   noResults: "Sin resultados",
   loading: "Cargando\u2026",
   versionMessage: "Hay una versi\xF3n nueva de la aplicaci\xF3n",

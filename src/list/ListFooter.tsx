@@ -8,11 +8,13 @@ import { LIST_PAGE_SIZES } from '../prefs/listPrefs'
 import { useLabels, type Labels } from '../context/UiProvider'
 import type { ListViewFooterProps } from './useListView'
 
-export type ListFooterProps = ListViewFooterProps & {
+export type ListFooterProps = Omit<ListViewFooterProps, 'hidden' | 'onHiddenChange' | 'onReset'> &
+  Partial<Pick<ListViewFooterProps, 'hidden' | 'onHiddenChange' | 'onReset'>> & {
   // Total de la consulta (lo único que no sale de `useListView`).
   total: number
-  // Columnas del `ResponsiveList`, para el menú de columnas de móvil.
-  columns: ColumnsMenuColumn[]
+  // Columnas del `ResponsiveList`, para el menú de columnas de móvil. Sin
+  // `onHiddenChange` + `onReset` no hay menú de columnas y no hacen falta.
+  columns?: ColumnsMenuColumn[]
   // `total` no es el total real: la consulta viene recortada por un tope y hay
   // más resultados de los que se enseñan. El recuento lo dice («primeros N»)
   // en vez de mentir con un total cerrado.
@@ -29,9 +31,20 @@ export type ListFooterProps = ListViewFooterProps & {
 
 /**
  * Pie estándar de un listado (debajo del `ResponsiveList`):
- * recuento/navegación a la izquierda y, al fondo a la derecha, el selector de
- * filas por página. La fila se pinta SIEMPRE, aunque no haya navegación, para
- * que todos los listados midan lo mismo.
+ * recuento/navegación a la izquierda y, al fondo a la derecha, el menú de
+ * columnas (móvil) o el selector de filas por página. La fila se pinta
+ * SIEMPRE, aunque no haya navegación, para que todos los listados midan lo
+ * mismo.
+ *
+ * FILAS POR PÁGINA (v0.7.0): con menú de columnas (`onHiddenChange` +
+ * `onReset`, lo normal con `useListView`) el pie NO pinta selector: el tamaño
+ * vive en el submenú «Filas por página» del `ColumnsMenu` —el de la cabecera
+ * de la tabla en escritorio (`listProps.pageSize`/`onPageSizeChange`) y el del
+ * pie en móvil o con 0 resultados—. Sin menú de columnas (un consumidor que
+ * usa `ListFooter` sin `onHiddenChange`/`onReset`) el selector sigue en el pie
+ * como antes. Ojo si montas el `ResponsiveList` a mano: sin pasarle
+ * `pageSize`/`onPageSizeChange`, en escritorio no habría dónde cambiar el
+ * tamaño.
  *
  * A la izquierda: con más de una página, la propia `Pagination` (rango +
  * flechas); con una sola página, `Pagination` no pinta nada
@@ -86,8 +99,8 @@ export type ListFooterProps = ListViewFooterProps & {
  * su `EmptyState` en lugar de la tabla, así que el menú incrustado no existe a
  * ningún ancho y quien ocultó columnas se queda sin «Restablecer columnas». El
  * pie pasa a ser el único acceso y lo enseña a CUALQUIER ancho; a cambio se
- * esconde el selector de filas por página, que no gobierna nada visible y
- * quedaba solo, clavado al fondo del visor.
+ * esconde el control de filas por página (selector o submenú), que no
+ * gobierna nada visible.
  */
 export function ListFooter({
   page,
@@ -117,6 +130,9 @@ export function ListFooter({
   // Sin tabla no hay menú de columnas incrustado: el del pie deja de ser solo
   // para móvil y el selector de filas se retira.
   const isEmpty = total === 0
+  // Con menú de columnas el tamaño de página va en su submenú (v0.7.0) y el
+  // selector del pie sobra; sin menú, el selector se queda aquí.
+  const hasColumnsMenu = !!onHiddenChange && !!onReset
   // Buscar o filtrar cambiaba la lista sin que el
   // lector de pantalla dijera nada. Región `status` SIEMPRE montada (una región
   // viva que aparece junto con su texto no se anuncia de forma fiable) con el
@@ -133,7 +149,9 @@ export function ListFooter({
     <div className={cn('@container', className)}>
       <div
         className={cn(
-          'flex flex-wrap items-center justify-between gap-2 pt-2',
+          // v0.7.0: pie más bajo (pt-2 → pt-1, separación vertical al
+          // envolver gap-y-1). En táctil los botones siguen midiendo 44 px.
+          'flex flex-wrap items-center justify-between gap-x-2 gap-y-1 pt-1',
           '@2xl:grid @2xl:grid-cols-[1fr_auto_1fr]',
         )}
       >
@@ -176,19 +194,25 @@ export function ListFooter({
           </span>
         </div>
         <div className="ml-auto flex items-center gap-2 @2xl:ml-0 @2xl:justify-self-end">
-          <ColumnsMenu
-            className={isEmpty ? undefined : '@3xl:hidden'}
-            columns={columns}
-            hidden={hidden}
-            onHiddenChange={onHiddenChange}
-            onReset={onReset}
-            compact={compact}
-            onCompactChange={onCompactChange}
-            columnOrder={columnOrder}
-            onColumnOrderChange={onColumnOrderChange}
-            labels={labelsProp}
-          />
-          {!isEmpty && (
+          {hasColumnsMenu && (
+            <ColumnsMenu
+              // `size-7` (28 px, como las flechas de `Pagination`) para no
+              // estirar la fila; en táctil el suelo de 44 px del botón sigue.
+              className={cn('size-7', !isEmpty && '@3xl:hidden')}
+              columns={columns ?? []}
+              hidden={hidden ?? []}
+              onHiddenChange={onHiddenChange}
+              onReset={onReset}
+              compact={compact}
+              onCompactChange={onCompactChange}
+              columnOrder={columnOrder}
+              onColumnOrderChange={onColumnOrderChange}
+              pageSize={pageSize}
+              onPageSizeChange={isEmpty ? undefined : onPageSizeChange}
+              labels={labelsProp}
+            />
+          )}
+          {!isEmpty && !hasColumnsMenu && (
             <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
               <SelectTrigger aria-label={label} title={label}
                 className="tabular-nums pointer-coarse:min-h-11 pointer-coarse:min-w-11">
