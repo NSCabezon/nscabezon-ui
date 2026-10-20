@@ -946,3 +946,199 @@ describe('ResponsiveList (orden de columnas)', () => {
     expect(onColumnOrderChange).toHaveBeenCalledWith(['name', 'id', 'total'])
   })
 })
+
+// v0.5.0 · Columna flexible: al arrastrar el borde de una columna solo cambian
+// ella y la flexible (por defecto la `primary` sin `width`); el resto se queda
+// con el ancho que tenía. jsdom no hace layout: se mide con un
+// getBoundingClientRect falso por `data-column-width-key`, y lo que se
+// comprueba es el <colgroup> (lo que manda en table-fixed) y lo que se guarda.
+describe('ResponsiveList (columna flexible)', () => {
+  type FlexRow = { id: number }
+  const flexColumns: ResponsiveColumn<FlexRow>[] = [
+    { key: 'name', header: 'Nombre', cell: () => 'n', primary: true },
+    { key: 'ref', header: 'Ref', cell: () => 'r', width: 100 },
+    { key: 'client', header: 'Cliente', cell: () => 'c' },
+    { key: 'total', header: 'Total', cell: () => 't', width: 90 },
+    { key: 'menu', header: '', cell: () => '⋯', action: true },
+  ]
+  const flexRows: FlexRow[] = [{ id: 1 }]
+  let measured: Record<string, number>
+  const originalRect = HTMLElement.prototype.getBoundingClientRect
+  const originalCapture = Element.prototype.setPointerCapture
+
+  class FakePointerEvent extends MouseEvent {
+    pointerId = 1
+  }
+  beforeEach(() => {
+    measured = { name: 400, ref: 100, client: 200, total: 90, menu: 56 }
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      const key = this.getAttribute('data-column-width-key')
+      return { width: key ? (measured[key] ?? 0) : 0 } as DOMRect
+    }
+    Element.prototype.setPointerCapture = vi.fn()
+  })
+  afterEach(() => {
+    HTMLElement.prototype.getBoundingClientRect = originalRect
+    Element.prototype.setPointerCapture = originalCapture
+  })
+
+  function renderFlex(props: Partial<React.ComponentProps<typeof ResponsiveList<FlexRow>>> = {}) {
+    const onColumnWidthsChange = vi.fn<(w: Record<string, number>) => void>()
+    render(
+      <ResponsiveList
+        columns={flexColumns}
+        data={flexRows}
+        rowKey={(r) => r.id}
+        resizable
+        onColumnWidthsChange={onColumnWidthsChange}
+        {...props}
+      />,
+    )
+    return onColumnWidthsChange
+  }
+  /** Ancho de cada <col> por clave de columna (null = sin ancho: absorbe). */
+  function colWidths(): Record<string, string | null> {
+    const keys = heads().map((th) => th.getAttribute('data-column-width-key')!)
+    const cols = Array.from(table().querySelectorAll('colgroup > col'))
+    return Object.fromEntries(keys.map((k, i) => [k, (cols[i] as HTMLElement).style.width || null]))
+  }
+  function handleOf(key: string) {
+    return heads()
+      .find((th) => th.getAttribute('data-column-width-key') === key)!
+      .querySelector('[data-column-resize-handle]')!
+  }
+  function dragHandle(key: string, dx: number, { release = true } = {}) {
+    const el = handleOf(key)
+    act(() => {
+      el.dispatchEvent(new FakePointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 0 }))
+    })
+    act(() => {
+      el.dispatchEvent(new FakePointerEvent('pointermove', { bubbles: true, clientX: dx }))
+    })
+    if (release) {
+      act(() => {
+        el.dispatchEvent(new FakePointerEvent('pointerup', { bubbles: true, clientX: dx }))
+      })
+    }
+  }
+
+  it('por defecto la flexible es la primary sin `width`: única sin <col> width junto a las autos', () => {
+    renderFlex()
+    expect(colWidths()).toEqual({
+      name: null,
+      ref: '100px',
+      client: null,
+      total: '90px',
+      menu: '56px',
+    })
+  })
+
+  it('arrastrar Ref cambia solo Ref y la flexible; el resto se queda igual (las autos, fijadas en px)', () => {
+    const onChange = renderFlex()
+    dragHandle('ref', 50, { release: false })
+    expect(colWidths()).toEqual({
+      name: null, // absorbe: 400 → 350
+      ref: '150px',
+      client: '200px', // estaba «auto»: se fija en lo que medía
+      total: '90px',
+      menu: '56px',
+    })
+    act(() => {
+      handleOf('ref').dispatchEvent(new FakePointerEvent('pointerup', { bubbles: true, clientX: 50 }))
+    })
+    // Se guarda Ref y la auto fijada; la flexible NUNCA se guarda en px.
+    expect(onChange).toHaveBeenCalledWith({ ref: 150, client: 200 })
+  })
+
+  it('tras guardar, solo la flexible queda sin ancho: es la única que cambia con la ventana', () => {
+    renderFlex({ columnWidths: { ref: 150, client: 200 } })
+    const before = colWidths()
+    expect(before).toEqual({ name: null, ref: '150px', client: '200px', total: '90px', menu: '56px' })
+    // Ventana más estrecha: la tabla mide menos, nada del <colgroup> depende de eso.
+    measured = { ...measured, name: 150 }
+    renderFlex({ columnWidths: { ref: 150, client: 200 } })
+    expect(colWidths()).toEqual(before)
+  })
+
+  it('tope: la flexible no baja de su mínimo (96 px por defecto); la arrastrada deja de crecer', () => {
+    const onChange = renderFlex()
+    dragHandle('ref', 1000)
+    // name medía 400 → puede ceder 400 - 96 = 304.
+    expect(onChange).toHaveBeenCalledWith({ ref: 100 + 304, client: 200 })
+  })
+
+  it('tope con `minWidth` propio de la flexible', () => {
+    const onChange = renderFlex({
+      columns: flexColumns.map((c) => (c.key === 'name' ? { ...c, minWidth: 300 } : c)),
+    })
+    dragHandle('ref', 1000)
+    expect(onChange).toHaveBeenCalledWith({ ref: 200, client: 200 })
+  })
+
+  it('arrastrar la flexible: cambia ella y compensa la última no-action sin `width`', () => {
+    const onChange = renderFlex()
+    dragHandle('name', 50, { release: false })
+    expect(colWidths()).toEqual({
+      name: '450px',
+      ref: '100px',
+      client: null, // compensa: 200 → 150
+      total: '90px',
+      menu: '56px',
+    })
+    act(() => {
+      handleOf('name').dispatchEvent(new FakePointerEvent('pointerup', { bubbles: true, clientX: 50 }))
+    })
+    // La flexible vuelve a ir sin ancho (ocupa lo que sobra = 450); se guarda la que compensó.
+    expect(onChange).toHaveBeenCalledWith({ client: 150 })
+    expect(colWidths().name).toBeNull()
+  })
+
+  it('un ancho guardado para la flexible (prefs antiguas) se ignora y se limpia al guardar', () => {
+    const onChange = renderFlex({ columnWidths: { name: 300 } })
+    expect(colWidths().name).toBeNull()
+    dragHandle('ref', 10)
+    expect(onChange).toHaveBeenCalledWith({ ref: 110, client: 200 })
+  })
+
+  it('`flex: true` elige otra columna; la primary sin `width` pasa a fijarse al arrastrar', () => {
+    const onChange = renderFlex({
+      columns: flexColumns.map((c) => (c.key === 'client' ? { ...c, flex: true } : c)),
+    })
+    dragHandle('ref', 20)
+    expect(onChange).toHaveBeenCalledWith({ ref: 120, name: 400 })
+  })
+
+  it('primary con `width`: la flexible es la primera sin `width`', () => {
+    const onChange = renderFlex({
+      columns: flexColumns.map((c) => (c.key === 'name' ? { ...c, width: 300 } : c)),
+    })
+    expect(colWidths()).toMatchObject({ name: '300px', client: null })
+    dragHandle('ref', 20)
+    expect(onChange).toHaveBeenCalledWith({ ref: 120 })
+  })
+
+  it('doble clic sigue borrando el ancho guardado de la columna', () => {
+    const onChange = renderFlex({ columnWidths: { ref: 150, client: 200 } })
+    act(() => {
+      handleOf('ref').dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+    })
+    expect(onChange).toHaveBeenCalledWith({ client: 200 })
+  })
+
+  it('con orden de columnas y modo compacto: la flexible se sigue eligiendo y absorbe', () => {
+    const onChange = renderFlex({
+      columnOrder: ['ref', 'client', 'name', 'total', 'menu'],
+      onColumnOrderChange: () => {},
+      compact: true,
+    })
+    expect(heads().map((th) => th.getAttribute('data-column-width-key'))).toEqual([
+      'ref',
+      'client',
+      'name',
+      'total',
+      'menu',
+    ])
+    dragHandle('ref', 30)
+    expect(onChange).toHaveBeenCalledWith({ ref: 130, client: 200 })
+  })
+})

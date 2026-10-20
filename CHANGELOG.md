@@ -3,6 +3,38 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.5.0] - 2026-10-20
+
+### Cambiado
+
+- Redimensionar columnas (`resizable`): al arrastrar el borde de una columna
+  ya no se reparten el cambio las demás. Solo cambian la arrastrada y la
+  **columna flexible**; el resto se queda con el ancho que tenía (las que iban
+  sin ancho se fijan en px al empezar y se guardan así al soltar). La tabla
+  sigue llenando el ancho, sin scroll lateral, y al cambiar el ancho de la
+  ventana solo cambia la flexible.
+  - Flexible = la marcada con `flex: true`; si ninguna, la `primary` sin
+    `width`; si no, la primera columna no-`action` sin `width`; si todas
+    tienen `width`, ninguna (comportamiento anterior).
+  - No baja de su `minWidth` (por defecto 96 px): llegado ahí, la arrastrada
+    deja de crecer.
+  - Arrastrar la propia flexible: compensa la última columna no-`action` sin
+    `width` o, si no hay, su vecina de la derecha.
+  - La flexible nunca se guarda en `ListPrefs.widths` (un ancho antiguo para
+    ella se ignora y se limpia al guardar). Doble clic en el asa,
+    «Restablecer columnas», modo compacto y reordenar, igual que antes.
+
+### Añadido
+
+- `ResponsiveColumn.flex` y `ResponsiveColumn.minWidth`.
+- `useColumnResize`: opción `columns` (columnas visibles, en orden) que activa
+  el modo de columna flexible; devuelve además `colWidth(key)` (ancho resuelto
+  para el `<col>`) y `flexKey`. Los `<th>` se miden por
+  `data-column-width-key` (`COLUMN_WIDTH_KEY_ATTR`). Sin `columns`, igual que
+  antes.
+- `resolveFlexColumnKey`, `flexAbsorberKey`, `FLEX_MIN_COLUMN_WIDTH` y el tipo
+  `SizedColumn` exportados (también desde `@nscabezon/ui/storage`).
+
 ## [0.4.0] - 2026-10-20
 
 ### Añadido

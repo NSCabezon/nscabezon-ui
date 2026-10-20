@@ -98,6 +98,40 @@ declare function visibleColumnsOf<C extends {
     key: string;
     primary?: boolean;
 }>(columns: C[], hidden: string[] | undefined): C[];
+/** Ancho mínimo por defecto de la columna flexible, en px (ver `minWidth`). */
+declare const FLEX_MIN_COLUMN_WIDTH = 96;
+/** Lo que las reglas de la columna flexible necesitan saber de cada columna. */
+type SizedColumn = {
+    key: string;
+    width?: number;
+    action?: boolean;
+    header?: unknown;
+    primary?: boolean;
+    flex?: boolean;
+    minWidth?: number;
+};
+/**
+ * Columna flexible de un listado `resizable`: la ÚNICA que gana o pierde
+ * ancho cuando se arrastra otra o cambia el ancho de la ventana. Regla, sobre
+ * las columnas VISIBLES y en orden:
+ * 1. la primera marcada con `flex: true`;
+ * 2. si ninguna, la `primary` si no tiene `width` ni es `action`;
+ * 3. si no, la primera columna no-`action` sin `width`;
+ * 4. si tampoco hay, ninguna (`undefined`): arrastrar cambia solo la columna
+ *    arrastrada y table-fixed reparte la diferencia como antes de v0.5.0.
+ */
+declare function resolveFlexColumnKey(columns: SizedColumn[]): string | undefined;
+/**
+ * Columna que compensa cuando se arrastra la PROPIA flexible: la última
+ * columna no-`action` sin `width` (distinta de la flexible) y, si no hay, la
+ * vecina de la derecha de la flexible (sea cual sea). `undefined` = la
+ * flexible no tiene asa (es la última y no hay con quién compensar).
+ *
+ * Por qué la última sin `width` y no la vecina sin más: una columna sin
+ * `width` es una de texto que el consumidor dejó crecer; las que traen `width`
+ * (importes, fechas, estados) tienen el ancho pensado para su contenido.
+ */
+declare function flexAbsorberKey(columns: SizedColumn[], flexKey: string): string | undefined;
 
 /**
  * Clases de una fila con `rowStyle` en `ResponsiveList` (tabla y tarjeta).
@@ -132,4 +166,4 @@ declare function getLastAuthMethod(storageKey?: string): AuthMethod | null;
 /** Guarda el método. Si no hay storage (modo privado / bloqueado) se ignora: el hint es opcional. */
 declare function setLastAuthMethod(method: AuthMethod, storageKey?: string): void;
 
-export { type AuthMethod, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_LAST_AUTH_METHOD_KEY, DEFAULT_LIST_PAGE_SIZE, EMPTY_LIST_PREFS, LIST_PAGE_SIZES, LIST_PREFS_STORAGE_PREFIX, type ListPageSize, type ListPrefs, type ListPrefsDefaults, type ListSort, type OAuthProvider, type SortDir, TINTED_ROW_CLASS, cn, getLastAuthMethod, isListPageSize, listPrefsEqual, normalizeListPrefs, resolveColumnWidth, resolveListDefaults, rowTone, safeStorage, setLastAuthMethod, visibleColumnsOf };
+export { type AuthMethod, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_LAST_AUTH_METHOD_KEY, DEFAULT_LIST_PAGE_SIZE, EMPTY_LIST_PREFS, FLEX_MIN_COLUMN_WIDTH, LIST_PAGE_SIZES, LIST_PREFS_STORAGE_PREFIX, type ListPageSize, type ListPrefs, type ListPrefsDefaults, type ListSort, type OAuthProvider, type SizedColumn, type SortDir, TINTED_ROW_CLASS, cn, flexAbsorberKey, getLastAuthMethod, isListPageSize, listPrefsEqual, normalizeListPrefs, resolveColumnWidth, resolveFlexColumnKey, resolveListDefaults, rowTone, safeStorage, setLastAuthMethod, visibleColumnsOf };

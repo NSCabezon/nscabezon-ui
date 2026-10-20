@@ -6,7 +6,7 @@ import { ColumnsMenu } from './columns-menu'
 import { ListCompactProvider } from './listCompact'
 import { useColumnResize } from './useColumnResize'
 import { TINTED_ROW_CLASS } from './rowTone'
-import { resolveColumnWidth, visibleColumnsOf } from './columnWidth'
+import { visibleColumnsOf } from './columnWidth'
 import { moveColumn, orderColumns } from './columnOrder'
 import { useLabels, useUi, type Labels } from '../context/UiProvider'
 import type { ListSort, SortDir } from '../prefs/listPrefs'
@@ -62,6 +62,16 @@ export type ResponsiveColumn<T> = {
   // el sobrante). Para que una columna absorba el espacio sobrante de
   // table-fixed, no le pongas `width` — ver la nota junto al <colgroup>.
   width?: number
+  // Columna flexible de `resizable` (v0.5.0): la única que gana o pierde ancho
+  // cuando el usuario arrastra otra columna o cambia el ancho de la ventana;
+  // las demás no se mueven. Sin ninguna marcada: la `primary` si no tiene
+  // `width`; si no, la primera columna no-`action` sin `width` (ver
+  // `resolveFlexColumnKey`). La flexible nunca lleva <col> width (su `width`,
+  // si lo tiene, se ignora) ni se guarda en `columnWidths`.
+  flex?: boolean
+  // Mínimo (px) de la columna FLEXIBLE al arrastrar otra: llegado ahí, la
+  // arrastrada deja de crecer. Por defecto `FLEX_MIN_COLUMN_WIDTH` (96).
+  minWidth?: number
 }
 
 export type ResponsiveListProps<T> = {
@@ -116,7 +126,9 @@ export type ResponsiveListProps<T> = {
   // con un <colgroup> y cada <th> menos el último lleva un asa de arrastre en
   // su borde derecho. `columnWidths` es el mapa persistido (px por `key`);
   // `onColumnWidthsChange` recibe el mapa completo al soltar (mínimo 64px) y
-  // sin esa clave al hacer doble click en el asa.
+  // sin esa clave al hacer doble click en el asa. Desde v0.5.0 la diferencia
+  // de un arrastre la absorbe solo la columna flexible (ver `flex`), que nunca
+  // entra en el mapa.
   resizable?: boolean
   columnWidths?: Record<string, number>
   onColumnWidthsChange?: (widths: Record<string, number>) => void
@@ -216,9 +228,6 @@ export function ResponsiveList<T>({
 }: ResponsiveListProps<T>) {
   const { Link, navigate } = useUi()
   const labels = useLabels(labelsProp)
-  // Redimensión de columnas (asa + ancho en vivo del arrastre): el hook se
-  // exporta aparte para tablas hechas a mano (ver useColumnResize).
-  const { widthOf, resizeHandle } = useColumnResize({ columnWidths, onColumnWidthsChange })
   // Handlers de la fila-enlace. El <Link> de la columna `primary` ya cubre el
   // teclado y el menú contextual; esto es para que el resto de la fila (que no
   // puede ser un <a>: no se puede envolver un <tr>, y un overlay absoluto
@@ -314,13 +323,17 @@ export function ResponsiveList<T>({
     return sort.dir === 'asc' ? 'ascending' : 'descending'
   }
 
-  // Ancho a aplicar en el <colgroup>: ver `resolveColumnWidth`.
-  function colWidth(col: ResponsiveColumn<T>): number | undefined {
-    return resolveColumnWidth(col, widthOf(col.key))
-  }
-
   const orderedColumns = orderColumns(columns, columnOrder)
   const visibleColumns = visibleColumnsOf(orderedColumns, hiddenColumns)
+  // Redimensión de columnas (asa + ancho en vivo del arrastre + columna
+  // flexible): el hook se exporta aparte para tablas hechas a mano (ver
+  // useColumnResize). Recibe las columnas VISIBLES en su orden: la flexible y
+  // la que la compensa se eligen entre ellas.
+  const { colWidth, resizeHandle } = useColumnResize({
+    columnWidths,
+    onColumnWidthsChange,
+    columns: visibleColumns,
+  })
   const mobileColumns = visibleColumns.filter((c) => !c.hideOnMobile)
   const primary = mobileColumns.find((c) => c.primary)
   // TODAS las columnas `action` van al slot superior derecho: con find() solo
@@ -457,16 +470,17 @@ export function ResponsiveList<T>({
             {resizable && (
               <colgroup>
                 {leading && <col style={{ width: 40 }} />}
-                {/* Regla para quien defina `columns`: como mucho UNA columna (lo
-                    suyo es que sea la `primary`) debe quedarse sin `width` — esa
+                {/* Regla para quien defina `columns`: la columna flexible (`flex`,
+                    o por defecto la `primary` sin `width`) va sin <col> width y
                     es la que absorbe el espacio sobrante de table-fixed. Pon
-                    `width` al resto de columnas de datos; las `action` sin
+                    `width` al resto de columnas de datos (las que no lo tengan
+                    se fijan en px al primer arrastre); las `action` sin
                     cabecera (icono suelto) no lo necesitan, ya caen a
                     DEFAULT_ACTION_COLUMN_WIDTH — pero una `action` CON cabecera
                     (botón con texto, p.ej. «Presupuesto de venta») SÍ necesita
                     su `width` explícito o se recorta. */}
                 {visibleColumns.map((col) => {
-                  const width = colWidth(col)
+                  const width = colWidth(col.key)
                   return <col key={col.key} style={width ? { width } : undefined} />
                 })}
                 {columnsMenu && <col style={{ width: 44 }} />}
@@ -501,6 +515,7 @@ export function ResponsiveList<T>({
                       style={stickyHeadStyle}
                       aria-sort={ariaSort(col)}
                       data-column-key={draggable ? col.key : undefined}
+                      data-column-width-key={resizable ? col.key : undefined}
                       data-dragging={dragKey === col.key ? '' : undefined}
                       data-drop={side ?? undefined}
                       {...headDragProps(col)}

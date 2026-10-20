@@ -125,6 +125,20 @@ function resolveColumnWidth(col, stored) {
 function visibleColumnsOf(columns, hidden) {
   return hidden?.length ? columns.filter((c) => c.primary || !hidden.includes(c.key)) : columns;
 }
+var FLEX_MIN_COLUMN_WIDTH = 96;
+function resolveFlexColumnKey(columns) {
+  const marked = columns.find((c) => c.flex);
+  if (marked) return marked.key;
+  const primary = columns.find((c) => c.primary);
+  if (primary && primary.width == null && !primary.action) return primary.key;
+  return columns.find((c) => !c.action && c.width == null)?.key;
+}
+function flexAbsorberKey(columns, flexKey) {
+  const free = columns.filter((c) => c.key !== flexKey && !c.action && c.width == null);
+  if (free.length) return free[free.length - 1].key;
+  const i = columns.findIndex((c) => c.key === flexKey);
+  return i >= 0 ? columns[i + 1]?.key : void 0;
+}
 
 // src/list/rowTone.ts
 var TINT = 12;
@@ -156,15 +170,18 @@ export {
   DEFAULT_LAST_AUTH_METHOD_KEY,
   DEFAULT_LIST_PAGE_SIZE,
   EMPTY_LIST_PREFS,
+  FLEX_MIN_COLUMN_WIDTH,
   LIST_PAGE_SIZES,
   LIST_PREFS_STORAGE_PREFIX,
   TINTED_ROW_CLASS,
   cn,
+  flexAbsorberKey,
   getLastAuthMethod,
   isListPageSize,
   listPrefsEqual,
   normalizeListPrefs,
   resolveColumnWidth,
+  resolveFlexColumnKey,
   resolveListDefaults,
   rowTone,
   safeStorage,

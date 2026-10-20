@@ -1,10 +1,12 @@
 "use client";
 import {
+  COLUMN_WIDTH_KEY_ATTR,
   ColumnsMenu,
   DEFAULT_ACTION_COLUMN_WIDTH,
   DEFAULT_LIST_PAGE_SIZE,
   DEFAULT_PAGE_SIZE,
   EMPTY_LIST_PREFS,
+  FLEX_MIN_COLUMN_WIDTH,
   LIST_PAGE_SIZES,
   LIST_PREFS_STORAGE_PREFIX,
   LIST_PREFS_WIDTHS_DEBOUNCE_MS,
@@ -15,6 +17,7 @@ import {
   TINTED_ROW_CLASS,
   TOUCH_TEXT_LINK,
   createSupabaseListPrefsStore,
+  flexAbsorberKey,
   isListPageSize,
   listPrefsEqual,
   localOnlyListPrefsStore,
@@ -22,6 +25,7 @@ import {
   normalizeListPrefs,
   orderColumns,
   resolveColumnWidth,
+  resolveFlexColumnKey,
   resolveListDefaults,
   rowTone,
   useColumnResize,
@@ -32,15 +36,17 @@ import {
   usePagination,
   useSupabaseListPrefsStore,
   visibleColumnsOf
-} from "./chunk-CU74V7WC.js";
+} from "./chunk-B6CDMP77.js";
 import "./chunk-6CXBNIIA.js";
 import "./chunk-QPTTCNNI.js";
 export {
+  COLUMN_WIDTH_KEY_ATTR,
   ColumnsMenu,
   DEFAULT_ACTION_COLUMN_WIDTH,
   DEFAULT_LIST_PAGE_SIZE,
   DEFAULT_PAGE_SIZE,
   EMPTY_LIST_PREFS,
+  FLEX_MIN_COLUMN_WIDTH,
   LIST_PAGE_SIZES,
   LIST_PREFS_STORAGE_PREFIX,
   LIST_PREFS_WIDTHS_DEBOUNCE_MS,
@@ -51,6 +57,7 @@ export {
   TINTED_ROW_CLASS,
   TOUCH_TEXT_LINK,
   createSupabaseListPrefsStore,
+  flexAbsorberKey,
   isListPageSize,
   listPrefsEqual,
   localOnlyListPrefsStore,
@@ -58,6 +65,7 @@ export {
   normalizeListPrefs,
   orderColumns,
   resolveColumnWidth,
+  resolveFlexColumnKey,
   resolveListDefaults,
   rowTone,
   useColumnResize,

@@ -161,4 +161,77 @@ describe('useColumnResize', () => {
     expect(classes).toContain('before:bg-border')
     expect(classes).not.toMatch(/(^|\s|:)opacity-0/)
   })
+
+  // v0.5.0: una tabla a mano entra en el modo de columna flexible pasando
+  // `columns` y marcando sus <th> con `data-column-width-key`.
+  describe('con `columns` (columna flexible)', () => {
+    const W: Record<string, number> = { desc: 300, qty: 80, price: 100 }
+    function FlexHarness({ onChange }: { onChange: (w: Record<string, number>) => void }) {
+      const { colWidth, resizeHandle, flexKey } = useColumnResize({
+        columnWidths: {},
+        onColumnWidthsChange: onChange,
+        columns: [{ key: 'desc' }, { key: 'qty', width: 80 }, { key: 'price', width: 100 }],
+      })
+      return (
+        <table>
+          <colgroup>
+            {['desc', 'qty', 'price'].map((k) => (
+              <col key={k} data-testid={`col-${k}`} style={{ width: colWidth(k) }} />
+            ))}
+          </colgroup>
+          <thead>
+            <tr data-flex={flexKey}>
+              {['desc', 'qty', 'price'].map((k) => (
+                <th
+                  key={k}
+                  data-column-width-key={k}
+                  ref={(el) => {
+                    if (el) el.getBoundingClientRect = () => ({ width: W[k] }) as DOMRect
+                  }}
+                >
+                  {k}
+                  {resizeHandle(k)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+        </table>
+      )
+    }
+    const colW = (k: string) =>
+      (container.querySelector(`[data-testid="col-${k}"]`) as HTMLElement).style.width
+
+    it('la flexible (primera sin `width`) va sin ancho; arrastrar qty solo la mueve a ella', () => {
+      const onChange = vi.fn()
+      act(() => root.render(<FlexHarness onChange={onChange} />))
+      expect(container.querySelector('tr')!.getAttribute('data-flex')).toBe('desc')
+      expect(colW('desc')).toBe('')
+      const qty = container.querySelectorAll('th')[1].querySelector('span')!
+      act(() => {
+        qty.dispatchEvent(new FakePointerEvent('pointerdown', { button: 0, clientX: 0 }))
+      })
+      act(() => {
+        qty.dispatchEvent(new FakePointerEvent('pointermove', { clientX: 40 }))
+      })
+      expect([colW('desc'), colW('qty'), colW('price')]).toEqual(['', '120px', '100px'])
+      act(() => {
+        qty.dispatchEvent(new FakePointerEvent('pointerup', { clientX: 40 }))
+      })
+      expect(onChange).toHaveBeenCalledWith({ qty: 120 })
+    })
+
+    it('la flexible SIN columna libre compensa con su vecina de la derecha', () => {
+      const onChange = vi.fn()
+      act(() => root.render(<FlexHarness onChange={onChange} />))
+      const desc = container.querySelectorAll('th')[0].querySelector('span')!
+      act(() => {
+        desc.dispatchEvent(new FakePointerEvent('pointerdown', { button: 0, clientX: 0 }))
+      })
+      act(() => {
+        desc.dispatchEvent(new FakePointerEvent('pointerup', { clientX: -50 }))
+      })
+      // desc 300 → 250 (sigue sin guardarse); qty, la vecina, 80 → 130.
+      expect(onChange).toHaveBeenCalledWith({ qty: 130 })
+    })
+  })
 })

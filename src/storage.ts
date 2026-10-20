@@ -19,8 +19,12 @@ export {
 } from './prefs/listPrefs'
 export {
   DEFAULT_ACTION_COLUMN_WIDTH,
+  FLEX_MIN_COLUMN_WIDTH,
+  flexAbsorberKey,
   resolveColumnWidth,
+  resolveFlexColumnKey,
   visibleColumnsOf,
+  type SizedColumn,
 } from './list/columnWidth'
 export { TINTED_ROW_CLASS, rowTone } from './list/rowTone'
 export {

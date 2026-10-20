@@ -8,11 +8,15 @@ export {
 } from './list/responsive-list'
 export { ColumnsMenu, type ColumnsMenuColumn, type ColumnsMenuProps } from './list/columns-menu'
 export { useListCompact } from './list/listCompact'
-export { MIN_COLUMN_WIDTH, useColumnResize } from './list/useColumnResize'
+export { COLUMN_WIDTH_KEY_ATTR, MIN_COLUMN_WIDTH, useColumnResize } from './list/useColumnResize'
 export {
   DEFAULT_ACTION_COLUMN_WIDTH,
+  FLEX_MIN_COLUMN_WIDTH,
+  flexAbsorberKey,
   resolveColumnWidth,
+  resolveFlexColumnKey,
   visibleColumnsOf,
+  type SizedColumn,
 } from './list/columnWidth'
 export { moveColumn, orderColumns } from './list/columnOrder'
 export { TINTED_ROW_CLASS, rowTone } from './list/rowTone'

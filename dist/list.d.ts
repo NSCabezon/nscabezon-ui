@@ -18,6 +18,8 @@ type ResponsiveColumn<T> = {
     headClassName?: string;
     cellClassName?: string;
     width?: number;
+    flex?: boolean;
+    minWidth?: number;
 };
 type ResponsiveListProps<T> = {
     columns: ResponsiveColumn<T>[];
@@ -88,29 +90,6 @@ declare function ColumnsMenu({ columns, hidden, onHiddenChange, onReset, classNa
 /** `true` dentro de un `ResponsiveList` en modo compacto; `false` fuera o en modo normal. */
 declare function useListCompact(): boolean;
 
-/** Ancho mínimo de una columna arrastrable, en px. */
-declare const MIN_COLUMN_WIDTH = 64;
-/**
- * Columnas redimensionables con el ratón: asa en el borde derecho de cada
- * cabecera, doble clic para devolverla a su ancho natural.
- *
- * Vive aparte de `ResponsiveList` porque también lo usan tablas a mano (p. ej.
- * una tabla de líneas con celdas editables). Los anchos se persisten con
- * `useListPrefs` (`setWidths`).
- *
- * Mecánica: pointer events CON captura, así el arrastre sigue aunque el puntero
- * salga de la celda. El ancho inicial, si no hay uno guardado, se mide del
- * propio `<th>`. Mientras se arrastra el ancho vive en el estado local (`drag`)
- * y solo se persiste al soltar: un arrastre son decenas de eventos.
- */
-declare function useColumnResize({ columnWidths, onColumnWidthsChange, }: {
-    columnWidths?: Record<string, number>;
-    onColumnWidthsChange?: (widths: Record<string, number>) => void;
-}): {
-    widthOf: (key: string) => number | undefined;
-    resizeHandle: (columnKey: string) => React.JSX.Element;
-};
-
 declare const DEFAULT_ACTION_COLUMN_WIDTH = 56;
 /**
  * Ancho a aplicar en el <colgroup> de un ResponsiveList `resizable`: lo
@@ -135,6 +114,80 @@ declare function visibleColumnsOf<C extends {
     key: string;
     primary?: boolean;
 }>(columns: C[], hidden: string[] | undefined): C[];
+/** Ancho mínimo por defecto de la columna flexible, en px (ver `minWidth`). */
+declare const FLEX_MIN_COLUMN_WIDTH = 96;
+/** Lo que las reglas de la columna flexible necesitan saber de cada columna. */
+type SizedColumn = {
+    key: string;
+    width?: number;
+    action?: boolean;
+    header?: unknown;
+    primary?: boolean;
+    flex?: boolean;
+    minWidth?: number;
+};
+/**
+ * Columna flexible de un listado `resizable`: la ÚNICA que gana o pierde
+ * ancho cuando se arrastra otra o cambia el ancho de la ventana. Regla, sobre
+ * las columnas VISIBLES y en orden:
+ * 1. la primera marcada con `flex: true`;
+ * 2. si ninguna, la `primary` si no tiene `width` ni es `action`;
+ * 3. si no, la primera columna no-`action` sin `width`;
+ * 4. si tampoco hay, ninguna (`undefined`): arrastrar cambia solo la columna
+ *    arrastrada y table-fixed reparte la diferencia como antes de v0.5.0.
+ */
+declare function resolveFlexColumnKey(columns: SizedColumn[]): string | undefined;
+/**
+ * Columna que compensa cuando se arrastra la PROPIA flexible: la última
+ * columna no-`action` sin `width` (distinta de la flexible) y, si no hay, la
+ * vecina de la derecha de la flexible (sea cual sea). `undefined` = la
+ * flexible no tiene asa (es la última y no hay con quién compensar).
+ *
+ * Por qué la última sin `width` y no la vecina sin más: una columna sin
+ * `width` es una de texto que el consumidor dejó crecer; las que traen `width`
+ * (importes, fechas, estados) tienen el ancho pensado para su contenido.
+ */
+declare function flexAbsorberKey(columns: SizedColumn[], flexKey: string): string | undefined;
+
+/** Ancho mínimo de una columna arrastrable, en px. */
+declare const MIN_COLUMN_WIDTH = 64;
+/** Atributo que marca cada `<th>` medible con la clave de su columna. */
+declare const COLUMN_WIDTH_KEY_ATTR = "data-column-width-key";
+/**
+ * Columnas redimensionables con el ratón: asa en el borde derecho de cada
+ * cabecera, doble clic para devolverla a su ancho natural.
+ *
+ * Vive aparte de `ResponsiveList` porque también lo usan tablas a mano (p. ej.
+ * una tabla de líneas con celdas editables). Los anchos se persisten con
+ * `useListPrefs` (`setWidths`).
+ *
+ * Mecánica: pointer events CON captura, así el arrastre sigue aunque el puntero
+ * salga de la celda. El ancho inicial, si no hay uno guardado, se mide del
+ * propio `<th>`. Mientras se arrastra el ancho vive en el estado local (`drag`)
+ * y solo se persiste al soltar: un arrastre son decenas de eventos.
+ *
+ * Columna flexible (v0.5.0, con `columns`): la tabla llena siempre el ancho y
+ * la diferencia de un arrastre la gana o la pierde SOLO la columna flexible
+ * (ver `resolveFlexColumnKey`); las demás se quedan como estaban (las que iban
+ * sin ancho se fijan en px al empezar, medidas de los `<th>` con
+ * `data-column-width-key`). La flexible nunca se guarda en px: queda sin
+ * ancho y es la única que cambia con el tamaño de la ventana. No baja de su
+ * `minWidth` (o `FLEX_MIN_COLUMN_WIDTH`): llegado ahí, la arrastrada deja de
+ * crecer. Arrastrar la propia flexible lo compensa `flexAbsorberKey`. Sin
+ * `columns` (tablas a mano antiguas) o sin columna flexible, el comportamiento
+ * es el de antes: cambia la arrastrada y table-fixed reparte.
+ */
+declare function useColumnResize({ columnWidths, onColumnWidthsChange, columns, }: {
+    columnWidths?: Record<string, number>;
+    onColumnWidthsChange?: (widths: Record<string, number>) => void;
+    /** Columnas VISIBLES, en orden: activa el modo de columna flexible. */
+    columns?: SizedColumn[];
+}): {
+    widthOf: (key: string) => number | undefined;
+    colWidth: (key: string) => number | undefined;
+    flexKey: string | undefined;
+    resizeHandle: (columnKey: string) => React.JSX.Element | null;
+};
 
 type OrderableColumn = {
     key: string;
@@ -467,4 +520,4 @@ type SupabaseLikeAuthClient = SupabaseLikeClient & {
  */
 declare function useSupabaseListPrefsStore(client: SupabaseLikeAuthClient, { table, onError }?: SupabaseListPrefsStoreOptions): ListPrefsStore;
 
-export { ColumnsMenu, type ColumnsMenuColumn, type ColumnsMenuProps, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_PAGE_SIZE, LIST_PREFS_WIDTHS_DEBOUNCE_MS, ListFooter, type ListFooterProps, ListPrefs, ListPrefsDefaults, ListPrefsStore, ListSort, type ListView, type ListViewDefaults, type ListViewFooterProps, type ListViewListProps, MIN_COLUMN_WIDTH, Pagination, type PaginationProps, type ResponsiveColumn, ResponsiveList, type ResponsiveListProps, type SupabaseLikeAuthClient, SupabaseLikeClient, SupabaseListPrefsStoreOptions, TINTED_ROW_CLASS, TOUCH_TEXT_LINK, type UnpaginatedListView, type UseListPrefsOptions, type UseListPrefsResult, type UseListViewOptions, moveColumn, orderColumns, resolveColumnWidth, rowTone, useColumnResize, useListColumns, useListCompact, useListPrefs, useListView, usePagination, useSupabaseListPrefsStore, visibleColumnsOf };
+export { COLUMN_WIDTH_KEY_ATTR, ColumnsMenu, type ColumnsMenuColumn, type ColumnsMenuProps, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_PAGE_SIZE, FLEX_MIN_COLUMN_WIDTH, LIST_PREFS_WIDTHS_DEBOUNCE_MS, ListFooter, type ListFooterProps, ListPrefs, ListPrefsDefaults, ListPrefsStore, ListSort, type ListView, type ListViewDefaults, type ListViewFooterProps, type ListViewListProps, MIN_COLUMN_WIDTH, Pagination, type PaginationProps, type ResponsiveColumn, ResponsiveList, type ResponsiveListProps, type SizedColumn, type SupabaseLikeAuthClient, SupabaseLikeClient, SupabaseListPrefsStoreOptions, TINTED_ROW_CLASS, TOUCH_TEXT_LINK, type UnpaginatedListView, type UseListPrefsOptions, type UseListPrefsResult, type UseListViewOptions, flexAbsorberKey, moveColumn, orderColumns, resolveColumnWidth, resolveFlexColumnKey, rowTone, useColumnResize, useListColumns, useListCompact, useListPrefs, useListView, usePagination, useSupabaseListPrefsStore, visibleColumnsOf };

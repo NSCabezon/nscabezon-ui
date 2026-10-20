@@ -13,7 +13,7 @@ hay `prepare`: instalar no compila nada).
 | Área | Exportaciones |
 | --- | --- |
 | Integración | `UiProvider`, `useUi`, `useLabels`, `defaultLabels`, tipos `Labels`, `UiLinkProps` |
-| Listados | `ResponsiveList` (tabla en escritorio / tarjetas en móvil, orden servidor, anchos arrastrables, columnas ocultas, cabecera fija, filas teñidas, `rowHref`, modo compacto, columnas reordenables), `ColumnsMenu`, `useListCompact`, `orderColumns`, `moveColumn`, `useColumnResize`, `MIN_COLUMN_WIDTH`, `TOUCH_TEXT_LINK`, `rowTone`, `TINTED_ROW_CLASS`, `resolveColumnWidth`, `visibleColumnsOf`, `DEFAULT_ACTION_COLUMN_WIDTH` |
+| Listados | `ResponsiveList` (tabla en escritorio / tarjetas en móvil, orden servidor, anchos arrastrables, columnas ocultas, cabecera fija, filas teñidas, `rowHref`, modo compacto, columnas reordenables), `ColumnsMenu`, `useListCompact`, `orderColumns`, `moveColumn`, `useColumnResize`, `MIN_COLUMN_WIDTH`, `TOUCH_TEXT_LINK`, `rowTone`, `TINTED_ROW_CLASS`, `resolveColumnWidth`, `visibleColumnsOf`, `DEFAULT_ACTION_COLUMN_WIDTH`, `resolveFlexColumnKey`, `flexAbsorberKey`, `FLEX_MIN_COLUMN_WIDTH`, `COLUMN_WIDTH_KEY_ATTR` |
 | Paginación | `Pagination`, `usePagination`, `DEFAULT_PAGE_SIZE`, `ListFooter` |
 | Estado de listado | `useListView` (preferencias + paginación, `paginated: false` y `compactable` opcionales), `useListColumns` (solo columnas), `useListPrefs` |
 | Preferencias | `ListPrefs`, `ListSort`, `normalizeListPrefs`, `listPrefsEqual`, `resolveListDefaults`, `LIST_PAGE_SIZES`, `DEFAULT_LIST_PAGE_SIZE`, `EMPTY_LIST_PREFS`, almacenes `useSupabaseListPrefsStore` (hook que sigue la sesión), `createSupabaseListPrefsStore` y `localOnlyListPrefsStore` |
@@ -238,9 +238,32 @@ const view = useListView('orders', {
   puede ir en cualquier posición de la tabla, pero en móvil sigue siendo el
   título de la tarjeta (el `<dl>` sí sigue el orden). `view.order` da el orden
   guardado; `orderColumns(columns, order)` lo aplica en una tabla a mano.
-- Regla de anchos con `resizable`: como mucho UNA columna (lo normal, la
-  `primary`) sin `width`; una `action` con botón de texto necesita `width` o
-  `header` (sin ellos cae a 56 px).
+- Regla de anchos con `resizable`: la tabla llena siempre el ancho (sin
+  scroll lateral) y el espacio que sobra o falta lo absorbe UNA columna, la
+  **flexible**. Al arrastrar el borde de una columna solo cambian ella y la
+  flexible; las demás no se mueven (las que iban sin ancho se fijan en px al
+  empezar el arrastre y se guardan así). Al cambiar el ancho de la ventana
+  solo cambia la flexible: nunca se guarda en px (un ancho guardado para ella
+  se ignora y se limpia).
+  - Cuál es (`resolveFlexColumnKey`, entre las columnas visibles): la marcada
+    con `flex: true`; si ninguna, la `primary` si no tiene `width`; si no, la
+    primera columna no-`action` sin `width`. Si todas tienen `width`, no hay
+    flexible y arrastrar cambia solo la arrastrada (table-fixed reparte, como
+    antes de v0.5.0).
+  - Mínimo: la flexible no baja de su `minWidth` (por defecto
+    `FLEX_MIN_COLUMN_WIDTH`, 96 px); llegado ahí, la arrastrada deja de
+    crecer. Las demás, de `MIN_COLUMN_WIDTH` (64 px).
+  - Arrastrar la propia flexible (`flexAbsorberKey`): compensa la última
+    columna no-`action` sin `width`; si no hay, su vecina de la derecha. Al
+    soltar se guarda la que compensó y la flexible vuelve a ir sin ancho.
+  - Lo normal: `width` en todas las columnas de datos salvo la de texto
+    principal. Una `action` con botón de texto necesita `width` o `header`
+    (sin ellos cae a 56 px). Doble clic en el asa y «Restablecer columnas»
+    devuelven los anchos de serie.
+  - Tabla a mano: `useColumnResize({ columnWidths, onColumnWidthsChange,
+    columns })` con las columnas visibles en orden, `colWidth(key)` en cada
+    `<col>` y `data-column-width-key={key}` en cada `<th>` (de ahí se miden).
+    Sin `columns`, el hook se comporta como antes.
 
 ## Preferencias de listado
 

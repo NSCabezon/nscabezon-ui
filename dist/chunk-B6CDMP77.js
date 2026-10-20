@@ -266,18 +266,78 @@ function useListCompact() {
 
 // src/list/useColumnResize.tsx
 import * as React4 from "react";
+
+// src/list/columnWidth.ts
+var DEFAULT_ACTION_COLUMN_WIDTH = 56;
+function resolveColumnWidth(col, stored) {
+  return stored ?? col.width ?? (col.action && !col.header ? DEFAULT_ACTION_COLUMN_WIDTH : void 0);
+}
+function visibleColumnsOf(columns, hidden) {
+  return hidden?.length ? columns.filter((c) => c.primary || !hidden.includes(c.key)) : columns;
+}
+var FLEX_MIN_COLUMN_WIDTH = 96;
+function resolveFlexColumnKey(columns) {
+  const marked = columns.find((c) => c.flex);
+  if (marked) return marked.key;
+  const primary = columns.find((c) => c.primary);
+  if (primary && primary.width == null && !primary.action) return primary.key;
+  return columns.find((c) => !c.action && c.width == null)?.key;
+}
+function flexAbsorberKey(columns, flexKey) {
+  const free = columns.filter((c) => c.key !== flexKey && !c.action && c.width == null);
+  if (free.length) return free[free.length - 1].key;
+  const i = columns.findIndex((c) => c.key === flexKey);
+  return i >= 0 ? columns[i + 1]?.key : void 0;
+}
+
+// src/list/useColumnResize.tsx
 import { jsx as jsx3 } from "react/jsx-runtime";
 var MIN_COLUMN_WIDTH = 64;
+var COLUMN_WIDTH_KEY_ATTR = "data-column-width-key";
+function measureRow(th) {
+  const out = {};
+  for (const cell of Array.from(th?.parentElement?.children ?? [])) {
+    const key = cell.getAttribute(COLUMN_WIDTH_KEY_ATTR);
+    if (!key) continue;
+    const w = cell.getBoundingClientRect().width;
+    if (w > 0) out[key] = w;
+  }
+  return out;
+}
 function useColumnResize({
   columnWidths,
-  onColumnWidthsChange
+  onColumnWidthsChange,
+  columns
 }) {
   const [drag, setDrag] = React4.useState(null);
   const dragRef = React4.useRef(null);
+  const flexKey = columns ? resolveFlexColumnKey(columns) : void 0;
+  const flexCol = flexKey ? columns?.find((c) => c.key === flexKey) : void 0;
+  const flexMin = flexCol?.minWidth ?? FLEX_MIN_COLUMN_WIDTH;
+  const absorberKey = columns && flexKey ? flexAbsorberKey(columns, flexKey) : void 0;
+  function baseWidth(key) {
+    if (key === flexKey) return void 0;
+    const col = columns?.find((c) => c.key === key);
+    return col ? resolveColumnWidth(col, columnWidths?.[key]) : columnWidths?.[key];
+  }
   function widthOf(key) {
-    return drag?.key === key ? drag.px : columnWidths?.[key];
+    return drag?.widths[key] ?? columnWidths?.[key];
+  }
+  function colWidth(key) {
+    if (drag) {
+      if (key in drag.widths) return drag.widths[key];
+      if (key === drag.autoKey) return void 0;
+    }
+    return baseWidth(key);
+  }
+  function clamp(d, clientX) {
+    return Math.round(Math.max(d.min, Math.min(d.max, d.startW + clientX - d.startX)));
+  }
+  function liveWidths(d, px) {
+    return { ...d.pinned, [d.key]: px };
   }
   function resizeHandle(columnKey) {
+    if (flexKey && columnKey === flexKey && !absorberKey) return null;
     return /* @__PURE__ */ jsx3(
       "span",
       {
@@ -287,27 +347,64 @@ function useColumnResize({
         onPointerDown: (e) => {
           if (e.button !== 0) return;
           const th = e.currentTarget.parentElement;
-          const startW = columnWidths?.[columnKey] ?? th?.getBoundingClientRect().width ?? 0;
+          const measured = flexKey ? measureRow(th) : {};
+          const isFlex = !!flexKey && columnKey === flexKey;
+          const startW = (isFlex ? measured[columnKey] : columnWidths?.[columnKey] ?? measured[columnKey]) ?? th?.getBoundingClientRect().width ?? 0;
+          const d = {
+            key: columnKey,
+            startX: e.clientX,
+            startW,
+            min: isFlex ? flexMin : MIN_COLUMN_WIDTH,
+            max: Infinity,
+            pinned: {}
+          };
+          if (flexKey && columns) {
+            const partnerKey = isFlex ? absorberKey : flexKey;
+            const partnerStart = measured[partnerKey] ?? (isFlex ? baseWidth(partnerKey) : void 0);
+            const partnerMin = isFlex ? MIN_COLUMN_WIDTH : flexMin;
+            d.partner = { key: partnerKey, startW: partnerStart };
+            if (partnerStart != null) d.max = startW + Math.max(0, partnerStart - partnerMin);
+            for (const c of columns) {
+              if (c.key === columnKey || c.key === flexKey || c.key === partnerKey) continue;
+              if (baseWidth(c.key) == null && measured[c.key] != null) {
+                d.pinned[c.key] = Math.round(measured[c.key]);
+              }
+            }
+          }
           e.currentTarget.setPointerCapture(e.pointerId);
-          dragRef.current = { key: columnKey, startX: e.clientX, startW };
-          setDrag({ key: columnKey, px: Math.max(MIN_COLUMN_WIDTH, Math.round(startW)) });
+          dragRef.current = d;
+          setDrag({
+            key: columnKey,
+            widths: liveWidths(d, clamp(d, e.clientX)),
+            autoKey: d.partner?.key
+          });
           e.preventDefault();
         },
         onPointerMove: (e) => {
           const d = dragRef.current;
           if (!d) return;
-          setDrag({
-            key: d.key,
-            px: Math.max(MIN_COLUMN_WIDTH, Math.round(d.startW + e.clientX - d.startX))
-          });
+          setDrag({ key: d.key, widths: liveWidths(d, clamp(d, e.clientX)), autoKey: d.partner?.key });
         },
         onPointerUp: (e) => {
           const d = dragRef.current;
           if (!d) return;
-          const px = Math.max(MIN_COLUMN_WIDTH, Math.round(d.startW + e.clientX - d.startX));
+          const px = clamp(d, e.clientX);
           dragRef.current = null;
           setDrag(null);
-          onColumnWidthsChange?.({ ...columnWidths, [d.key]: px });
+          if (!flexKey) {
+            onColumnWidthsChange?.({ ...columnWidths, [d.key]: px });
+            return;
+          }
+          const next = { ...columnWidths, ...d.pinned };
+          delete next[flexKey];
+          if (d.key !== flexKey) next[d.key] = px;
+          else if (d.partner?.startW != null) {
+            next[d.partner.key] = Math.max(
+              MIN_COLUMN_WIDTH,
+              Math.round(d.partner.startW - (px - d.startW))
+            );
+          }
+          onColumnWidthsChange?.(next);
         },
         onPointerCancel: () => {
           dragRef.current = null;
@@ -322,7 +419,7 @@ function useColumnResize({
       }
     );
   }
-  return { widthOf, resizeHandle };
+  return { widthOf, colWidth, flexKey, resizeHandle };
 }
 
 // src/list/rowTone.ts
@@ -335,15 +432,6 @@ function rowTone(color) {
     "--row-tint": `color-mix(in oklab, ${color} ${TINT}%, transparent)`,
     "--row-tint-hover": `color-mix(in oklab, ${color} ${TINT_HOVER}%, transparent)`
   };
-}
-
-// src/list/columnWidth.ts
-var DEFAULT_ACTION_COLUMN_WIDTH = 56;
-function resolveColumnWidth(col, stored) {
-  return stored ?? col.width ?? (col.action && !col.header ? DEFAULT_ACTION_COLUMN_WIDTH : void 0);
-}
-function visibleColumnsOf(columns, hidden) {
-  return hidden?.length ? columns.filter((c) => c.primary || !hidden.includes(c.key)) : columns;
 }
 
 // src/primitives/table.tsx
@@ -460,7 +548,6 @@ function ResponsiveList({
 }) {
   const { Link, navigate } = useUi();
   const labels = useLabels(labelsProp);
-  const { widthOf, resizeHandle } = useColumnResize({ columnWidths, onColumnWidthsChange });
   function rowNavProps(href) {
     if (!href) return {};
     return {
@@ -525,11 +612,13 @@ function ResponsiveList({
     if (sort?.key !== col.key) return "none";
     return sort.dir === "asc" ? "ascending" : "descending";
   }
-  function colWidth(col) {
-    return resolveColumnWidth(col, widthOf(col.key));
-  }
   const orderedColumns = orderColumns(columns, columnOrder);
   const visibleColumns = visibleColumnsOf(orderedColumns, hiddenColumns);
+  const { colWidth, resizeHandle } = useColumnResize({
+    columnWidths,
+    onColumnWidthsChange,
+    columns: visibleColumns
+  });
   const mobileColumns = visibleColumns.filter((c) => !c.hideOnMobile);
   const primary = mobileColumns.find((c) => c.primary);
   const actions = mobileColumns.filter((c) => c.action);
@@ -627,7 +716,7 @@ function ResponsiveList({
             resizable && /* @__PURE__ */ jsxs3("colgroup", { children: [
               leading && /* @__PURE__ */ jsx5("col", { style: { width: 40 } }),
               visibleColumns.map((col) => {
-                const width = colWidth(col);
+                const width = colWidth(col.key);
                 return /* @__PURE__ */ jsx5("col", { style: width ? { width } : void 0 }, col.key);
               }),
               columnsMenu && /* @__PURE__ */ jsx5("col", { style: { width: 44 } })
@@ -656,6 +745,7 @@ function ResponsiveList({
                     style: stickyHeadStyle,
                     "aria-sort": ariaSort(col),
                     "data-column-key": draggable ? col.key : void 0,
+                    "data-column-width-key": resizable ? col.key : void 0,
                     "data-dragging": dragKey === col.key ? "" : void 0,
                     "data-drop": side ?? void 0,
                     ...headDragProps(col),
@@ -1642,13 +1732,17 @@ export {
   moveColumn,
   ColumnsMenu,
   useListCompact,
-  MIN_COLUMN_WIDTH,
-  useColumnResize,
-  TINTED_ROW_CLASS,
-  rowTone,
   DEFAULT_ACTION_COLUMN_WIDTH,
   resolveColumnWidth,
   visibleColumnsOf,
+  FLEX_MIN_COLUMN_WIDTH,
+  resolveFlexColumnKey,
+  flexAbsorberKey,
+  MIN_COLUMN_WIDTH,
+  COLUMN_WIDTH_KEY_ATTR,
+  useColumnResize,
+  TINTED_ROW_CLASS,
+  rowTone,
   TOUCH_TEXT_LINK,
   ResponsiveList,
   Pagination,
