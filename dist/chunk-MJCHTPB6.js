@@ -643,7 +643,10 @@ function ResponsiveList({
   ) : null;
   const compactCellClass = compact ? "whitespace-nowrap overflow-hidden text-ellipsis" : void 0;
   const compactHeadClass = compact ? "whitespace-nowrap" : void 0;
-  const menuHeadStyle = { ...stickyHeadStyle, right: 0 };
+  const menuInHead = !!columnsMenu;
+  const menuOutsideScroll = menuInHead && !stickyHeader;
+  const lastVisibleCol = visibleColumns[visibleColumns.length - 1];
+  const lastHeadPad = menuInHead && !!lastVisibleCol && !(lastVisibleCol.action && !lastVisibleCol.header);
   const reorderable = !!onColumnOrderChange;
   const [dragKey, setDragKey] = React6.useState(null);
   const [overKey, setOverKey] = React6.useState(null);
@@ -662,7 +665,9 @@ function ResponsiveList({
     return {
       draggable: true,
       onPointerDown: (e) => {
-        resizingRef.current = !!e.target.closest?.("[data-column-resize-handle]");
+        resizingRef.current = !!e.target.closest?.(
+          "[data-column-resize-handle],[data-list-columns-menu-head]"
+        );
       },
       onDragStart: (e) => {
         if (resizingRef.current) {
@@ -703,10 +708,10 @@ function ResponsiveList({
     // Midiendo el contenedor, una lista metida en una tarjeta estrecha también
     // acierta — el caso de las sedes en Ajustes → Taller, con 302 px.
     /* @__PURE__ */ jsx5(ListCompactProvider, { value: compact, children: /* @__PURE__ */ jsxs3("div", { className: cn("@container", className), children: [
-      /* @__PURE__ */ jsx5("div", { className: "hidden @3xl:block", children: /* @__PURE__ */ jsxs3(
+      /* @__PURE__ */ jsx5("div", { className: cn("hidden @3xl:block", menuOutsideScroll && "relative"), children: /* @__PURE__ */ jsxs3(
         Table,
         {
-          containerClassName: stickyHeader ? "overflow-visible" : void 0,
+          containerClassName: stickyHeader ? "overflow-visible" : menuOutsideScroll ? "static overflow-x-auto" : void 0,
           "data-compact": compact ? "" : void 0,
           className: cn(
             stickyHeader && "border-separate border-spacing-0 [&_tbody_td]:border-b [&_tbody_tr:last-child_td]:border-b-0",
@@ -718,14 +723,15 @@ function ResponsiveList({
               visibleColumns.map((col) => {
                 const width = colWidth(col.key);
                 return /* @__PURE__ */ jsx5("col", { style: width ? { width } : void 0 }, col.key);
-              }),
-              columnsMenu && /* @__PURE__ */ jsx5("col", { style: { width: 44 } })
+              })
             ] }),
             /* @__PURE__ */ jsx5(TableHeader, { className: stickyHeader ? "[&_tr]:border-b-0" : void 0, children: /* @__PURE__ */ jsxs3(TableRow, { className: stickyHeader ? "hover:bg-transparent" : void 0, children: [
               leading && /* @__PURE__ */ jsx5(TableHead, { className: cn("w-10", stickyHeadClass), style: stickyHeadStyle, children: /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.selectColumn }) }),
               visibleColumns.map((col) => {
                 const draggable = reorderable && !col.action;
                 const side = draggable ? dropSide(col.key) : null;
+                const isLast = col.key === lastVisibleKey;
+                const staticHead = isLast && menuOutsideScroll;
                 return /* @__PURE__ */ jsxs3(
                   TableHead,
                   {
@@ -733,14 +739,16 @@ function ResponsiveList({
                       // `relative` ANTES de `sticky` (stickyHeadClass): con las
                       // dos, tailwind-merge se queda con la última y sticky es
                       // también contenedor del asa absoluta (y del indicador).
-                      (resizable || draggable) && "relative",
+                      (resizable || draggable) && !staticHead && "relative",
                       fixedCellClass,
                       col.sortable && onSortChange && "group",
                       draggable && "cursor-grab active:cursor-grabbing",
                       dragKey === col.key && "opacity-50",
                       col.headClassName,
                       compactHeadClass,
-                      stickyHeadClass
+                      stickyHeadClass,
+                      isLast && lastHeadPad && "pr-10",
+                      staticHead && side && (side === "before" ? "shadow-[inset_2px_0_0_var(--color-primary)]" : "shadow-[inset_-2px_0_0_var(--color-primary)]")
                     ),
                     style: stickyHeadStyle,
                     "aria-sort": ariaSort(col),
@@ -751,7 +759,7 @@ function ResponsiveList({
                     ...headDragProps(col),
                     children: [
                       renderHead(col),
-                      side && /* @__PURE__ */ jsx5(
+                      side && !staticHead && /* @__PURE__ */ jsx5(
                         "span",
                         {
                           "aria-hidden": true,
@@ -763,26 +771,22 @@ function ResponsiveList({
                         }
                       ),
                       col.action && !col.header && /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.actionsColumn }),
-                      resizable && col.key !== lastVisibleKey && resizeHandle(col.key)
+                      resizable && !isLast && resizeHandle(col.key),
+                      isLast && columnsMenu && /* @__PURE__ */ jsx5(
+                        "div",
+                        {
+                          "data-list-columns-menu-head": true,
+                          className: "absolute top-0 right-0 z-20 flex h-10 cursor-auto items-center bg-background px-1",
+                          onDragOver: (e) => e.stopPropagation(),
+                          onDrop: (e) => e.stopPropagation(),
+                          children: columnsMenu
+                        }
+                      )
                     ]
                   },
                   col.key
                 );
-              }),
-              columnsMenu && /* @__PURE__ */ jsxs3(
-                TableHead,
-                {
-                  className: cn(
-                    "sticky z-20 w-11 bg-background p-0 text-center",
-                    stickyHeader && "border-b"
-                  ),
-                  style: menuHeadStyle,
-                  children: [
-                    /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.columnsMenu }),
-                    columnsMenu
-                  ]
-                }
-              )
+              })
             ] }) }),
             /* @__PURE__ */ jsx5(TableBody, { children: data.map((row) => {
               const href = rowHref?.(row);
@@ -834,8 +838,7 @@ function ResponsiveList({
                         children: renderCell(col, row, href)
                       },
                       col.key
-                    )),
-                    columnsMenu && /* @__PURE__ */ jsx5(TableCell, { className: "p-0" })
+                    ))
                   ]
                 },
                 rowKey(row)

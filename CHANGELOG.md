@@ -3,6 +3,31 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.6.0] - 2026-10-20
+
+### Cambiado
+
+- `ResponsiveList`: el botón del menú de columnas ya **no es una columna**.
+  Antes era una columna fija a la derecha (`<col>` de 44 px, `<th>` sticky y
+  una celda vacía en cada fila) que reservaba ancho en toda la tabla y se lo
+  quitaba a las de datos (en tablas justas se cortaban los estados). Ahora:
+  - Sin `<col>` propio ni `<td>` vacíos; el colgroup, la columna flexible y
+    las mediciones (`data-column-width-key`) solo cuentan columnas de datos.
+  - El botón va dentro de la última `<th>` visible, posicionado `absolute`
+    en el borde derecho de la cabecera, con fondo opaco. Esa `<th>` (solo
+    la cabecera, nunca las celdas) lleva `pr-10` para que el botón no tape
+    el texto ni la flecha de orden, salvo que sea una `action` sin cabecera.
+  - Con `stickyHeader` viaja con la cabecera fija. Sin ella, la última `<th>`
+    y el contenedor de scroll quedan sin posicionar y el botón se ancla al
+    envoltorio de fuera del scroll: se queda en la esquina derecha visible
+    aunque la tabla scrollee a lo ancho. El indicador de arrastre de esa
+    `<th>` pasa a ser una sombra interior.
+  - Mantiene su `aria-label` y en el Tab va detrás de las cabeceras
+    ordenables. No arrastra la cabecera ni es zona de soltar.
+  - Se quita el `<span class="sr-only">` de la antigua columna (el botón ya
+    se nombra con su `aria-label`).
+  - Móvil (tarjetas) y `ListFooter`, sin cambios.
+
 ## [0.5.0] - 2026-10-20
 
 ### Cambiado

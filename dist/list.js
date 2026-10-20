@@ -36,7 +36,7 @@ import {
   usePagination,
   useSupabaseListPrefsStore,
   visibleColumnsOf
-} from "./chunk-B6CDMP77.js";
+} from "./chunk-MJCHTPB6.js";
 import "./chunk-6CXBNIIA.js";
 import "./chunk-QPTTCNNI.js";
 export {

@@ -136,10 +136,10 @@ export type ResponsiveListProps<T> = {
   // La columna `primary` nunca se oculta.
   hiddenColumns?: string[]
   // Menú de columnas incrustado (opt-in): con AMBOS callbacks, la tabla de
-  // escritorio pinta una columna extra al final con el `ColumnsMenu` dentro.
-  // Esa columna no se guarda, no ordena y no se puede ocultar a sí misma; en
-  // móvil no hay cabecera: el menú va encima de las tarjetas (ver
-  // `mobileColumnsMenu`).
+  // escritorio superpone el botón del `ColumnsMenu` en el borde derecho de la
+  // cabecera (desde v0.6.0 NO es una columna: no ocupa ancho ni pinta celdas
+  // en el cuerpo). En móvil no hay cabecera: el menú va encima de las
+  // tarjetas (ver `mobileColumnsMenu`).
   onHiddenColumnsChange?: (hidden: string[]) => void
   onColumnsReset?: () => void
   // En móvil (cards) pinta el menú de columnas encima de las tarjetas,
@@ -161,7 +161,7 @@ export type ResponsiveListProps<T> = {
   // Orden de columnas del usuario (opt-in). `columnOrder` (claves; `[]` = el
   // de `columns`) se aplica a tabla, <colgroup> y <dl> de la tarjeta móvil; el
   // título de la tarjeta sigue siendo la `primary`. Las `action` (y la columna
-  // del menú) no se mueven. Con `onColumnOrderChange`, en escritorio se
+  // (y el botón del menú) no se mueven. Con `onColumnOrderChange`, en escritorio se
   // arrastra la cabecera para mover la columna (HTML5 drag and drop) y el menú
   // de columnas ofrece «Subir»/«Bajar» (la vía de teclado). El callback recibe
   // todas las claves de `columns` en el orden nuevo.
@@ -375,12 +375,25 @@ export function ResponsiveList<T>({
   // `cn()` (tailwind-merge) para ganar a un `whitespace-normal` suyo.
   const compactCellClass = compact ? 'whitespace-nowrap overflow-hidden text-ellipsis' : undefined
   const compactHeadClass = compact ? 'whitespace-nowrap' : undefined
-  // La celda del menú va `sticky right-0`: con `resizable` la tabla puede
-  // scrollear a lo ancho y el botón se perdería fuera de pantalla. `z-20` para
-  // quedar por encima del resto de la cabecera sticky (z-10), y fondo propio
-  // opaco para que el contenido pase por debajo sin transparentarse. El `top`
-  // sale del sticky de cabecera cuando lo hay: la celda se fija en los dos ejes.
-  const menuHeadStyle: React.CSSProperties = { ...stickyHeadStyle, right: 0 }
+  // Botón del menú de columnas (v0.6.0): NO es una columna —una columna de
+  // 44 px le quitaba ese ancho a las de verdad y en tablas justas cortaba los
+  // estados—. Va DENTRO de la última cabecera visible (así el Tab llega a él
+  // justo después de las cabeceras ordenables) pero posicionado `absolute`:
+  // - Con `stickyHeader` esa <th> es sticky (posicionada): el botón se pega a
+  //   su borde derecho y viaja con la cabecera fija.
+  // - Sin `stickyHeader` la <th> y el contenedor de scroll de la tabla se
+  //   quedan SIN posicionar, así que el bloque contenedor del botón es el
+  //   envoltorio `relative` de fuera del scroll: queda en la esquina superior
+  //   derecha VISIBLE aunque la tabla scrollee a lo ancho, y el `overflow` del
+  //   contenedor (y el `overflow-hidden` de `resizable`) no lo recorta.
+  // La última cabecera reserva su ancho con `pr-10` (solo la <th>, nunca las
+  // celdas) para que el botón no tape el texto ni la flecha de orden; una
+  // `action` sin cabecera no tiene nada que tapar y no lo lleva. Fondo opaco
+  // como la cabecera. No es zona de arrastre ni de soltar (`data-list-columns-menu-head`).
+  const menuInHead = !!columnsMenu
+  const menuOutsideScroll = menuInHead && !stickyHeader
+  const lastVisibleCol = visibleColumns[visibleColumns.length - 1]
+  const lastHeadPad = menuInHead && !!lastVisibleCol && !(lastVisibleCol.action && !lastVisibleCol.header)
 
   // Arrastre de cabeceras (HTML5 drag and drop nativo, sin dependencias). Solo
   // las columnas no-`action` se arrastran y reciben. La columna cae DETRÁS del
@@ -411,7 +424,10 @@ export function ResponsiveList<T>({
     return {
       draggable: true,
       onPointerDown: (e) => {
-        resizingRef.current = !!(e.target as Element).closest?.('[data-column-resize-handle]')
+        // Ni el asa ni el botón del menú de columnas arrastran la cabecera.
+        resizingRef.current = !!(e.target as Element).closest?.(
+          '[data-column-resize-handle],[data-list-columns-menu-head]',
+        )
       },
       onDragStart: (e) => {
         if (resizingRef.current) {
@@ -457,9 +473,15 @@ export function ResponsiveList<T>({
     <ListCompactProvider value={compact}>
       <div className={cn('@container', className)}>
         {/* Desktop: table */}
-        <div className="hidden @3xl:block">
+        <div className={cn('hidden @3xl:block', menuOutsideScroll && 'relative')}>
           <Table
-            containerClassName={stickyHeader ? 'overflow-visible' : undefined}
+            containerClassName={
+              stickyHeader
+                ? 'overflow-visible'
+                : menuOutsideScroll
+                  ? 'static overflow-x-auto'
+                  : undefined
+            }
             data-compact={compact ? '' : undefined}
             className={cn(
               stickyHeader &&
@@ -483,7 +505,6 @@ export function ResponsiveList<T>({
                   const width = colWidth(col.key)
                   return <col key={col.key} style={width ? { width } : undefined} />
                 })}
-                {columnsMenu && <col style={{ width: 44 }} />}
               </colgroup>
             )}
             <TableHeader className={stickyHeader ? '[&_tr]:border-b-0' : undefined}>
@@ -496,6 +517,11 @@ export function ResponsiveList<T>({
                 {visibleColumns.map((col) => {
                   const draggable = reorderable && !col.action
                   const side = draggable ? dropSide(col.key) : null
+                  const isLast = col.key === lastVisibleKey
+                  // Sin `stickyHeader` la última <th> no puede ir posicionada
+                  // (ver el botón del menú): su indicador de arrastre es una
+                  // sombra interior en vez del <span> absoluto.
+                  const staticHead = isLast && menuOutsideScroll
                   return (
                     <TableHead
                       key={col.key}
@@ -503,7 +529,7 @@ export function ResponsiveList<T>({
                         // `relative` ANTES de `sticky` (stickyHeadClass): con las
                         // dos, tailwind-merge se queda con la última y sticky es
                         // también contenedor del asa absoluta (y del indicador).
-                        (resizable || draggable) && 'relative',
+                        (resizable || draggable) && !staticHead && 'relative',
                         fixedCellClass,
                         col.sortable && onSortChange && 'group',
                         draggable && 'cursor-grab active:cursor-grabbing',
@@ -511,6 +537,12 @@ export function ResponsiveList<T>({
                         col.headClassName,
                         compactHeadClass,
                         stickyHeadClass,
+                        isLast && lastHeadPad && 'pr-10',
+                        staticHead &&
+                          side &&
+                          (side === 'before'
+                            ? 'shadow-[inset_2px_0_0_var(--color-primary)]'
+                            : 'shadow-[inset_-2px_0_0_var(--color-primary)]'),
                       )}
                       style={stickyHeadStyle}
                       aria-sort={ariaSort(col)}
@@ -523,7 +555,7 @@ export function ResponsiveList<T>({
                       {renderHead(col)}
                       {/* Dónde cae la columna arrastrada: una línea en el borde
                           izquierdo (delante) o derecho (detrás) del destino. */}
-                      {side && (
+                      {side && !staticHead && (
                         <span
                           aria-hidden
                           data-column-drop-indicator={side}
@@ -538,23 +570,21 @@ export function ResponsiveList<T>({
                       {col.action && !col.header && (
                         <span className="sr-only">{labels.actionsColumn}</span>
                       )}
-                      {resizable && col.key !== lastVisibleKey && resizeHandle(col.key)}
+                      {resizable && !isLast && resizeHandle(col.key)}
+                      {isLast && columnsMenu && (
+                        <div
+                          data-list-columns-menu-head
+                          className="absolute top-0 right-0 z-20 flex h-10 cursor-auto items-center bg-background px-1"
+                          // Ni origen ni destino de un arrastre de columnas.
+                          onDragOver={(e) => e.stopPropagation()}
+                          onDrop={(e) => e.stopPropagation()}
+                        >
+                          {columnsMenu}
+                        </div>
+                      )}
                     </TableHead>
                   )
                 })}
-                {columnsMenu && (
-                  <TableHead
-                    className={cn(
-                      'sticky z-20 w-11 bg-background p-0 text-center',
-                      stickyHeader && 'border-b',
-                    )}
-                    style={menuHeadStyle}
-                  >
-                    {/* Nombre accesible de la columna: el botón es un icono. */}
-                    <span className="sr-only">{labels.columnsMenu}</span>
-                    {columnsMenu}
-                  </TableHead>
-                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -619,11 +649,6 @@ export function ResponsiveList<T>({
                         {renderCell(col, row, href)}
                       </TableCell>
                     ))}
-                    {/* Celda vacía de la columna del menú: no es sticky a
-                        propósito — un fondo opaco fijo aquí se comería el hover
-                        de la fila y los tintes de `rowStyle`. Como está vacía, no
-                        hay nada que proteger del scroll horizontal. */}
-                    {columnsMenu && <TableCell className="p-0" />}
                   </TableRow>
                 )
               })}

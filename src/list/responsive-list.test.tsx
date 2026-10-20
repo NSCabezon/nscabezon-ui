@@ -102,7 +102,7 @@ describe('ResponsiveList (opt-in)', () => {
     expect(container.innerHTML).toBe(base)
   })
 
-  it('con los dos callbacks pinta la columna del menú al final, sticky y solo en la tabla', () => {
+  it('v0.6.0: con los dos callbacks el botón del menú va en la cabecera, sin columna propia', () => {
     render(
       <ResponsiveList
         columns={columns}
@@ -114,24 +114,36 @@ describe('ResponsiveList (opt-in)', () => {
         mobileColumnsMenu={false}
       />,
     )
-    // Cabecera: las visibles (id oculta) + la del menú, que va la última.
+    // Cabecera: SOLO las visibles (id oculta); el botón no añade <th>.
     const th = heads()
-    expect(th).toHaveLength(3)
-    const menuHead = th[th.length - 1]
-    expect(menuHead.querySelector('button')).not.toBeNull()
-    // Nombre accesible de la columna (el botón es solo un icono).
-    expect(menuHead.querySelector('.sr-only')).not.toBeNull()
-    // Pegada al borde derecho: con `resizable` la tabla scrollea a lo ancho.
-    expect(menuHead.className).toContain('sticky')
-    expect(menuHead.getAttribute('style')).toContain('right: 0')
-    // No ordena ni se puede ocultar a sí misma: ni aria-sort ni entrada propia.
-    expect(menuHead.hasAttribute('aria-sort')).toBe(false)
+    expect(th.map((h) => h.textContent)).toEqual(['Nombre', 'Total'])
+    // El botón vive dentro de la ÚLTIMA cabecera visible, superpuesto.
+    const menu = th[1].querySelector('[data-list-columns-menu-head]')!
+    expect(menu).not.toBeNull()
+    expect(menu.className).toContain('absolute')
+    expect(menu.className).toContain('right-0')
+    expect(menu.className).toContain('bg-background')
+    expect(menu.querySelector('button')!.getAttribute('aria-label')).toBe('Columnas')
+    expect(table().querySelectorAll('[data-list-columns-menu-head]')).toHaveLength(1)
+    // Solo la última cabecera reserva el hueco del botón; ninguna celda.
+    expect(th[1].className).toContain('pr-10')
+    expect(th[0].className).not.toContain('pr-10')
+    expect(table().querySelector('tbody td.pr-10')).toBeNull()
+    // Sin stickyHeader: ni la <th> ni el contenedor de scroll van posicionados
+    // (el botón se ancla al envoltorio `relative` de fuera del scroll).
+    expect(th[1].className).not.toMatch(/\b(relative|sticky)\b/)
+    const scroller = table().parentElement!
+    expect(scroller.className).toContain('static')
+    expect(scroller.className).not.toContain('relative')
+    expect(scroller.parentElement!.className).toContain('relative')
+    // No ordena ni se puede ocultar a sí mismo.
+    expect(container.querySelectorAll('[aria-sort]')).toHaveLength(0)
 
-    // Cuerpo: una celda vacía por fila, para que cuadre con la cabecera.
+    // Cuerpo: sin celda vacía extra por fila.
     for (const tr of Array.from(table().querySelectorAll('tbody tr'))) {
       const cells = Array.from(tr.querySelectorAll('td'))
-      expect(cells).toHaveLength(3)
-      expect(cells[cells.length - 1].textContent).toBe('')
+      expect(cells.map((td) => td.textContent)).toEqual([expect.any(String), expect.any(String)])
+      expect(cells.every((td) => td.textContent !== '')).toBe(true)
     }
 
     // Móvil (cards) con `mobileColumnsMenu={false}` (lista con ListFooter):
@@ -140,7 +152,45 @@ describe('ResponsiveList (opt-in)', () => {
     for (const card of cards()) expect(card.querySelector('button')).toBeNull()
   })
 
-  it('la columna del menú entra en el colgroup sin asa de redimensión', () => {
+  it('v0.6.0: con stickyHeader el botón va en la última <th> sticky', () => {
+    render(
+      <ResponsiveList
+        columns={columns}
+        data={rows}
+        rowKey={(r) => r.id}
+        stickyHeader
+        hiddenColumns={[]}
+        onHiddenColumnsChange={() => {}}
+        onColumnsReset={() => {}}
+      />,
+    )
+    const th = heads()
+    expect(th).toHaveLength(3)
+    const last = th[2]
+    expect(last.className).toContain('sticky')
+    expect(last.className).toContain('pr-10')
+    expect(last.querySelector('[data-list-columns-menu-head] button')).not.toBeNull()
+    expect(table().parentElement!.className).toContain('overflow-visible')
+  })
+
+  it('v0.6.0: una última columna `action` sin cabecera no lleva el padding extra', () => {
+    render(
+      <ResponsiveList
+        columns={[...columns, { key: 'menu', cell: () => '⋯', action: true }]}
+        data={rows}
+        rowKey={(r) => r.id}
+        hiddenColumns={[]}
+        onHiddenColumnsChange={() => {}}
+        onColumnsReset={() => {}}
+      />,
+    )
+    const th = heads()
+    expect(th).toHaveLength(4)
+    expect(th[3].querySelector('[data-list-columns-menu-head]')).not.toBeNull()
+    expect(th.some((h) => h.className.includes('pr-10'))).toBe(false)
+  })
+
+  it('v0.6.0: el botón del menú no entra en el colgroup y la última columna sigue sin asa', () => {
     render(
       <ResponsiveList
         columns={columns}
@@ -154,14 +204,18 @@ describe('ResponsiveList (opt-in)', () => {
         onColumnsReset={() => {}}
       />,
     )
-    // 3 columnas de datos + la del menú, con ancho fijo propio.
+    // Solo las 3 columnas de datos: ningún <col> de 44 px.
     const cols = Array.from(table().querySelectorAll('colgroup > col'))
-    expect(cols).toHaveLength(4)
-    expect(cols[3].getAttribute('style')).toContain('44px')
-    // El asa sigue estando en todas menos la última columna de DATOS; la del
-    // menú no se redimensiona.
+    expect(cols).toHaveLength(3)
+    expect(cols.some((c) => (c.getAttribute('style') ?? '').includes('44px'))).toBe(false)
     const handles = heads().map((th) => th.querySelector('.cursor-col-resize'))
-    expect(handles.map(Boolean)).toEqual([true, true, false, false])
+    expect(handles.map(Boolean)).toEqual([true, true, false])
+    // Las mediciones solo cuentan las <th> de datos.
+    expect(table().querySelectorAll('[data-column-width-key]')).toHaveLength(3)
+    expect(
+      table().querySelector('[data-list-columns-menu-head]')!.closest('[data-column-width-key]')!
+        .getAttribute('data-column-width-key'),
+    ).toBe('id')
   })
 
   it('la cabecera ordenable cicla asc → desc → asc y expone aria-sort', () => {
@@ -528,10 +582,9 @@ describe('ResponsiveList (opt-in)', () => {
     )
     render(ui())
     const menuHead = () => heads()[heads().length - 1]
-    expect(menuHead().querySelector('.sr-only')!.textContent).toBe('Columns')
     expect(menuHead().querySelector('button')!.getAttribute('aria-label')).toBe('Columns')
     render(ui({ columnsMenu: 'Spalten' }))
-    expect(menuHead().querySelector('.sr-only')!.textContent).toBe('Spalten')
+    expect(menuHead().querySelector('button')!.getAttribute('aria-label')).toBe('Spalten')
   })
 
   it('A11Y-7: las cabeceras de acciones y de selección llevan nombre sr-only', () => {
@@ -581,7 +634,9 @@ describe('ResponsiveList (opt-in)', () => {
         onColumnsReset={() => {}}
       />,
     )
-    expect(heads()[heads().length - 1].querySelector('.sr-only')!.textContent).toBe('Columnas')
+    expect(heads()[heads().length - 1].querySelector('button')!.getAttribute('aria-label')).toBe(
+      'Columnas',
+    )
   })
 
   it('mobileColumnsMenu: por defecto pinta el menú encima de las cards (solo con los dos callbacks)', () => {
@@ -916,6 +971,50 @@ describe('ResponsiveList (orden de columnas)', () => {
     } finally {
       Element.prototype.setPointerCapture = setPointerCapture
     }
+  })
+
+  it('v0.6.0: el botón del menú ni arrastra la cabecera ni es zona de soltar; la última <th> sigue recibiendo', () => {
+    const onColumnOrderChange = vi.fn()
+    render(
+      <ResponsiveList
+        columns={columns}
+        data={rows}
+        rowKey={(r) => r.id}
+        hiddenColumns={[]}
+        onHiddenColumnsChange={() => {}}
+        onColumnsReset={() => {}}
+        onColumnOrderChange={onColumnOrderChange}
+      />,
+    )
+    const last = heads()[2]
+    const menu = last.querySelector('[data-list-columns-menu-head]')!
+    const trigger = menu.querySelector('button')!
+    // Tab: el botón va detrás de los botones de ordenar/cabeceras en el DOM.
+    const focusables = Array.from(table().querySelectorAll('thead button'))
+    expect(focusables[focusables.length - 1]).toBe(trigger)
+    // Pulsar el botón y «arrastrar» no mueve la columna.
+    act(() => {
+      trigger.dispatchEvent(new FakePointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    })
+    const start = dnd('dragstart', last)
+    expect(start.defaultPrevented).toBe(true)
+    expect(last.hasAttribute('data-dragging')).toBe(false)
+    // Arrastrando otra cabecera, encima del botón no se puede soltar…
+    act(() => {
+      heads()[0].dispatchEvent(new FakePointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    })
+    dnd('dragstart', heads()[0])
+    expect(dnd('dragover', menu).defaultPrevented).toBe(false)
+    dnd('drop', menu)
+    expect(onColumnOrderChange).not.toHaveBeenCalled()
+    // …pero sí sobre el resto de la última cabecera, con indicador (sombra:
+    // esa <th> va sin posicionar para no atrapar al botón).
+    expect(dnd('dragover', heads()[2]).defaultPrevented).toBe(true)
+    expect(heads()[2].getAttribute('data-drop')).toBe('after')
+    expect(heads()[2].className).toContain('shadow-[inset_-2px_0_0_var(--color-primary)]')
+    expect(heads()[2].querySelector('[data-column-drop-indicator]')).toBeNull()
+    dnd('drop', heads()[2])
+    expect(onColumnOrderChange).toHaveBeenCalledWith(['total', 'id', 'name'])
   })
 
   it('columnOrder y onColumnOrderChange llegan al ColumnsMenu (lista en orden + Subir/Bajar)', async () => {

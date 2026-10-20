@@ -210,6 +210,13 @@ const view = useListView('orders', {
 - Sin paginación (lista entera, orden en cliente):
   `useListView(key, { columnKeys, defaults: {}, paginated: false })` o, solo
   columnas, `useListColumns(key, columnKeys)`.
+- Menú de columnas en escritorio (desde v0.6.0): **no es una columna**. El
+  botón se superpone en el borde derecho de la cabecera (dentro de la última
+  `<th>` visible, que reserva su hueco con `pr-10`; una `action` sin cabecera
+  no lo necesita), sin `<col>` ni celdas en el cuerpo, así que no le quita
+  ancho a las columnas de datos. Con `stickyHeader` viaja con la cabecera
+  fija; sin ella queda en la esquina derecha visible aunque la tabla scrollee
+  a lo ancho. En el Tab va detrás de las cabeceras ordenables.
 - Menú de columnas en móvil (`mobileColumnsMenu`): en móvil no hay cabecera
   de tabla, así que el menú va encima de las tarjetas. Está **activo por
   defecto** en cuanto la lista permite ocultar columnas
@@ -234,7 +241,7 @@ const view = useListView('orders', {
   ordenando; el asa de redimensión no arrastra) y el menú de columnas pinta la
   lista en el orden actual con «Subir»/«Bajar» por columna (la vía de
   teclado; textos `labels.columnMoveUp/Down`, funciones con el nombre de la
-  columna). Las columnas `action` y la del menú no se mueven; la `primary`
+  columna). Las columnas `action` (y el botón del menú) no se mueven; la `primary`
   puede ir en cualquier posición de la tabla, pero en móvil sigue siendo el
   título de la tarjeta (el `<dl>` sí sigue el orden). `view.order` da el orden
   guardado; `orderColumns(columns, order)` lo aplica en una tabla a mano.
