@@ -214,9 +214,10 @@ describe('ResponsiveList (opt-in)', () => {
     const handles = heads().map((th) => th.querySelector('[data-column-resize-handle=""]'))
     expect(handles.map(Boolean)).toEqual([true, true, false])
     // Con el menú fuera del scroll la última <th> va sin posicionar
-    // (`staticHead`): no lleva la mitad derecha de la zona (iría al envoltorio).
+    // (`staticHead`): desde v0.9.4 su mitad derecha de la zona va dentro de un
+    // ancla `relative` propia (RESIZE-EDGE-3).
     const starts = heads().map((th) => th.querySelector('[data-column-resize-handle="start"]'))
-    expect(starts.map(Boolean)).toEqual([false, true, false])
+    expect(starts.map(Boolean)).toEqual([false, true, true])
     // Las mediciones solo cuentan las <th> de datos.
     expect(table().querySelectorAll('[data-column-width-key]')).toHaveLength(3)
     expect(
@@ -1059,6 +1060,58 @@ describe('ResponsiveList (orden de columnas)', () => {
     }
   })
 
+  it('RESIZE-EDGE-3: sin stickyHeader (menú fuera del scroll) el borde izquierdo de la última cabecera redimensiona la anterior y no reordena', () => {
+    const setPointerCapture = Element.prototype.setPointerCapture
+    Element.prototype.setPointerCapture = vi.fn()
+    try {
+      const onColumnOrderChange = vi.fn()
+      const onColumnWidthsChange = vi.fn()
+      render(
+        <ResponsiveList
+          columns={columns}
+          data={rows}
+          rowKey={(r) => r.id}
+          resizable
+          onColumnWidthsChange={onColumnWidthsChange}
+          onColumnOrderChange={onColumnOrderChange}
+          hiddenColumns={[]}
+          onHiddenColumnsChange={() => {}}
+          onColumnsReset={() => {}}
+        />,
+      )
+      const last = heads()[2]
+      // La <th> sigue sin posicionar (el botón del menú sale al envoltorio)…
+      expect(last.className.split(/\s+/)).not.toContain('relative')
+      // …y la zona va en un ancla `relative` propia, sin el menú dentro.
+      const anchorEl = last.querySelector('[data-column-resize-anchor]')!
+      expect(anchorEl).not.toBeNull()
+      expect(anchorEl.className.split(/\s+/)).toContain('relative')
+      expect(anchorEl.querySelector('[data-list-columns-menu-head]')).toBeNull()
+      expect(last.querySelector('[data-list-columns-menu-head]')).not.toBeNull()
+      const zone = anchorEl.querySelector('[data-column-resize-handle="start"]')!
+      expect(zone).not.toBeNull()
+      act(() => {
+        zone.dispatchEvent(new FakePointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 0 }))
+      })
+      const start = dnd('dragstart', last)
+      expect(start.defaultPrevented).toBe(true)
+      dnd('dragover', heads()[0])
+      dnd('drop', heads()[0])
+      expect(onColumnOrderChange).not.toHaveBeenCalled()
+      act(() => {
+        zone.dispatchEvent(new FakePointerEvent('pointermove', { bubbles: true, clientX: 30 }))
+      })
+      act(() => {
+        zone.dispatchEvent(new FakePointerEvent('pointerup', { bubbles: true, clientX: 30 }))
+      })
+      expect(onColumnWidthsChange).toHaveBeenCalledTimes(1)
+      const saved = onColumnWidthsChange.mock.calls[0][0] as Record<string, number>
+      expect(Object.keys(saved)).toEqual([heads()[1].getAttribute('data-column-width-key')])
+    } finally {
+      Element.prototype.setPointerCapture = setPointerCapture
+    }
+  })
+
   it('v0.6.0: el botón del menú ni arrastra la cabecera ni es zona de soltar; la última <th> sigue recibiendo', () => {
     const onColumnOrderChange = vi.fn()
     render(
@@ -1280,6 +1333,60 @@ describe('ResponsiveList (como Excel + relleno)', () => {
     const onChange = renderO()
     dragHandle('desc', -100)
     expect(onChange).toHaveBeenCalledWith({ desc: 400 })
+  })
+
+  it('RESIZE-CLICK-1: un clic sin mover en el asa (propia o de inicio) no guarda ancho ni ordena; el doble clic sigue restaurando', () => {
+    measured.desc = 500
+    const onSortChange = vi.fn()
+    const onChange = renderO({
+      columns: oColumns.map((c) => (c.key === 'client' ? { ...c, sortable: true } : c)),
+      onSortChange,
+      columnWidths: { opened: 150 },
+    })
+    const startZone = (key: string) =>
+      heads()
+        .find((th) => th.getAttribute('data-column-width-key') === key)!
+        .querySelector('[data-column-resize-handle="start"]')!
+    function clickAt(el: Element, upX = 0) {
+      act(() => {
+        el.dispatchEvent(new FakePointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 0 }))
+      })
+      act(() => {
+        el.dispatchEvent(new FakePointerEvent('pointerup', { bubbles: true, clientX: upX }))
+      })
+      act(() => {
+        el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      })
+    }
+    // Asa propia del relleno: sigue rellenando (no se guarda su ancho estirado).
+    clickAt(handleOf('desc'))
+    // Asa de inicio (mitad derecha de la zona del borde de «Cliente»).
+    clickAt(startZone('desc'))
+    // Temblor de 2 px: sigue siendo un clic.
+    clickAt(handleOf('client'), 2)
+    expect(onChange).not.toHaveBeenCalled()
+    expect(onSortChange).not.toHaveBeenCalled()
+    expect(colWidths()).toEqual({ ...BASE, opened: '150px' })
+    // Arrastrar y volver al mismo ancho guardado tampoco guarda.
+    const el = handleOf('opened')
+    act(() => {
+      el.dispatchEvent(new FakePointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 0 }))
+    })
+    act(() => {
+      el.dispatchEvent(new FakePointerEvent('pointermove', { bubbles: true, clientX: 20 }))
+    })
+    act(() => {
+      el.dispatchEvent(new FakePointerEvent('pointerup', { bubbles: true, clientX: 0 }))
+    })
+    expect(onChange).not.toHaveBeenCalled()
+    // Doble clic (dos clics sin mover + dblclick): restaura, sin guardar antes.
+    clickAt(el)
+    clickAt(el)
+    act(() => {
+      el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+    })
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledWith({})
   })
 
   it('RESIZE-EDGE-2: el borde izquierdo de la cabecera siguiente redimensiona la anterior (también el relleno, desde su ancho pintado)', () => {

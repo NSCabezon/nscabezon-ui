@@ -493,6 +493,7 @@ function visibleColumnsOf(columns, hidden) {
 // src/list/useColumnResize.tsx
 import { jsx as jsx3 } from "react/jsx-runtime";
 var COLUMN_WIDTH_KEY_ATTR = "data-column-width-key";
+var DRAG_THRESHOLD = 3;
 function useColumnResize({
   columnWidths,
   onColumnWidthsChange,
@@ -555,24 +556,29 @@ function useColumnResize({
             key: columnKey,
             startX: e.clientX,
             startW,
-            min: col ? columnFloor(col) : MIN_COLUMN_WIDTH
+            min: col ? columnFloor(col) : MIN_COLUMN_WIDTH,
+            moved: false
           };
           e.currentTarget.setPointerCapture(e.pointerId);
           dragRef.current = d;
-          setDrag({ key: columnKey, width: clamp(d, e.clientX) });
           e.preventDefault();
         },
         onPointerMove: (e) => {
           const d = dragRef.current;
           if (!d) return;
+          if (!d.moved && Math.abs(e.clientX - d.startX) < DRAG_THRESHOLD) return;
+          d.moved = true;
           setDrag({ key: d.key, width: clamp(d, e.clientX) });
         },
         onPointerUp: (e) => {
           const d = dragRef.current;
           if (!d) return;
-          const px = clamp(d, e.clientX);
           dragRef.current = null;
           setDrag(null);
+          const moved = d.moved || Math.abs(e.clientX - d.startX) >= DRAG_THRESHOLD;
+          if (!moved) return;
+          const px = clamp(d, e.clientX);
+          if (columnWidths?.[d.key] === px) return;
           onColumnWidthsChange?.({ ...columnWidths, [d.key]: px });
         },
         onPointerCancel: () => {
@@ -988,7 +994,15 @@ function ResponsiveList({
                           children: columnsMenu
                         }
                       ),
-                      resizable && prevKey && !staticHead && resizeHandle(prevKey, "start")
+                      resizable && prevKey && !staticHead && resizeHandle(prevKey, "start"),
+                      resizable && prevKey && staticHead && /* @__PURE__ */ jsx5(
+                        "div",
+                        {
+                          "data-column-resize-anchor": "",
+                          className: "relative -my-20 -ml-4 h-40 w-0",
+                          children: resizeHandle(prevKey, "start")
+                        }
+                      )
                     ]
                   },
                   col.key

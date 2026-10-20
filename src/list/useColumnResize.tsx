@@ -26,7 +26,18 @@ type DragRef = {
   startX: number
   startW: number
   min: number
+  /** El puntero ya se alejó `DRAG_THRESHOLD` px: es un arrastre, no un clic. */
+  moved: boolean
 }
+
+/**
+ * Px que tiene que moverse el puntero desde `pointerdown` para que el asa
+ * cuente como arrastre (v0.9.4). Un clic sin mover (o con temblor de 1-2 px)
+ * no guarda nada: con la zona de agarre ancha de v0.9.3, un clic que apuntaba
+ * a ordenar y caía en el asa guardaba el ancho estirado del relleno (dejaba de
+ * rellenar) o congelaba en px una columna que no se había tocado.
+ */
+const DRAG_THRESHOLD = 3
 
 /**
  * Columnas redimensionables con el ratón: asa en el borde derecho de cada
@@ -185,23 +196,32 @@ export function useColumnResize({
             startX: e.clientX,
             startW,
             min: col ? columnFloor(col) : MIN_COLUMN_WIDTH,
+            moved: false,
           }
           e.currentTarget.setPointerCapture(e.pointerId)
           dragRef.current = d
-          setDrag({ key: columnKey, width: clamp(d, e.clientX) })
+          // Sin `setDrag` todavía: hasta que el puntero se mueva es un clic y
+          // nada cambia (ni el relleno deja de rellenar).
           e.preventDefault()
         }}
         onPointerMove={(e) => {
           const d = dragRef.current
           if (!d) return
+          if (!d.moved && Math.abs(e.clientX - d.startX) < DRAG_THRESHOLD) return
+          d.moved = true
           setDrag({ key: d.key, width: clamp(d, e.clientX) })
         }}
         onPointerUp={(e) => {
           const d = dragRef.current
           if (!d) return
-          const px = clamp(d, e.clientX)
           dragRef.current = null
           setDrag(null)
+          // Clic sin arrastre (v0.9.4): no se guarda nada. Doble clic sigue
+          // llegando a `onDoubleClick` (dos clics sin mover).
+          const moved = d.moved || Math.abs(e.clientX - d.startX) >= DRAG_THRESHOLD
+          if (!moved) return
+          const px = clamp(d, e.clientX)
+          if (columnWidths?.[d.key] === px) return
           onColumnWidthsChange?.({ ...columnWidths, [d.key]: px })
         }}
         onPointerCancel={() => {

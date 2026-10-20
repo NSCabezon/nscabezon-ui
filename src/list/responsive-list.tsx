@@ -652,10 +652,24 @@ export function ResponsiveList<T>({
                       {/* Mitad derecha de la zona de agarre del borde anterior:
                           fallar el asa por 1 px ya no agarra (y mueve) esta
                           cabecera. Después del asa propia a propósito (quien
-                          busque «el asa de la columna» encuentra antes la suya).
-                          No en una <th> sin posicionar (`staticHead`): el
-                          `absolute` se iría al envoltorio. */}
+                          busque «el asa de la columna» encuentra antes la suya). */}
                       {resizable && prevKey && !staticHead && resizeHandle(prevKey, 'start')}
+                      {/* En una <th> sin posicionar (`staticHead`) el `absolute`
+                          del asa se iría al envoltorio, así que va dentro de un
+                          ancla `relative` propia (v0.9.4): de ancho 0, pegada al
+                          borde izquierdo (`-ml-4` = TABLE_CELL_X) y muy alta
+                          con márgenes negativos (no ocupa sitio: su caja de
+                          margen mide 0); el `overflow-hidden` de la <th> la
+                          recorta a la altura de la cabecera. El botón del menú
+                          no va dentro: sigue saliendo al envoltorio. */}
+                      {resizable && prevKey && staticHead && (
+                        <div
+                          data-column-resize-anchor=""
+                          className="relative -my-20 -ml-4 h-40 w-0"
+                        >
+                          {resizeHandle(prevKey, 'start')}
+                        </div>
+                      )}
                     </TableHead>
                   )
                 })}

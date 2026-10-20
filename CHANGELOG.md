@@ -3,6 +3,30 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.9.4] - 2026-10-20
+
+### Corregido
+
+- **Un clic en el asa de una columna guardaba un ancho** (LIST-1). Al soltar,
+  `useColumnResize` llamaba siempre a `onColumnWidthsChange`, aunque el
+  puntero no se hubiera movido. Con la zona de agarre más ancha de v0.9.3, un
+  clic que apuntaba a ordenar y caía en el asa guardaba el ancho estirado de la
+  columna de relleno (que dejaba de rellenar, y en ventanas más pequeñas
+  aparecía scroll horizontal) o fijaba en px una columna que nadie había
+  tocado. Ahora solo cuenta como arrastre si el puntero se aleja **3 px** o
+  más del `pointerdown`, y solo se guarda si el ancho cambia de verdad. Un
+  clic sin mover no toca los anchos ni ordena, y el doble clic sigue
+  restaurando la columna (dos clics sin mover llegan al `dblclick`). El estado
+  de arrastre en vivo empieza al superar ese umbral, no en el `pointerdown`.
+- **En listas sin `stickyHeader` (menú de columnas fuera del scroll), agarrar
+  justo a la derecha de la línea anterior a la última columna la movía**
+  (LIST-2). Esa última `<th>` va sin posicionar (`staticHead`) y se quedaba
+  sin la mitad derecha de la zona de agarre (`resizeHandle(prev, 'start')`).
+  Ahora la lleva dentro de un ancla `relative` propia
+  (`data-column-resize-anchor`): de ancho 0, pegada al borde izquierdo y
+  recortada a la altura de la cabecera por su `overflow-hidden`. La `<th>`
+  sigue sin posicionar y el botón del menú sigue saliendo al envoltorio.
+
 ## [0.9.3] - 2026-10-20
 
 ### Corregido
