@@ -3,6 +3,19 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.9.6] - 2026-10-21
+
+### Cambiado
+
+- **La tabla siempre ocupa el 100 % del ancho, y estrechar la columna de relleno
+  se queda.** En la 0.9.5 el ancho guardado del relleno era solo su mínimo:
+  al arrastrarla para estrecharla parecía cambiar y al soltar volvía. Ahora
+  `tableSizing` devuelve siempre `width: 100%` + `min-width: suma`. Si la columna
+  de relleno tiene ancho guardado, manda ese ancho (vuelve la regla de la 0.9.3
+  en `resolveFillColumnKey`). Cuando todas las columnas tienen ancho y sobra
+  sitio, table-fixed reparte el sobrante entre ellas en proporción: nunca hay
+  hueco a la derecha. Doble clic en su asa la vuelve a hacer relleno.
+
 ## [0.9.5] - 2026-10-21
 
 ### Cambiado

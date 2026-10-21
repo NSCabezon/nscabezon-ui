@@ -15,9 +15,9 @@ import {
 // efectivo, la de relleno la marca el consumidor y la tabla mide
 // máx(contenedor, suma).
 describe('resolveFillColumnKey', () => {
-  it('RESIZE-FILL-6 (v0.9.5): con ancho guardado en la de relleno sigue rellenando', () => {
+  it('RESIZE-FILL-6: con ancho guardado en la de relleno no hay relleno (ni pasa a otra marcada)', () => {
     const cols = [{ key: 'n' }, { key: 'desc', fill: true }, { key: 'x', fill: true }]
-    expect(resolveFillColumnKey(cols, { desc: 200 })).toBe('desc')
+    expect(resolveFillColumnKey(cols, { desc: 200 })).toBeUndefined()
     expect(resolveFillColumnKey(cols, { n: 90 })).toBe('desc')
     expect(resolveFillColumnKey(cols, {})).toBe('desc')
     expect(resolveFillColumnKey(cols)).toBe('desc')
@@ -69,6 +69,6 @@ describe('columnFloor', () => {
 describe('tableSizing', () => {
   it('con relleno: 100 % con la suma como mínimo; sin relleno: la suma exacta', () => {
     expect(tableSizing(800, true)).toEqual({ width: '100%', minWidth: 800 })
-    expect(tableSizing(800, false)).toEqual({ width: 800 })
+    expect(tableSizing(800, false)).toEqual({ width: '100%', minWidth: 800 })
   })
 })

@@ -136,13 +136,13 @@ declare function isFillColumn(col: {
  * relleno y, si las columnas no llegan al ancho del contenedor, queda hueco a
  * la derecha. Nunca se elige sola (ni la `primary`): la decide el consumidor.
  *
- * v0.9.5: SIEMPRE rellena, también con ancho guardado (pedido del dueño
- * 21/10/2026: el hueco a la derecha de la v0.9.3 no gustaba). El ancho que el
- * usuario guarda en ella pasa a ser su MÍNIMO (la tabla mide máx(contenedor,
- * suma)): se puede ensanchar, no estrechar por debajo del hueco disponible.
- * `widths` se acepta por compatibilidad y ya no cambia el resultado.
+ * v0.9.6: con `widths` (los anchos guardados del usuario), si esa columna
+ * tiene ancho guardado deja de ser LA de relleno: manda su ancho (también para
+ * estrecharla) y la tabla sigue al 100 % repartiendo el sobrante entre todas
+ * (ver `tableSizing`). NO pasa el relleno a otra columna marcada. Doble clic
+ * en su asa (se borra el guardado) la vuelve a hacer relleno.
  */
-declare function resolveFillColumnKey(columns: SizedColumn[], _widths?: Record<string, number>): string | undefined;
+declare function resolveFillColumnKey(columns: SizedColumn[], widths?: Record<string, number>): string | undefined;
 /**
  * Suelo de una columna: su `minWidth` si lo trae; si no, `MIN_COLUMN_WIDTH`
  * (64), salvo que su propio ancho por defecto sea menor (un icono de 40 o 56
@@ -161,19 +161,18 @@ declare function columnFloor(col: Omit<SizedColumn, 'key'>): number;
  */
 declare function resolveColumnWidth(col: Omit<SizedColumn, 'key'>, stored: number | undefined): number;
 /**
- * Estilo de la `<table>` (table-fixed) para el modelo «como Excel + relleno»:
- * - Con columna de relleno: `width: 100%` y `min-width: suma`. La `<col>` del
- *   relleno va SIN ancho, así que table-fixed le da todo lo que sobre
- *   (tabla − resto de columnas); como la tabla nunca baja de la suma, ese
- *   sobrante nunca es menor que su base. Resultado: ancho = máx(contenedor,
- *   suma), el relleno solo crece y el resto no se mueve.
- * - Sin relleno: `width: suma` exacta. Con `width: 100%` table-fixed
- *   repartiría el sobrante entre TODAS las columnas; con la suma, queda hueco
- *   a la derecha.
+ * Estilo de la `<table>` (table-fixed): SIEMPRE `width: 100%` y
+ * `min-width: suma` (v0.9.6, dueño 21/10/2026: la tabla ocupa todo el ancho,
+ * nunca hueco a la derecha).
+ * - Con columna de relleno (sin ancho guardado): su `<col>` va SIN ancho y
+ *   table-fixed le da todo lo que sobre; el resto no se mueve.
+ * - Sin relleno (ninguna marcada, o el usuario la dimensionó): todas las
+ *   `<col>` llevan ancho y table-fixed reparte el sobrante entre ellas en
+ *   proporción. Estrechar una columna se nota y se queda.
  * Si la suma supera el contenedor, la tabla lo desborda y el contenedor de
- * scroll la desplaza a lo ancho.
+ * scroll la desplaza a lo ancho. `hasFill` se conserva por compatibilidad.
  */
-declare function tableSizing(totalWidth: number, hasFill: boolean): {
+declare function tableSizing(totalWidth: number, _hasFill?: boolean): {
     width: string | number;
     minWidth?: number;
 };

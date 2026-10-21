@@ -1302,10 +1302,10 @@ describe('ResponsiveList (como Excel + relleno)', () => {
     expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM - 20}px` })
   })
 
-  it('sin relleno marcado: ninguna se estira, la tabla mide la suma (hueco a la derecha)', () => {
+  it('sin relleno marcado: todas con ancho y tabla al 100 % (v0.9.6: el sobrante se reparte, sin hueco)', () => {
     renderO({ columns: oColumns.map((c) => (c.key === 'desc' ? { ...c, fill: undefined } : c)) })
     expect(colWidths()).toEqual({ ...BASE, desc: '160px' })
-    expect(tableStyle()).toEqual({ width: `${SUM}px`, minWidth: '' })
+    expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM}px` })
   })
 
   it('la primary NO es relleno por defecto (el Nº nunca debería serlo)', () => {
@@ -1315,7 +1315,7 @@ describe('ResponsiveList (como Excel + relleno)', () => {
       ),
     })
     expect(colWidths().num).toBe('160px')
-    expect(tableStyle().width).toBe(`${SUM + 70}px`)
+    expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM + 70}px` })
   })
 
   it('`flex: true` (v0.5.0) es alias de `fill`', () => {
@@ -1425,16 +1425,15 @@ describe('ResponsiveList (como Excel + relleno)', () => {
     expect(onChange).toHaveBeenCalledWith({ opened: 110 })
   })
 
-  it('prefs viejas con anchos raros se respetan (con suelo 64); el guardado del relleno es su mínimo (v0.9.5)', () => {
+  it('prefs viejas con anchos raros se respetan (con suelo 64); un guardado del relleno lo fija (v0.9.6: tabla al 100 %)', () => {
     renderO({ columnWidths: { client: 999, status: 5, desc: 300 } })
-    expect(colWidths()).toEqual({ ...BASE, client: '999px', status: '64px' })
-    // Rellena: 100 % con la suma (relleno incluido) de mínimo.
+    expect(colWidths()).toEqual({ ...BASE, client: '999px', status: '64px', desc: '300px' })
     expect(tableStyle()).toEqual({ width: '100%', minWidth: `${90 + 999 + 300 + 120 + 64 + 56}px` })
   })
 
-  it('RESIZE-FILL-1 (v0.9.5): con ancho guardado el relleno SIGUE rellenando: <col> sin ancho y tabla 100 % con su ancho guardado como mínimo', () => {
+  it('RESIZE-FILL-1 (v0.9.6): con ancho guardado manda ese ancho en su <col> (se puede estrechar) y la tabla sigue al 100 %', () => {
     renderO({ columnWidths: { desc: 200 } })
-    expect(colWidths()).toEqual(BASE)
+    expect(colWidths()).toEqual({ ...BASE, desc: '200px' })
     expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM - 160 + 200}px` })
   })
 
@@ -1444,7 +1443,7 @@ describe('ResponsiveList (como Excel + relleno)', () => {
     dragHandle('desc', -150, { release: false })
     // Durante el arrastre ya no rellena: su <col> sigue al puntero.
     expect(colWidths().desc).toBe('350px')
-    expect(tableStyle()).toEqual({ width: `${SUM - 160 + 350}px`, minWidth: '' })
+    expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM - 160 + 350}px` })
     act(() => {
       handleOf('desc').dispatchEvent(
         new FakePointerEvent('pointerup', { bubbles: true, clientX: -150 }),
@@ -1480,7 +1479,7 @@ describe('ResponsiveList (como Excel + relleno)', () => {
       columns: oColumns.map((c) => (c.key === 'opened' ? { ...c, fill: true } : c)),
       columnWidths: { desc: 200 },
     })
-    expect(colWidths()).toEqual(BASE)
+    expect(colWidths()).toEqual({ ...BASE, desc: '200px' })
     expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM - 160 + 200}px` })
   })
 

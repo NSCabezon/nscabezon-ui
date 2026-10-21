@@ -469,8 +469,10 @@ var MIN_COLUMN_WIDTH = 64;
 function isFillColumn(col) {
   return !!(col.fill ?? col.flex);
 }
-function resolveFillColumnKey(columns, _widths) {
-  return columns.find(isFillColumn)?.key;
+function resolveFillColumnKey(columns, widths) {
+  const key = columns.find(isFillColumn)?.key;
+  if (key == null || widths?.[key] != null) return void 0;
+  return key;
 }
 function defaultWidthOf(col) {
   return col.width ?? (col.action && !col.header ? DEFAULT_ACTION_COLUMN_WIDTH : DEFAULT_COLUMN_WIDTH);
@@ -481,8 +483,8 @@ function columnFloor(col) {
 function resolveColumnWidth(col, stored) {
   return Math.max(stored ?? defaultWidthOf(col), columnFloor(col));
 }
-function tableSizing(totalWidth, hasFill) {
-  return hasFill ? { width: "100%", minWidth: totalWidth } : { width: totalWidth };
+function tableSizing(totalWidth, _hasFill) {
+  return { width: "100%", minWidth: totalWidth };
 }
 function visibleColumnsOf(columns, hidden) {
   return hidden?.length ? columns.filter((c) => c.primary || !hidden.includes(c.key)) : columns;

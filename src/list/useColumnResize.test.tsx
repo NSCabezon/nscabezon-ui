@@ -269,15 +269,15 @@ describe('useColumnResize', () => {
       expect(onChange).toHaveBeenCalledWith({ desc: 540 })
     })
 
-    it('sin relleno: la tabla mide la suma exacta (hueco a la derecha)', () => {
+    it('sin relleno: tabla al 100 % con la suma de mínimo (v0.9.6, sin hueco)', () => {
       act(() =>
         root.render(
           <ExcelHarness columns={[{ key: 'a', width: 100 }, { key: 'b' }]} onChange={vi.fn()} />,
         ),
       )
       expect([colW('a'), colW('b')]).toEqual(['100px', '160px'])
-      expect(tableEl().style.width).toBe('260px')
-      expect(tableEl().style.minWidth).toBe('')
+      expect(tableEl().style.width).toBe('100%')
+      expect(tableEl().style.minWidth).toBe('260px')
     })
 
     it('`flex` sigue funcionando como alias de `fill`', () => {
