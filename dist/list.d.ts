@@ -136,14 +136,13 @@ declare function isFillColumn(col: {
  * relleno y, si las columnas no llegan al ancho del contenedor, queda hueco a
  * la derecha. Nunca se elige sola (ni la `primary`): la decide el consumidor.
  *
- * v0.9.3: con `widths` (los anchos guardados del usuario), si esa columna
- * tiene ancho guardado deja de rellenar y la tabla queda SIN relleno (hueco a
- * la derecha, como Excel): el usuario la ha dimensionado a mano y manda su
- * ancho, también para estrecharla. NO pasa el relleno a otra columna marcada:
- * una segunda `fill` empezaría a estirarse sola sin que nadie la tocara.
- * Doble clic en su asa (se borra el guardado) la vuelve a hacer relleno.
+ * v0.9.5: SIEMPRE rellena, también con ancho guardado (pedido del dueño
+ * 21/10/2026: el hueco a la derecha de la v0.9.3 no gustaba). El ancho que el
+ * usuario guarda en ella pasa a ser su MÍNIMO (la tabla mide máx(contenedor,
+ * suma)): se puede ensanchar, no estrechar por debajo del hueco disponible.
+ * `widths` se acepta por compatibilidad y ya no cambia el resultado.
  */
-declare function resolveFillColumnKey(columns: SizedColumn[], widths?: Record<string, number>): string | undefined;
+declare function resolveFillColumnKey(columns: SizedColumn[], _widths?: Record<string, number>): string | undefined;
 /**
  * Suelo de una columna: su `minWidth` si lo trae; si no, `MIN_COLUMN_WIDTH`
  * (64), salvo que su propio ancho por defecto sea menor (un icono de 40 o 56

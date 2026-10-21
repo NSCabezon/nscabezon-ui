@@ -39,7 +39,7 @@ import {
   usePagination,
   useSupabaseListPrefsStore,
   visibleColumnsOf
-} from "./chunk-ZKHDEZWC.js";
+} from "./chunk-ZWT32KBA.js";
 import {
   VERSION_FOCUS_THROTTLE_MS,
   VERSION_POLL_INTERVAL_MS,

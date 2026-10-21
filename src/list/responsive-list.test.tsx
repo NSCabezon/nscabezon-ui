@@ -1425,20 +1425,17 @@ describe('ResponsiveList (como Excel + relleno)', () => {
     expect(onChange).toHaveBeenCalledWith({ opened: 110 })
   })
 
-  it('prefs viejas con anchos raros se respetan (con suelo 64); un guardado del relleno lo fija (v0.9.3)', () => {
+  it('prefs viejas con anchos raros se respetan (con suelo 64); el guardado del relleno es su mínimo (v0.9.5)', () => {
     renderO({ columnWidths: { client: 999, status: 5, desc: 300 } })
-    expect(colWidths()).toEqual({ ...BASE, client: '999px', status: '64px', desc: '300px' })
-    // Sin relleno: la suma exacta.
-    expect(tableStyle()).toEqual({ width: `${90 + 999 + 300 + 120 + 64 + 56}px`, minWidth: '' })
+    expect(colWidths()).toEqual({ ...BASE, client: '999px', status: '64px' })
+    // Rellena: 100 % con la suma (relleno incluido) de mínimo.
+    expect(tableStyle()).toEqual({ width: '100%', minWidth: `${90 + 999 + 300 + 120 + 64 + 56}px` })
   })
 
-  it('RESIZE-FILL-1: con ancho guardado el relleno deja de rellenar: su <col> lleva ese ancho y la tabla mide la suma (hueco a la derecha)', () => {
+  it('RESIZE-FILL-1 (v0.9.5): con ancho guardado el relleno SIGUE rellenando: <col> sin ancho y tabla 100 % con su ancho guardado como mínimo', () => {
     renderO({ columnWidths: { desc: 200 } })
-    // Las demás, idénticas (nadie se estira); la tabla, la suma exacta: sin
-    // `width: 100%` table-fixed no reparte el sobrante, y sin `min-width` de
-    // más no hay scroll si cabe.
-    expect(colWidths()).toEqual({ ...BASE, desc: '200px' })
-    expect(tableStyle()).toEqual({ width: `${SUM - 160 + 200}px`, minWidth: '' })
+    expect(colWidths()).toEqual(BASE)
+    expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM - 160 + 200}px` })
   })
 
   it('RESIZE-FILL-2: estrechar el relleno estirado se ve en vivo y se guarda (antes no encogía)', () => {
@@ -1478,13 +1475,13 @@ describe('ResponsiveList (como Excel + relleno)', () => {
     expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM - 120 + 150}px` })
   })
 
-  it('RESIZE-FILL-5: con el relleno fijado, otra columna marcada `fill` NO pasa a rellenar', () => {
+  it('RESIZE-FILL-5: con ancho guardado en el relleno, otra columna marcada `fill` NO pasa a rellenar', () => {
     renderO({
       columns: oColumns.map((c) => (c.key === 'opened' ? { ...c, fill: true } : c)),
       columnWidths: { desc: 200 },
     })
-    expect(colWidths()).toEqual({ ...BASE, desc: '200px' })
-    expect(tableStyle().width).toBe(`${SUM - 160 + 200}px`)
+    expect(colWidths()).toEqual(BASE)
+    expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM - 160 + 200}px` })
   })
 
   it('doble clic borra el ancho guardado de la columna', () => {

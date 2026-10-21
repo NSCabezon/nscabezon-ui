@@ -3,6 +3,18 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.9.5] - 2026-10-21
+
+### Cambiado
+
+- **La columna de relleno siempre rellena, también con ancho guardado.** En la
+  v0.9.3, redimensionar a mano la columna `fill` la fijaba y la tabla dejaba un
+  hueco a la derecha (como Excel); no gustaba. Ahora el ancho guardado es su
+  MÍNIMO: la tabla mide `width: 100%` con la suma (relleno incluido) de
+  `min-width`, así que se ensancha y, si sobra sitio, sigue estirándose. No se
+  puede estrechar por debajo del hueco disponible. `resolveFillColumnKey`
+  ignora ya `widths` (se acepta por compatibilidad).
+
 ## [0.9.4] - 2026-10-20
 
 ### Corregido
