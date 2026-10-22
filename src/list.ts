@@ -8,7 +8,13 @@ export {
 } from './list/responsive-list'
 export { ColumnsMenu, type ColumnsMenuColumn, type ColumnsMenuProps } from './list/columns-menu'
 export { useListCompact } from './list/listCompact'
-export { COLUMN_WIDTH_KEY_ATTR, useColumnResize } from './list/useColumnResize'
+export {
+  COLUMN_WIDTH_KEY_ATTR,
+  RESIZE_KEY_MAX,
+  RESIZE_KEY_STEP,
+  RESIZE_KEY_STEP_LARGE,
+  useColumnResize,
+} from './list/useColumnResize'
 export {
   DEFAULT_ACTION_COLUMN_WIDTH,
   DEFAULT_COLUMN_WIDTH,

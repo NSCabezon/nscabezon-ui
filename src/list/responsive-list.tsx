@@ -7,6 +7,7 @@ import { ListCompactProvider } from './listCompact'
 import { useColumnResize } from './useColumnResize'
 import { TINTED_ROW_CLASS } from './rowTone'
 import { visibleColumnsOf } from './columnWidth'
+import { nodeText } from './nodeText'
 import { moveColumn, orderColumns } from './columnOrder'
 import { useLabels, useUi, type Labels } from '../context/UiProvider'
 import type { ListSort, SortDir } from '../prefs/listPrefs'
@@ -368,10 +369,11 @@ export function ResponsiveList<T>({
   // Redimensión de columnas (asa + ancho en vivo del arrastre + relleno): el
   // hook se exporta aparte para tablas hechas a mano (ver useColumnResize).
   // Recibe las columnas VISIBLES en su orden: la suma y el relleno salen de ellas.
-  const { colWidth, tableStyle, resizeHandle } = useColumnResize({
+  const { colWidth, tableStyle, totalWidth, resizeHandle } = useColumnResize({
     columnWidths,
     onColumnWidthsChange,
     columns: visibleColumns,
+    labels: labelsProp,
   })
   const mobileColumns = visibleColumns.filter((c) => !c.hideOnMobile)
   const primary = mobileColumns.find((c) => c.primary)
@@ -418,21 +420,32 @@ export function ResponsiveList<T>({
   const compactHeadClass = compact ? 'whitespace-nowrap' : undefined
   // Botón del menú de columnas (v0.6.0): NO es una columna —una columna de
   // 44 px le quitaba ese ancho a las de verdad y en tablas justas cortaba los
-  // estados—. Va DENTRO de la última cabecera visible (así el Tab llega a él
-  // justo después de las cabeceras ordenables) pero posicionado `absolute`:
-  // - Con `stickyHeader` esa <th> es sticky (posicionada): el botón se pega a
-  //   su borde derecho y viaja con la cabecera fija.
-  // - Sin `stickyHeader` la <th> y el contenedor de scroll de la tabla se
-  //   quedan SIN posicionar, así que el bloque contenedor del botón es el
-  //   envoltorio `relative` de fuera del scroll: queda en la esquina superior
-  //   derecha VISIBLE aunque la tabla scrollee a lo ancho, y el `overflow` del
-  //   contenedor (y el `overflow-hidden` de `resizable`) no lo recorta.
+  // estados—. Siempre a la vista aunque la tabla scrollee a lo ancho (LIST-3):
+  // - Sin `stickyHeader` va DENTRO de la última cabecera visible (así el Tab
+  //   llega a él justo después de las cabeceras ordenables) pero posicionado
+  //   `absolute`: la <th> y el contenedor de scroll de la tabla se quedan SIN
+  //   posicionar, así que su bloque contenedor es el envoltorio `relative` de
+  //   fuera del scroll: queda en la esquina superior derecha VISIBLE aunque la
+  //   tabla scrollee a lo ancho, y el `overflow` del contenedor (y el
+  //   `overflow-hidden` de `resizable`) no lo recorta.
+  // - Con `stickyHeader` (v0.9.7) el scroll es del consumidor (p. ej. un visor
+  //   con `overflow-auto` en los dos ejes) y dentro de la última <th> (sticky,
+  //   o sea posicionada, y con `overflow-hidden`) el botón se iba con ella por
+  //   la derecha. Ahora va en un ancla `sticky` (arriba y a la derecha) JUSTO
+  //   ANTES de la <table>, dentro del envoltorio, que mide lo mismo que la
+  //   tabla (`min-width` = la suma de anchos con `resizable`, `min-w-fit` sin
+  //   él): así el ancla puede pegarse al borde derecho del visor en todo el
+  //   ancho de la tabla. Alto 0 (no empuja la tabla); el botón cuelga de ella
+  //   con fondo opaco de cabecera fija. En el Tab va justo ANTES de las
+  //   cabeceras (no puede ir detrás en el DOM sin quedar tras todas las filas).
   // La última cabecera reserva su ancho con `pr-10` (solo la <th>, nunca las
-  // celdas) para que el botón no tape el texto ni la flecha de orden; una
-  // `action` sin cabecera no tiene nada que tapar y no lo lleva. Fondo opaco
-  // como la cabecera. No es zona de arrastre ni de soltar (`data-list-columns-menu-head`).
+  // celdas) para que el botón no tape el texto ni la flecha de orden cuando la
+  // tabla cabe o está al final del scroll; una `action` sin cabecera no tiene
+  // nada que tapar y no lo lleva. No es zona de arrastre ni de soltar
+  // (`data-list-columns-menu-head`).
   const menuInHead = !!columnsMenu
   const menuOutsideScroll = menuInHead && !stickyHeader
+  const menuSticky = menuInHead && !!stickyHeader
   const lastVisibleCol = visibleColumns[visibleColumns.length - 1]
   const lastHeadPad = menuInHead && !!lastVisibleCol && !(lastVisibleCol.action && !lastVisibleCol.header)
 
@@ -529,7 +542,40 @@ export function ResponsiveList<T>({
     <ListCompactProvider value={compact}>
       <div className={cn('@container', AUTO_HEAD_BG, className)}>
         {/* Desktop: table */}
-        <div className={cn('hidden @3xl:block', menuOutsideScroll && 'relative')}>
+        <div
+          className={cn(
+            'hidden @3xl:block',
+            menuOutsideScroll && 'relative',
+            // Ancla del menú con cabecera fija (LIST-3): el envoltorio mide lo
+            // que la tabla para que el ancla `sticky` recorra todo su ancho.
+            menuSticky && 'relative',
+            menuSticky && !resizable && 'min-w-fit',
+          )}
+          style={
+            menuSticky && resizable && totalWidth != null
+              ? { minWidth: totalWidth + (leading ? 40 : 0) }
+              : undefined
+          }
+        >
+          {menuSticky && (
+            <div
+              data-list-columns-menu-head
+              data-list-columns-menu-sticky=""
+              className="sticky right-0 z-20 ml-auto h-0 w-0"
+              style={stickyHeadStyle}
+              onDragOver={(e) => e.stopPropagation()}
+              onDrop={(e) => e.stopPropagation()}
+            >
+              <div
+                className={cn(
+                  'absolute top-0 right-0 flex h-10 cursor-auto items-center px-1',
+                  HEAD_BG,
+                )}
+              >
+                {columnsMenu}
+              </div>
+            </div>
+          )}
           <Table
             containerClassName={
               stickyHeader
@@ -634,8 +680,14 @@ export function ResponsiveList<T>({
                       {col.action && !col.header && (
                         <span className="sr-only">{labels.actionsColumn}</span>
                       )}
-                      {resizable && !isLast && resizeHandle(col.key)}
-                      {isLast && columnsMenu && (
+                      {resizable &&
+                        !isLast &&
+                        resizeHandle(
+                          col.key,
+                          'end',
+                          nodeText(col.header) || (col.action ? labels.actionsColumn : col.key),
+                        )}
+                      {isLast && menuOutsideScroll && (
                         <div
                           data-list-columns-menu-head
                           className={cn(

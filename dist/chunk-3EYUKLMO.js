@@ -6,7 +6,7 @@ import {
 } from "./chunk-6CXBNIIA.js";
 import {
   useLabels
-} from "./chunk-CH6JC77L.js";
+} from "./chunk-3L77SDL2.js";
 
 // src/auth/OAuthButtons.tsx
 import { useState } from "react";

@@ -16,6 +16,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '../primitives/dropdown-menu'
+import { nodeText } from './nodeText'
 import { useLabels, type Labels } from '../context/UiProvider'
 import { LIST_PAGE_SIZES } from '../prefs/listPrefs'
 import { moveColumn, orderColumns } from './columnOrder'
@@ -66,18 +67,6 @@ export type ColumnsMenuProps = {
       'columnsMenu' | 'columnsReset' | 'compactMode' | 'columnMoveUp' | 'columnMoveDown' | 'pageSizeMenu'
     >
   >
-}
-
-// Texto plano de una cabecera (para el aria-label de «Subir»/«Bajar»): las
-// cabeceras suelen ser cadenas, pero pueden ser nodos con texto dentro.
-function nodeText(node: React.ReactNode): string {
-  if (node == null || typeof node === 'boolean') return ''
-  if (typeof node === 'string' || typeof node === 'number') return String(node)
-  if (Array.isArray(node)) return node.map(nodeText).join('')
-  if (React.isValidElement<{ children?: React.ReactNode }>(node)) {
-    return nodeText(node.props.children)
-  }
-  return ''
 }
 
 // Selector de columnas visibles de un `ResponsiveList` (prop `hiddenColumns`).

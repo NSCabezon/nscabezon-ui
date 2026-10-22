@@ -3,6 +3,47 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.9.7] - 2026-10-22
+
+### Añadido
+
+- **Redimensionar columnas con el teclado** (LIST-4). El asa de cada columna
+  era `role="presentation"` sin `tabindex`: solo se podía con ratón. Ahora es
+  un `role="separator"` enfocable (`aria-orientation="vertical"`,
+  `aria-valuenow/min/max` en px) con nombre propio: `labels.columnResize`
+  (nuevo, `(columna) => string`, por defecto «Ajustar ancho de {columna}»;
+  `useColumnResize({ labels })` y `resizeHandle(key, edge, name?)` para tablas
+  a mano). **←/→** cambian 16 px (1 rem), **Mayús+←/→** 64 px, con el mismo
+  suelo que el arrastre; se ve en vivo y se guarda **una vez** al soltar la
+  tecla (o al perder el foco) por `onColumnWidthsChange`, la misma
+  persistencia que el ratón. **Escape / Supr / Retroceso** devuelven el ancho
+  de serie, como el doble clic. Foco visible (zona teñida y línea de 2 px
+  con el color del anillo). Las teclas no ordenan ni reordenan; la mitad
+  `start` de la zona de agarre sigue sin foco (sería la misma columna dos
+  veces). Exporta `RESIZE_KEY_STEP`, `RESIZE_KEY_STEP_LARGE` y
+  `RESIZE_KEY_MAX` (1600, techo del teclado y `aria-valuemax`).
+
+### Corregido
+
+- **Con `stickyHeader`, el botón del menú de columnas se salía por la derecha
+  en cuanto la tabla scrolleaba a lo ancho** (LIST-3). Vivía dentro de la
+  última `<th>`, que con cabecera fija es sticky (posicionada) y con
+  `overflow-hidden`: se iba con ella. Ahora va en un ancla `sticky` (arriba y
+  a la derecha, `data-list-columns-menu-sticky`, alto 0, `z-20`, fondo de
+  cabecera fija) justo antes de la `<table>`, y el envoltorio de la tabla
+  mide lo mismo que ella (`min-width` = suma con `resizable`; `min-w-fit`
+  sin él) para que el ancla recorra todo su ancho: el botón queda pegado al
+  borde derecho del contenedor de scroll del consumidor y fijo con la
+  cabecera al bajar. Anchos y reparto, sin cambios (la columna de relleno y
+  `tableSizing` igual que en 0.9.6). En el Tab va ahora justo **antes** de
+  las cabeceras (detrás en el DOM quedaría tras todas las filas). Sin
+  `stickyHeader` no cambia (ya iba fuera del scroll).
+
+> **Consumidores:** pasad `columnResize` en los `labels` del `UiProvider` si
+> la app no está en español. Un test que busque el botón del menú dentro de
+> la última `<th>` con `stickyHeader` debe buscarlo en
+> `[data-list-columns-menu-head]` de la lista.
+
 ## [0.9.6] - 2026-10-21
 
 ### Cambiado

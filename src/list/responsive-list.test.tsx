@@ -154,13 +154,14 @@ describe('ResponsiveList (opt-in)', () => {
     for (const card of cards()) expect(card.querySelector('button')).toBeNull()
   })
 
-  it('v0.6.0: con stickyHeader el botón va en la última <th> sticky', () => {
+  it('LIST-3: con stickyHeader el botón va en un ancla sticky (arriba y a la derecha) antes de la tabla, no en la <th>', () => {
     render(
       <ResponsiveList
         columns={columns}
         data={rows}
         rowKey={(r) => r.id}
         stickyHeader
+        stickyHeaderTop={8}
         hiddenColumns={[]}
         onHiddenColumnsChange={() => {}}
         onColumnsReset={() => {}}
@@ -170,9 +171,42 @@ describe('ResponsiveList (opt-in)', () => {
     expect(th).toHaveLength(3)
     const last = th[2]
     expect(last.className).toContain('sticky')
+    // La última <th> sigue reservando el hueco del botón (tabla al final del scroll).
     expect(last.className).toContain('pr-10')
-    expect(last.querySelector('[data-list-columns-menu-head] button')).not.toBeNull()
+    // Ya no vive en la <th> (sticky + overflow-hidden: se iba con ella por la derecha).
+    expect(table().querySelector('[data-list-columns-menu-head]')).toBeNull()
     expect(table().parentElement!.className).toContain('overflow-visible')
+    const anchor = container.querySelector('[data-list-columns-menu-head]') as HTMLElement
+    expect(anchor).not.toBeNull()
+    expect(container.querySelectorAll('[data-list-columns-menu-head]')).toHaveLength(1)
+    // Ancla sticky arriba Y a la derecha, sin alto (no empuja la tabla), por
+    // encima de las <th> sticky (z-10), con el mismo `top` que la cabecera.
+    expect(anchor.className).toMatch(/\bsticky\b/)
+    expect(anchor.className).toContain('right-0')
+    expect(anchor.className).toContain('z-20')
+    expect(anchor.className).toContain('h-0')
+    expect(anchor.style.top).toBe('7px')
+    // Hermana ANTERIOR del contenedor de la tabla, dentro del envoltorio
+    // `relative` (que mide lo que la tabla: `min-w-fit` sin `resizable`).
+    expect(anchor.nextElementSibling).toBe(table().parentElement)
+    const wrap = anchor.parentElement!
+    expect(wrap.className).toContain('relative')
+    expect(wrap.className).toContain('min-w-fit')
+    // Fondo opaco de cabecera fija en la caja del botón.
+    const box = anchor.firstElementChild as HTMLElement
+    expect(box.className).toContain('var(--list-head-bg')
+    expect(box.querySelector('button')!.getAttribute('aria-label')).toBe('Columnas')
+    // En el Tab, justo antes de las cabeceras.
+    const focusables = Array.from(container.querySelectorAll('.\\@3xl\\:block button'))
+    expect(focusables[0]).toBe(box.querySelector('button'))
+  })
+
+  it('LIST-3: sin menú de columnas, con stickyHeader no hay ancla ni cambia el envoltorio', () => {
+    render(<ResponsiveList columns={columns} data={rows} rowKey={(r) => r.id} stickyHeader />)
+    expect(container.querySelector('[data-list-columns-menu-head]')).toBeNull()
+    const wrap = table().parentElement!.parentElement!
+    expect(wrap.className).not.toContain('min-w-fit')
+    expect(wrap.getAttribute('style')).toBeNull()
   })
 
   it('v0.6.0: una última columna `action` sin cabecera no lleva el padding extra', () => {
@@ -224,6 +258,55 @@ describe('ResponsiveList (opt-in)', () => {
       table().querySelector('[data-list-columns-menu-head]')!.closest('[data-column-width-key]')!
         .getAttribute('data-column-width-key'),
     ).toBe('id')
+  })
+
+  it('LIST-4: cada asa propia es un separador enfocable con el nombre de su columna; ←/→ no ordenan', () => {
+    const onSortChange = vi.fn()
+    const onColumnWidthsChange = vi.fn()
+    render(
+      <ResponsiveList
+        columns={[
+          ...columns.slice(0, 2),
+          { key: 'menu', cell: () => '⋯', action: true },
+          columns[2],
+        ]}
+        data={rows}
+        rowKey={(r) => r.id}
+        resizable
+        columnWidths={{ total: 120 }}
+        onColumnWidthsChange={onColumnWidthsChange}
+        sort={null}
+        onSortChange={onSortChange}
+        hiddenColumns={[]}
+        onHiddenColumnsChange={() => {}}
+        onColumnsReset={() => {}}
+        labels={{ columnResize: (c) => `Resize ${c}` }}
+      />,
+    )
+    const seps = Array.from(table().querySelectorAll('[role="separator"]'))
+    // Todas menos la última; las mitades `start` (y el ancla de la última) no.
+    expect(seps.map((h) => h.getAttribute('aria-label'))).toEqual([
+      'Resize Nombre',
+      'Resize Total',
+      'Resize Acciones',
+    ])
+    expect(seps.every((h) => h.getAttribute('tabindex') === '0')).toBe(true)
+    expect(table().querySelectorAll('[data-column-resize-handle="start"][tabindex]')).toHaveLength(0)
+    expect(seps[1].getAttribute('aria-valuenow')).toBe('120')
+    // Orden de Tab en la cabecera: ordenar Total y luego su asa.
+    const totalTh = heads()[1]
+    const tabbables = Array.from(totalTh.querySelectorAll('button, [tabindex="0"]'))
+    expect(tabbables[0].tagName).toBe('BUTTON')
+    expect(tabbables[1]).toBe(seps[1])
+    // → en el asa: no ordena; guarda al soltar.
+    act(() => {
+      seps[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }))
+    })
+    act(() => {
+      seps[1].dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true, cancelable: true }))
+    })
+    expect(onSortChange).not.toHaveBeenCalled()
+    expect(onColumnWidthsChange).toHaveBeenCalledWith({ total: 136 })
   })
 
   it('la cabecera ordenable cicla asc → desc → asc y expone aria-sort', () => {
@@ -1516,7 +1599,7 @@ describe('ResponsiveList (como Excel + relleno)', () => {
     expect(tableStyle().minWidth).toBe(`${SUM + 40}px`)
   })
 
-  it('cabecera fija + menú: la tabla sigue midiendo la suma y el botón va en la última <th> sticky', () => {
+  it('LIST-3: cabecera fija + menú: la tabla sigue midiendo la suma y el envoltorio del ancla mide lo mismo', () => {
     renderO({
       stickyHeader: true,
       hiddenColumns: [],
@@ -1524,11 +1607,18 @@ describe('ResponsiveList (como Excel + relleno)', () => {
       onColumnsReset: () => {},
       mobileColumnsMenu: false,
     })
+    // Los anchos y el reparto no cambian.
     expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM}px` })
     const last = heads()[heads().length - 1]
     expect(last.className).toContain('sticky')
-    const menu = last.querySelector('[data-list-columns-menu-head]')!
-    expect(menu.className).toContain('bg-inherit')
+    expect(last.querySelector('[data-list-columns-menu-head]')).toBeNull()
+    const anchor = container.querySelector('[data-list-columns-menu-sticky]') as HTMLElement
+    // El envoltorio (padre del ancla y del contenedor de la tabla) mide la
+    // suma: el ancla sticky recorre todo el ancho de la tabla.
+    const wrap = anchor.parentElement as HTMLElement
+    expect(wrap.style.minWidth).toBe(`${SUM}px`)
+    expect(wrap.className).not.toContain('min-w-fit')
+    expect(wrap.contains(table())).toBe(true)
   })
 })
 
@@ -1572,14 +1662,16 @@ describe('ResponsiveList (fondo del botón del menú de columnas)', () => {
     expect(bgClasses(th.closest('thead')!)).toEqual(['bg-inherit'])
   })
 
-  it('cabecera fija: la <th> lleva el fondo opaco por variable (tarjeta o `--list-head-bg`) y el botón lo hereda', () => {
+  it('cabecera fija: la <th> lleva el fondo opaco por variable (tarjeta o `--list-head-bg`) y el botón (LIST-3: en su ancla) también', () => {
     render(
       <ResponsiveList columns={columns} data={rows} rowKey={(r) => r.id} stickyHeader {...menuProps} />,
     )
-    const th = menuEl().closest('th')!
+    const th = heads()[2]
     expect(th.className).toContain('var(--list-head-bg')
     expect(th.className).not.toMatch(/(^|\s)bg-background(\s|$)/)
-    expect(bgClasses(menuEl())).toEqual(['bg-inherit'])
+    const box = container.querySelector('[data-list-columns-menu-sticky] > div')!
+    expect(box.className).toContain('var(--list-head-bg')
+    expect(box.className).not.toMatch(/(^|\s)bg-background(\s|$)/)
     // La raíz pasa a `--color-card` sola dentro de un `.bg-card`.
     expect(container.querySelector('.\\@container')!.className).toContain(
       '[.bg-card_&]:[--list-auto-head-bg:var(--color-card)]',

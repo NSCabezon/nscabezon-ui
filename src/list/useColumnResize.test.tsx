@@ -3,7 +3,13 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { MIN_COLUMN_WIDTH, useColumnResize } from './useColumnResize'
+import {
+  MIN_COLUMN_WIDTH,
+  RESIZE_KEY_MAX,
+  RESIZE_KEY_STEP,
+  RESIZE_KEY_STEP_LARGE,
+  useColumnResize,
+} from './useColumnResize'
 
 // El redimensionado sale de ResponsiveList a un hook porque lo usan DOS tablas
 // con markup distinto: los listados y la tabla de líneas de presupuesto (que es
@@ -64,7 +70,7 @@ function Harness({
   )
 }
 
-const handle = () => container.querySelector('th > span[role="presentation"]')!
+const handle = () => container.querySelector('th > span[data-column-resize-handle=""]')!
 const live = () => container.querySelector('[data-testid="live"]')!.textContent
 
 function drag(dx: number, { release = true } = {}) {
@@ -299,6 +305,125 @@ describe('useColumnResize', () => {
       expect(colW('date')).toBe('131px')
       dragKey(1, -80)
       expect(onChange).toHaveBeenCalledWith({ date: 131 })
+    })
+
+    // LIST-4 (v0.9.7): el asa se maneja con teclado.
+    const sep = (i: number) => container.querySelectorAll('th')[i].querySelector('span')!
+    function key(el: Element, type: 'keydown' | 'keyup', k: string, init: KeyboardEventInit = {}) {
+      const ev = new KeyboardEvent(type, { key: k, bubbles: true, cancelable: true, ...init })
+      act(() => {
+        el.dispatchEvent(ev)
+      })
+      return ev
+    }
+
+    it('LIST-4: el asa es un separador enfocable con nombre y valores en px', () => {
+      act(() => root.render(<ExcelHarness columns={cols} widths={{ date: 130 }} onChange={vi.fn()} />))
+      const h = sep(2)
+      expect(h.getAttribute('role')).toBe('separator')
+      expect(h.getAttribute('aria-orientation')).toBe('vertical')
+      expect(h.getAttribute('tabindex')).toBe('0')
+      // Sin `header`, el nombre es la clave.
+      expect(h.getAttribute('aria-label')).toBe('Ajustar ancho de date')
+      expect(h.getAttribute('aria-valuenow')).toBe('130')
+      expect(h.getAttribute('aria-valuemin')).toBe(String(MIN_COLUMN_WIDTH))
+      expect(h.getAttribute('aria-valuemax')).toBe(String(RESIZE_KEY_MAX))
+      // Foco visible.
+      expect(h.className).toContain('focus-visible:before:bg-ring')
+      // La mitad `'start'` no es una parada de Tab ni un separador.
+      act(() => root.render(<StartHarness />))
+      const start = container.querySelector('[data-column-resize-handle="start"]')!
+      expect(start.getAttribute('role')).toBe('presentation')
+      expect(start.hasAttribute('tabindex')).toBe(false)
+    })
+
+    function StartHarness() {
+      const { resizeHandle } = useColumnResize({ columnWidths: {}, columns: cols })
+      return (
+        <table>
+          <thead>
+            <tr>
+              <th>{resizeHandle('client', 'start')}</th>
+            </tr>
+          </thead>
+        </table>
+      )
+    }
+
+    it('LIST-4: ←/→ cambian 16 px en vivo y se guarda UNA vez al soltar la tecla', () => {
+      const onChange = vi.fn()
+      act(() => root.render(<ExcelHarness columns={cols} widths={{ x: 1 }} onChange={onChange} />))
+      const h = sep(2)
+      const down = key(h, 'keydown', 'ArrowRight')
+      expect(down.defaultPrevented).toBe(true)
+      key(h, 'keydown', 'ArrowRight')
+      key(h, 'keydown', 'ArrowRight')
+      // En vivo: 120 + 3 × 16, sin guardar todavía.
+      expect(colW('date')).toBe(`${120 + 3 * RESIZE_KEY_STEP}px`)
+      expect(sep(2).getAttribute('aria-valuenow')).toBe(String(120 + 3 * RESIZE_KEY_STEP))
+      expect(onChange).not.toHaveBeenCalled()
+      key(sep(2), 'keyup', 'ArrowRight')
+      // Misma persistencia que el arrastre: el mapa entero con la columna nueva.
+      expect(onChange).toHaveBeenCalledTimes(1)
+      expect(onChange).toHaveBeenCalledWith({ x: 1, date: 120 + 3 * RESIZE_KEY_STEP })
+    })
+
+    it('LIST-4: Mayús+← estrecha 64 px y nunca baja del suelo', () => {
+      const onChange = vi.fn()
+      act(() => root.render(<ExcelHarness columns={cols} onChange={onChange} />))
+      const h = sep(0)
+      key(h, 'keydown', 'ArrowLeft', { shiftKey: true })
+      expect(colW('client')).toBe(`${160 - RESIZE_KEY_STEP_LARGE}px`)
+      key(sep(0), 'keydown', 'ArrowLeft', { shiftKey: true })
+      expect(colW('client')).toBe(`${MIN_COLUMN_WIDTH}px`)
+      key(sep(0), 'keyup', 'ArrowLeft', { shiftKey: true })
+      expect(onChange).toHaveBeenCalledWith({ client: MIN_COLUMN_WIDTH })
+    })
+
+    it('LIST-4: la columna de relleno parte de su ancho pintado (como el arrastre)', () => {
+      const onChange = vi.fn()
+      act(() =>
+        root.render(<ExcelHarness columns={cols} onChange={onChange} measured={{ desc: 500 }} />),
+      )
+      key(sep(1), 'keydown', 'ArrowRight')
+      key(sep(1), 'keyup', 'ArrowRight')
+      expect(onChange).toHaveBeenCalledWith({ desc: 500 + RESIZE_KEY_STEP })
+    })
+
+    it('LIST-4: perder el foco a mitad guarda lo pendiente', () => {
+      const onChange = vi.fn()
+      act(() => root.render(<ExcelHarness columns={cols} onChange={onChange} />))
+      const h = sep(2) as HTMLElement
+      act(() => h.focus())
+      key(h, 'keydown', 'ArrowLeft')
+      act(() => h.blur())
+      expect(onChange).toHaveBeenCalledWith({ date: 120 - RESIZE_KEY_STEP })
+    })
+
+    it('LIST-4: Escape y Supr devuelven el ancho de serie (como el doble clic)', () => {
+      const onChange = vi.fn()
+      act(() =>
+        root.render(<ExcelHarness columns={cols} widths={{ date: 300, client: 90 }} onChange={onChange} />),
+      )
+      key(sep(2), 'keydown', 'Escape')
+      expect(onChange).toHaveBeenLastCalledWith({ client: 90 })
+      key(sep(0), 'keydown', 'Delete')
+      expect(onChange).toHaveBeenLastCalledWith({ date: 300 })
+      // Sin ancho guardado no escribe nada.
+      onChange.mockClear()
+      key(sep(1), 'keydown', 'Escape')
+      expect(onChange).not.toHaveBeenCalled()
+    })
+
+    it('LIST-4: otras teclas (Tab, Intro, Ctrl+→) no hacen nada en el asa', () => {
+      const onChange = vi.fn()
+      act(() => root.render(<ExcelHarness columns={cols} onChange={onChange} />))
+      expect(key(sep(2), 'keydown', 'Tab').defaultPrevented).toBe(false)
+      expect(key(sep(2), 'keydown', 'Enter').defaultPrevented).toBe(false)
+      expect(key(sep(2), 'keydown', 'ArrowRight', { ctrlKey: true }).defaultPrevented).toBe(false)
+      key(sep(2), 'keyup', 'ArrowRight')
+      expect(onChange).not.toHaveBeenCalled()
+      expect(colW('date')).toBe('120px')
     })
 
     it('sin `minWidth`, el suelo es 64 y prefs viejas raras se respetan por encima', () => {

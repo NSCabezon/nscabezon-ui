@@ -164,6 +164,7 @@ export function AppUiProvider({ children }: { children: React.ReactNode }) {
       pageSizeLabel: t('pagination.pageSizeLabel'),
       pageSizeValue: (count) => t('pagination.pageSizeValue', { count }),
       pageSizeMenu: t('pagination.pageSizeLabel'), // submenú del menú de columnas (v0.7.0)
+      columnResize: (column) => t('columnsMenu.resize', { column }), // asa con teclado (v0.9.7)
       noResults: t('list.noResults'),
       loading: t('states.loading'),
       versionMessage: t('versionCheck.message'),
@@ -224,9 +225,15 @@ const view = useListView('orders', {
   botón se superpone en el borde derecho de la cabecera (dentro de la última
   `<th>` visible, que reserva su hueco con `pr-10`; una `action` sin cabecera
   no lo necesita), sin `<col>` ni celdas en el cuerpo, así que no le quita
-  ancho a las columnas de datos. Con `stickyHeader` viaja con la cabecera
-  fija; sin ella queda en la esquina derecha visible aunque la tabla scrollee
-  a lo ancho. En el Tab va detrás de las cabeceras ordenables.
+  ancho a las columnas de datos. **Siempre a la vista aunque la tabla
+  scrollee a lo ancho** (LIST-3, v0.9.7): sin `stickyHeader` queda en la
+  esquina derecha del envoltorio, fuera del scroll (en el Tab, detrás de las
+  cabeceras ordenables); con `stickyHeader` va en un ancla `sticky` (arriba y
+  a la derecha, `data-list-columns-menu-sticky`) justo antes de la `<table>`,
+  pegada al borde derecho del contenedor de scroll del consumidor y fija con
+  la cabecera al bajar (en el Tab, justo antes de las cabeceras). Ni anchos
+  ni reparto cambian: solo el envoltorio de la tabla mide lo mismo que ella
+  (`min-width` = suma con `resizable`, `min-w-fit` sin él).
 - Menú de columnas en móvil (`mobileColumnsMenu`): en móvil no hay cabecera
   de tabla, así que el menú va encima de las tarjetas. Está **activo por
   defecto** en cuanto la lista permite ocultar columnas
@@ -310,6 +317,18 @@ const view = useListView('orders', {
     estiramiento; si no cabe, scroll. Doble clic en el asa y «Restablecer
     columnas» devuelven los anchos de serie. La última columna no lleva asa
     propia.
+  - Teclado (v0.9.7, LIST-4): el asa de cada columna es un
+    `role="separator"` enfocable (`tabIndex=0`, en el Tab justo detrás del
+    botón de ordenar de su cabecera), con `aria-orientation="vertical"`,
+    `aria-label` = `labels.columnResize(columna)` (por defecto «Ajustar ancho
+    de {columna}») y `aria-valuenow/min/max` en px. **←/→** cambian 16 px
+    (1 rem; `RESIZE_KEY_STEP`), **Mayús+←/→** 64 px
+    (`RESIZE_KEY_STEP_LARGE`), con el mismo suelo que el ratón y techo de
+    teclado `RESIZE_KEY_MAX` (1600). Se ve en vivo y se guarda al soltar la
+    tecla (o al salir del asa), por el mismo `onColumnWidthsChange` que el
+    arrastre. **Escape, Supr o Retroceso** devuelven el ancho de serie (como
+    el doble clic). Las teclas no ordenan ni mueven la columna. La mitad
+    `start` de la zona de agarre no es enfocable.
   - Zona de agarre (v0.9.3): centrada en la línea. El asa de cada columna
     (`data-column-resize-handle=""`, borde derecho de su `<th>`) más la otra
     mitad en el borde izquierdo de la `<th>` siguiente

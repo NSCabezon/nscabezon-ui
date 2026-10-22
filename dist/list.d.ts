@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { CSSProperties } from 'react';
-import { g as ListSort, b as Labels, d as ListPrefs, e as ListPrefsDefaults, f as ListPrefsStore, h as SupabaseLikeClient, i as SupabaseListPrefsStoreOptions } from './UiProvider-COtezHWe.js';
-export { D as DEFAULT_LIST_PAGE_SIZE, E as EMPTY_LIST_PREFS, L as LIST_PAGE_SIZES, a as LIST_PREFS_STORAGE_PREFIX, c as ListPageSize, S as SortDir, m as createSupabaseListPrefsStore, o as isListPageSize, p as listPrefsEqual, q as localOnlyListPrefsStore, r as normalizeListPrefs, s as resolveListDefaults } from './UiProvider-COtezHWe.js';
+import { g as ListSort, b as Labels, d as ListPrefs, e as ListPrefsDefaults, f as ListPrefsStore, h as SupabaseLikeClient, i as SupabaseListPrefsStoreOptions } from './UiProvider-Ql4_gFkZ.js';
+export { D as DEFAULT_LIST_PAGE_SIZE, E as EMPTY_LIST_PREFS, L as LIST_PAGE_SIZES, a as LIST_PREFS_STORAGE_PREFIX, c as ListPageSize, S as SortDir, m as createSupabaseListPrefsStore, o as isListPageSize, p as listPrefsEqual, q as localOnlyListPrefsStore, r as normalizeListPrefs, s as resolveListDefaults } from './UiProvider-Ql4_gFkZ.js';
 
 type ResponsiveColumn<T> = {
     key: string;
@@ -187,6 +187,15 @@ declare function visibleColumnsOf<C extends {
 
 /** Atributo que marca cada `<th>` medible con la clave de su columna. */
 declare const COLUMN_WIDTH_KEY_ATTR = "data-column-width-key";
+/** Paso (px) de ←/→ en el asa enfocada (v0.9.7): 1 rem. */
+declare const RESIZE_KEY_STEP = 16;
+/** Paso (px) de Mayús+←/→ en el asa enfocada (v0.9.7): 4 rem. */
+declare const RESIZE_KEY_STEP_LARGE = 64;
+/**
+ * Techo (px) del teclado y `aria-valuemax` del asa (v0.9.7). El ratón no tiene
+ * techo; si el ancho ya lo supera, `aria-valuemax` es el propio ancho.
+ */
+declare const RESIZE_KEY_MAX = 1600;
 /**
  * Columnas redimensionables con el ratón: asa en el borde derecho de cada
  * cabecera, doble clic para devolverla a su ancho natural.
@@ -215,12 +224,22 @@ declare const COLUMN_WIDTH_KEY_ATTR = "data-column-width-key";
  *   (se puede estrechar; queda hueco a la derecha) hasta el doble clic.
  * Sin `columns` (tablas a mano antiguas): cambia la arrastrada, partiendo del
  * ancho guardado o, si no hay, del medido; suelo `MIN_COLUMN_WIDTH`.
+ *
+ * Teclado (v0.9.7, LIST-4): el asa `'end'` es un `role="separator"` enfocable
+ * (`aria-orientation="vertical"`, `aria-label` = `labels.columnResize(columna)`,
+ * `aria-valuenow/min/max` en px). ←/→ cambian 16 px (1 rem), Mayús+←/→ 64 px;
+ * se ve en vivo y se guarda al soltar la tecla (o al perder el foco), por el
+ * mismo `onColumnWidthsChange` que el arrastre y con el mismo suelo. Escape,
+ * Supr o Retroceso borran el ancho guardado, como el doble clic. La mitad
+ * `'start'` no es enfocable (sería la misma columna dos veces en el Tab).
  */
-declare function useColumnResize({ columnWidths, onColumnWidthsChange, columns, }: {
+declare function useColumnResize({ columnWidths, onColumnWidthsChange, columns, labels: labelsProp, }: {
     columnWidths?: Record<string, number>;
     onColumnWidthsChange?: (widths: Record<string, number>) => void;
     /** Columnas VISIBLES, en orden: activa el modelo «como Excel + relleno». */
     columns?: SizedColumn[];
+    /** Textos propios (`columnResize`); ganan al `UiProvider`. */
+    labels?: Partial<Labels>;
 }): {
     widthOf: (key: string) => number | undefined;
     colWidth: (key: string) => number | undefined;
@@ -229,7 +248,7 @@ declare function useColumnResize({ columnWidths, onColumnWidthsChange, columns, 
     flexKey: string | undefined;
     totalWidth: number | undefined;
     tableStyle: (extra?: number) => React.CSSProperties | undefined;
-    resizeHandle: (columnKey: string, edge?: "end" | "start") => React.JSX.Element;
+    resizeHandle: (columnKey: string, edge?: "end" | "start", name?: string) => React.JSX.Element;
 };
 
 type OrderableColumn = {
@@ -602,4 +621,4 @@ type SupabaseLikeAuthClient = SupabaseLikeClient & {
  */
 declare function useSupabaseListPrefsStore(client: SupabaseLikeAuthClient, { table, onError }?: SupabaseListPrefsStoreOptions): ListPrefsStore;
 
-export { COLUMN_WIDTH_KEY_ATTR, ColumnsMenu, type ColumnsMenuColumn, type ColumnsMenuProps, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, DEFAULT_PAGE_SIZE, LIST_PREFS_WIDTHS_DEBOUNCE_MS, ListFooter, type ListFooterProps, ListPrefs, ListPrefsDefaults, ListPrefsStore, ListSort, type ListView, type ListViewDefaults, type ListViewFooterProps, type ListViewListProps, MIN_COLUMN_WIDTH, Pagination, type PaginationProps, type ResponsiveColumn, ResponsiveList, type ResponsiveListProps, type SizedColumn, type SupabaseLikeAuthClient, SupabaseLikeClient, SupabaseListPrefsStoreOptions, TINTED_ROW_CLASS, TOUCH_TEXT_LINK, type UnpaginatedListView, type UseListPrefsOptions, type UseListPrefsResult, type UseListViewOptions, columnFloor, isFillColumn, listPrefsStorageKey, moveColumn, orderColumns, resolveColumnWidth, resolveFillColumnKey, rowTone, tableSizing, useColumnResize, useListColumns, useListCompact, useListPrefs, useListView, usePagination, useSupabaseListPrefsStore, visibleColumnsOf };
+export { COLUMN_WIDTH_KEY_ATTR, ColumnsMenu, type ColumnsMenuColumn, type ColumnsMenuProps, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, DEFAULT_PAGE_SIZE, LIST_PREFS_WIDTHS_DEBOUNCE_MS, ListFooter, type ListFooterProps, ListPrefs, ListPrefsDefaults, ListPrefsStore, ListSort, type ListView, type ListViewDefaults, type ListViewFooterProps, type ListViewListProps, MIN_COLUMN_WIDTH, Pagination, type PaginationProps, RESIZE_KEY_MAX, RESIZE_KEY_STEP, RESIZE_KEY_STEP_LARGE, type ResponsiveColumn, ResponsiveList, type ResponsiveListProps, type SizedColumn, type SupabaseLikeAuthClient, SupabaseLikeClient, SupabaseListPrefsStoreOptions, TINTED_ROW_CLASS, TOUCH_TEXT_LINK, type UnpaginatedListView, type UseListPrefsOptions, type UseListPrefsResult, type UseListViewOptions, columnFloor, isFillColumn, listPrefsStorageKey, moveColumn, orderColumns, resolveColumnWidth, resolveFillColumnKey, rowTone, tableSizing, useColumnResize, useListColumns, useListCompact, useListPrefs, useListView, usePagination, useSupabaseListPrefsStore, visibleColumnsOf };

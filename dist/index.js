@@ -13,6 +13,9 @@ import {
   ListFooter,
   MIN_COLUMN_WIDTH,
   Pagination,
+  RESIZE_KEY_MAX,
+  RESIZE_KEY_STEP,
+  RESIZE_KEY_STEP_LARGE,
   ResponsiveList,
   TINTED_ROW_CLASS,
   TOUCH_TEXT_LINK,
@@ -39,13 +42,13 @@ import {
   usePagination,
   useSupabaseListPrefsStore,
   visibleColumnsOf
-} from "./chunk-WB7ZTYYT.js";
+} from "./chunk-NN7YU7RS.js";
 import {
   VERSION_FOCUS_THROTTLE_MS,
   VERSION_POLL_INTERVAL_MS,
   fetchVersionJson,
   useVersionCheck
-} from "./chunk-4J3DGZBS.js";
+} from "./chunk-RI54ZDV6.js";
 import {
   AppleIcon,
   DEFAULT_LAST_AUTH_METHOD_KEY,
@@ -53,7 +56,7 @@ import {
   OAuthButtons,
   getLastAuthMethod,
   setLastAuthMethod
-} from "./chunk-SB3QDRST.js";
+} from "./chunk-3EYUKLMO.js";
 import {
   cn,
   safeStorage
@@ -63,7 +66,7 @@ import {
   defaultLabels,
   useLabels,
   useUi
-} from "./chunk-CH6JC77L.js";
+} from "./chunk-3L77SDL2.js";
 export {
   AppleIcon,
   COLUMN_WIDTH_KEY_ATTR,
@@ -82,6 +85,9 @@ export {
   MIN_COLUMN_WIDTH,
   OAuthButtons,
   Pagination,
+  RESIZE_KEY_MAX,
+  RESIZE_KEY_STEP,
+  RESIZE_KEY_STEP_LARGE,
   ResponsiveList,
   TINTED_ROW_CLASS,
   TOUCH_TEXT_LINK,

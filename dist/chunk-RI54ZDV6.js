@@ -1,7 +1,7 @@
 "use client";
 import {
   useLabels
-} from "./chunk-CH6JC77L.js";
+} from "./chunk-3L77SDL2.js";
 
 // src/version/useVersionCheck.ts
 import { useEffect, useRef } from "react";

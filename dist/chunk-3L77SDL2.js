@@ -9,6 +9,7 @@ var defaultLabels = {
   compactMode: "Modo compacto",
   columnMoveUp: (column) => `Subir ${column}`,
   columnMoveDown: (column) => `Bajar ${column}`,
+  columnResize: (column) => `Ajustar ancho de ${column}`,
   paginationFirst: "Primera p\xE1gina",
   paginationPrev: "P\xE1gina anterior",
   paginationNext: "P\xE1gina siguiente",

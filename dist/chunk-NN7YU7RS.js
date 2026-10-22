@@ -7,14 +7,14 @@ import {
 import {
   useLabels,
   useUi
-} from "./chunk-CH6JC77L.js";
+} from "./chunk-3L77SDL2.js";
 
 // src/list/responsive-list.tsx
-import * as React6 from "react";
+import * as React7 from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
 // src/list/columns-menu.tsx
-import * as React2 from "react";
+import "react";
 import { ChevronDown, ChevronUp, Columns3 } from "lucide-react";
 
 // src/primitives/dropdown-menu.tsx
@@ -200,6 +200,18 @@ function DropdownMenuSubContent({
   );
 }
 
+// src/list/nodeText.ts
+import * as React2 from "react";
+function nodeText(node) {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(nodeText).join("");
+  if (React2.isValidElement(node)) {
+    return nodeText(node.props.children);
+  }
+  return "";
+}
+
 // src/prefs/listPrefs.ts
 var LIST_PAGE_SIZES = [10, 25, 50, 100];
 var DEFAULT_LIST_PAGE_SIZE = 25;
@@ -317,15 +329,6 @@ function moveColumn(columns, order, from, to) {
 
 // src/list/columns-menu.tsx
 import { Fragment, jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
-function nodeText(node) {
-  if (node == null || typeof node === "boolean") return "";
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(nodeText).join("");
-  if (React2.isValidElement(node)) {
-    return nodeText(node.props.children);
-  }
-  return "";
-}
 function ColumnsMenu({
   columns,
   hidden,
@@ -452,15 +455,15 @@ function ColumnsMenu({
 }
 
 // src/list/listCompact.ts
-import * as React3 from "react";
-var ListCompactContext = React3.createContext(false);
+import * as React4 from "react";
+var ListCompactContext = React4.createContext(false);
 var ListCompactProvider = ListCompactContext.Provider;
 function useListCompact() {
-  return React3.useContext(ListCompactContext);
+  return React4.useContext(ListCompactContext);
 }
 
 // src/list/useColumnResize.tsx
-import * as React4 from "react";
+import * as React5 from "react";
 
 // src/list/columnWidth.ts
 var DEFAULT_ACTION_COLUMN_WIDTH = 56;
@@ -494,13 +497,19 @@ function visibleColumnsOf(columns, hidden) {
 import { jsx as jsx3 } from "react/jsx-runtime";
 var COLUMN_WIDTH_KEY_ATTR = "data-column-width-key";
 var DRAG_THRESHOLD = 3;
+var RESIZE_KEY_STEP = 16;
+var RESIZE_KEY_STEP_LARGE = 64;
+var RESIZE_KEY_MAX = 1600;
 function useColumnResize({
   columnWidths,
   onColumnWidthsChange,
-  columns
+  columns,
+  labels: labelsProp
 }) {
-  const [drag, setDrag] = React4.useState(null);
-  const dragRef = React4.useRef(null);
+  const labels = useLabels(labelsProp);
+  const [drag, setDrag] = React5.useState(null);
+  const dragRef = React5.useRef(null);
+  const keyRef = React5.useRef(null);
   const restingFillKey = columns ? resolveFillColumnKey(columns, columnWidths) : void 0;
   const fillKey = drag?.key === restingFillKey ? void 0 : restingFillKey;
   const colOf = (key) => columns?.find((c) => c.key === key);
@@ -535,28 +544,95 @@ function useColumnResize({
   function clamp(d, clientX) {
     return Math.round(Math.max(d.min, d.startW + clientX - d.startX));
   }
-  function resizeHandle(columnKey, edge = "end") {
+  function startWidthOf(columnKey, th) {
+    const measured = () => th?.getBoundingClientRect().width || void 0;
+    const col = colOf(columnKey);
+    if (!col) return columnWidths?.[columnKey] ?? measured() ?? 0;
+    if (columnKey === restingFillKey) return Math.max(measured() ?? 0, baseWidth(columnKey));
+    return baseWidth(columnKey);
+  }
+  function floorOf(columnKey) {
+    const col = colOf(columnKey);
+    return col ? columnFloor(col) : MIN_COLUMN_WIDTH;
+  }
+  function commit(key, px) {
+    if (columnWidths?.[key] === px) return;
+    onColumnWidthsChange?.({ ...columnWidths, [key]: px });
+  }
+  function restore(key) {
+    const next = { ...columnWidths };
+    delete next[key];
+    onColumnWidthsChange?.(next);
+  }
+  function flushKey() {
+    const k = keyRef.current;
+    if (!k) return;
+    keyRef.current = null;
+    setDrag(null);
+    commit(k.key, k.width);
+  }
+  function nameOf(columnKey, name) {
+    return name ?? (nodeText(colOf(columnKey)?.header) || columnKey);
+  }
+  function resizeHandle(columnKey, edge = "end", name) {
+    const focusable = edge === "end";
+    const now = focusable ? liveWidth(columnKey) : void 0;
+    const a11y = focusable ? {
+      role: "separator",
+      tabIndex: 0,
+      "aria-orientation": "vertical",
+      "aria-label": labels.columnResize(nameOf(columnKey, name)),
+      "aria-valuenow": now,
+      "aria-valuemin": floorOf(columnKey),
+      "aria-valuemax": Math.max(RESIZE_KEY_MAX, now ?? 0)
+    } : { role: "presentation" };
     return /* @__PURE__ */ jsx3(
       "span",
       {
-        role: "presentation",
+        ...a11y,
         "data-column-resize-handle": edge === "start" ? "start" : "",
-        className: edge === "start" ? "absolute inset-y-0 left-0 w-1.5 cursor-col-resize touch-none select-none before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:content-[''] hover:before:bg-muted-foreground" : "absolute inset-y-0 right-0 w-1.5 cursor-col-resize touch-none select-none before:absolute before:inset-y-1.5 before:right-0 before:w-px before:bg-border before:content-[''] hover:before:inset-y-0 hover:before:w-0.5 hover:before:bg-muted-foreground",
+        className: edge === "start" ? "absolute inset-y-0 left-0 w-1.5 cursor-col-resize touch-none select-none before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:content-[''] hover:before:bg-muted-foreground" : (
+          // Foco visible (v0.9.7): la zona se tiñe y la línea pasa a ser
+          // de 2 px a toda altura con el color del anillo de foco.
+          "absolute inset-y-0 right-0 w-1.5 cursor-col-resize touch-none select-none outline-none before:absolute before:inset-y-1.5 before:right-0 before:w-px before:bg-border before:content-[''] hover:before:inset-y-0 hover:before:w-0.5 hover:before:bg-muted-foreground focus-visible:bg-ring/30 focus-visible:before:inset-y-0 focus-visible:before:w-0.5 focus-visible:before:bg-ring"
+        ),
+        onKeyDown: focusable ? (e) => {
+          if (e.altKey || e.ctrlKey || e.metaKey) return;
+          if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+            e.preventDefault();
+            e.stopPropagation();
+            const step = e.shiftKey ? RESIZE_KEY_STEP_LARGE : RESIZE_KEY_STEP;
+            const from = keyRef.current?.key === columnKey ? keyRef.current.width : startWidthOf(columnKey, headOf(e.currentTarget, columnKey, edge));
+            const delta = e.key === "ArrowRight" ? step : -step;
+            const width = Math.round(
+              Math.max(floorOf(columnKey), Math.min(Math.max(RESIZE_KEY_MAX, from), from + delta))
+            );
+            keyRef.current = { key: columnKey, width };
+            setDrag({ key: columnKey, width });
+            return;
+          }
+          if (e.key === "Escape" || e.key === "Delete" || e.key === "Backspace") {
+            e.preventDefault();
+            e.stopPropagation();
+            keyRef.current = null;
+            setDrag(null);
+            if (columnWidths?.[columnKey] != null) restore(columnKey);
+          }
+        } : void 0,
+        onKeyUp: focusable ? (e) => {
+          if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+          e.stopPropagation();
+          flushKey();
+        } : void 0,
+        onBlur: focusable ? flushKey : void 0,
         onPointerDown: (e) => {
           if (e.button !== 0) return;
           const th = headOf(e.currentTarget, columnKey, edge);
-          const measured = () => th?.getBoundingClientRect().width || void 0;
-          const col = colOf(columnKey);
-          let startW;
-          if (!col) startW = columnWidths?.[columnKey] ?? measured() ?? 0;
-          else if (columnKey === restingFillKey) {
-            startW = Math.max(measured() ?? 0, baseWidth(columnKey));
-          } else startW = baseWidth(columnKey);
           const d = {
             key: columnKey,
             startX: e.clientX,
-            startW,
-            min: col ? columnFloor(col) : MIN_COLUMN_WIDTH,
+            startW: startWidthOf(columnKey, th),
+            min: floorOf(columnKey),
             moved: false
           };
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -577,19 +653,13 @@ function useColumnResize({
           setDrag(null);
           const moved = d.moved || Math.abs(e.clientX - d.startX) >= DRAG_THRESHOLD;
           if (!moved) return;
-          const px = clamp(d, e.clientX);
-          if (columnWidths?.[d.key] === px) return;
-          onColumnWidthsChange?.({ ...columnWidths, [d.key]: px });
+          commit(d.key, clamp(d, e.clientX));
         },
         onPointerCancel: () => {
           dragRef.current = null;
           setDrag(null);
         },
-        onDoubleClick: () => {
-          const next = { ...columnWidths };
-          delete next[columnKey];
-          onColumnWidthsChange?.(next);
-        },
+        onDoubleClick: () => restore(columnKey),
         onClick: (e) => e.stopPropagation()
       }
     );
@@ -804,10 +874,11 @@ function ResponsiveList({
   }
   const orderedColumns = orderColumns(columns, columnOrder);
   const visibleColumns = visibleColumnsOf(orderedColumns, hiddenColumns);
-  const { colWidth, tableStyle, resizeHandle } = useColumnResize({
+  const { colWidth, tableStyle, totalWidth, resizeHandle } = useColumnResize({
     columnWidths,
     onColumnWidthsChange,
-    columns: visibleColumns
+    columns: visibleColumns,
+    labels: labelsProp
   });
   const mobileColumns = visibleColumns.filter((c) => !c.hideOnMobile);
   const primary = mobileColumns.find((c) => c.primary);
@@ -837,12 +908,13 @@ function ResponsiveList({
   const compactHeadClass = compact ? "whitespace-nowrap" : void 0;
   const menuInHead = !!columnsMenu;
   const menuOutsideScroll = menuInHead && !stickyHeader;
+  const menuSticky = menuInHead && !!stickyHeader;
   const lastVisibleCol = visibleColumns[visibleColumns.length - 1];
   const lastHeadPad = menuInHead && !!lastVisibleCol && !(lastVisibleCol.action && !lastVisibleCol.header);
   const reorderable = !!onColumnOrderChange;
-  const [dragKey, setDragKey] = React6.useState(null);
-  const [overKey, setOverKey] = React6.useState(null);
-  const resizingRef = React6.useRef(false);
+  const [dragKey, setDragKey] = React7.useState(null);
+  const [overKey, setOverKey] = React7.useState(null);
+  const resizingRef = React7.useRef(false);
   const visibleIndex = (key) => key == null ? -1 : visibleColumns.findIndex((c) => c.key === key);
   const dropSide = (key) => {
     if (!dragKey || overKey !== key || dragKey === key) return null;
@@ -914,160 +986,201 @@ function ResponsiveList({
     // Midiendo el contenedor, una lista metida en una tarjeta estrecha también
     // acierta — el caso de las sedes en Ajustes → Taller, con 302 px.
     /* @__PURE__ */ jsx5(ListCompactProvider, { value: compact, children: /* @__PURE__ */ jsxs3("div", { className: cn("@container", AUTO_HEAD_BG, className), children: [
-      /* @__PURE__ */ jsx5("div", { className: cn("hidden @3xl:block", menuOutsideScroll && "relative"), children: /* @__PURE__ */ jsxs3(
-        Table,
+      /* @__PURE__ */ jsxs3(
+        "div",
         {
-          containerClassName: stickyHeader ? "overflow-visible" : menuOutsideScroll ? "static overflow-x-auto" : void 0,
-          "data-compact": compact ? "" : void 0,
           className: cn(
-            stickyHeader && "border-separate border-spacing-0 [&_tbody_td]:border-b [&_tbody_tr:last-child_td]:border-b-0",
-            resizable && "table-fixed"
+            "hidden @3xl:block",
+            menuOutsideScroll && "relative",
+            // Ancla del menú con cabecera fija (LIST-3): el envoltorio mide lo
+            // que la tabla para que el ancla `sticky` recorra todo su ancho.
+            menuSticky && "relative",
+            menuSticky && !resizable && "min-w-fit"
           ),
-          style: resizable ? tableStyle(leading ? 40 : 0) : void 0,
+          style: menuSticky && resizable && totalWidth != null ? { minWidth: totalWidth + (leading ? 40 : 0) } : void 0,
           children: [
-            resizable && /* @__PURE__ */ jsxs3("colgroup", { children: [
-              leading && /* @__PURE__ */ jsx5("col", { style: { width: 40 } }),
-              visibleColumns.map((col) => {
-                const width = colWidth(col.key);
-                return /* @__PURE__ */ jsx5("col", { style: width ? { width } : void 0 }, col.key);
-              })
-            ] }),
-            /* @__PURE__ */ jsx5(TableHeader, { className: cn(HEAD_INHERIT, stickyHeader && "[&_tr]:border-b-0"), children: /* @__PURE__ */ jsxs3(TableRow, { className: cn(HEAD_INHERIT, stickyHeader && "hover:bg-transparent"), children: [
-              leading && /* @__PURE__ */ jsx5(TableHead, { className: cn("w-10", HEAD_INHERIT, stickyHeadClass), style: stickyHeadStyle, children: /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.selectColumn }) }),
-              visibleColumns.map((col, i) => {
-                const draggable = reorderable && !col.action;
-                const prevKey = i > 0 ? visibleColumns[i - 1].key : void 0;
-                const side = draggable ? dropSide(col.key) : null;
-                const isLast = col.key === lastVisibleKey;
-                const staticHead = isLast && menuOutsideScroll;
-                return /* @__PURE__ */ jsxs3(
-                  TableHead,
+            menuSticky && /* @__PURE__ */ jsx5(
+              "div",
+              {
+                "data-list-columns-menu-head": true,
+                "data-list-columns-menu-sticky": "",
+                className: "sticky right-0 z-20 ml-auto h-0 w-0",
+                style: stickyHeadStyle,
+                onDragOver: (e) => e.stopPropagation(),
+                onDrop: (e) => e.stopPropagation(),
+                children: /* @__PURE__ */ jsx5(
+                  "div",
                   {
                     className: cn(
-                      // `relative` ANTES de `sticky` (stickyHeadClass): con las
-                      // dos, tailwind-merge se queda con la última y sticky es
-                      // también contenedor del asa absoluta (y del indicador).
-                      (resizable || draggable) && !staticHead && "relative",
-                      HEAD_INHERIT,
-                      fixedCellClass,
-                      col.sortable && onSortChange && "group",
-                      draggable && "cursor-grab active:cursor-grabbing",
-                      dragKey === col.key && "opacity-50",
-                      stickyHeadClass,
-                      col.headClassName,
-                      compactHeadClass,
-                      isLast && lastHeadPad && "pr-10",
-                      staticHead && side && (side === "before" ? "shadow-[inset_2px_0_0_var(--color-primary)]" : "shadow-[inset_-2px_0_0_var(--color-primary)]")
+                      "absolute top-0 right-0 flex h-10 cursor-auto items-center px-1",
+                      HEAD_BG
                     ),
-                    style: stickyHeadStyle,
-                    "aria-sort": ariaSort(col),
-                    "data-column-key": draggable ? col.key : void 0,
-                    "data-column-width-key": resizable ? col.key : void 0,
-                    "data-dragging": dragKey === col.key ? "" : void 0,
-                    "data-drop": side ?? void 0,
-                    ...headDragProps(col),
-                    children: [
-                      renderHead(col),
-                      side && !staticHead && /* @__PURE__ */ jsx5(
-                        "span",
+                    children: columnsMenu
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxs3(
+              Table,
+              {
+                containerClassName: stickyHeader ? "overflow-visible" : menuOutsideScroll ? "static overflow-x-auto" : void 0,
+                "data-compact": compact ? "" : void 0,
+                className: cn(
+                  stickyHeader && "border-separate border-spacing-0 [&_tbody_td]:border-b [&_tbody_tr:last-child_td]:border-b-0",
+                  resizable && "table-fixed"
+                ),
+                style: resizable ? tableStyle(leading ? 40 : 0) : void 0,
+                children: [
+                  resizable && /* @__PURE__ */ jsxs3("colgroup", { children: [
+                    leading && /* @__PURE__ */ jsx5("col", { style: { width: 40 } }),
+                    visibleColumns.map((col) => {
+                      const width = colWidth(col.key);
+                      return /* @__PURE__ */ jsx5("col", { style: width ? { width } : void 0 }, col.key);
+                    })
+                  ] }),
+                  /* @__PURE__ */ jsx5(TableHeader, { className: cn(HEAD_INHERIT, stickyHeader && "[&_tr]:border-b-0"), children: /* @__PURE__ */ jsxs3(TableRow, { className: cn(HEAD_INHERIT, stickyHeader && "hover:bg-transparent"), children: [
+                    leading && /* @__PURE__ */ jsx5(TableHead, { className: cn("w-10", HEAD_INHERIT, stickyHeadClass), style: stickyHeadStyle, children: /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.selectColumn }) }),
+                    visibleColumns.map((col, i) => {
+                      const draggable = reorderable && !col.action;
+                      const prevKey = i > 0 ? visibleColumns[i - 1].key : void 0;
+                      const side = draggable ? dropSide(col.key) : null;
+                      const isLast = col.key === lastVisibleKey;
+                      const staticHead = isLast && menuOutsideScroll;
+                      return /* @__PURE__ */ jsxs3(
+                        TableHead,
                         {
-                          "aria-hidden": true,
-                          "data-column-drop-indicator": side,
                           className: cn(
-                            "pointer-events-none absolute inset-y-0 z-10 w-0.5 bg-primary",
-                            side === "before" ? "left-0" : "right-0"
-                          )
-                        }
-                      ),
-                      col.action && !col.header && /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.actionsColumn }),
-                      resizable && !isLast && resizeHandle(col.key),
-                      isLast && columnsMenu && /* @__PURE__ */ jsx5(
-                        "div",
-                        {
-                          "data-list-columns-menu-head": true,
-                          className: cn(
-                            "absolute top-0 right-0 z-20 flex h-10 cursor-auto items-center px-1",
-                            HEAD_INHERIT
+                            // `relative` ANTES de `sticky` (stickyHeadClass): con las
+                            // dos, tailwind-merge se queda con la última y sticky es
+                            // también contenedor del asa absoluta (y del indicador).
+                            (resizable || draggable) && !staticHead && "relative",
+                            HEAD_INHERIT,
+                            fixedCellClass,
+                            col.sortable && onSortChange && "group",
+                            draggable && "cursor-grab active:cursor-grabbing",
+                            dragKey === col.key && "opacity-50",
+                            stickyHeadClass,
+                            col.headClassName,
+                            compactHeadClass,
+                            isLast && lastHeadPad && "pr-10",
+                            staticHead && side && (side === "before" ? "shadow-[inset_2px_0_0_var(--color-primary)]" : "shadow-[inset_-2px_0_0_var(--color-primary)]")
                           ),
-                          onDragOver: (e) => e.stopPropagation(),
-                          onDrop: (e) => e.stopPropagation(),
-                          children: columnsMenu
-                        }
-                      ),
-                      resizable && prevKey && !staticHead && resizeHandle(prevKey, "start"),
-                      resizable && prevKey && staticHead && /* @__PURE__ */ jsx5(
-                        "div",
-                        {
-                          "data-column-resize-anchor": "",
-                          className: "relative -my-20 -ml-4 h-40 w-0",
-                          children: resizeHandle(prevKey, "start")
-                        }
-                      )
-                    ]
-                  },
-                  col.key
-                );
-              })
-            ] }) }),
-            /* @__PURE__ */ jsx5(TableBody, { children: data.map((row) => {
-              const href = rowHref?.(row);
-              const style = rowStyle?.(row);
-              return /* @__PURE__ */ jsxs3(
-                TableRow,
-                {
-                  className: cn(
-                    (href || onRowClick) && (style ? "cursor-pointer" : "cursor-pointer hover:bg-muted/50"),
-                    style && TINTED_ROW_CLASS,
-                    rowClassName?.(row)
-                  ),
-                  style,
-                  "data-state": isRowSelected?.(row) ? "selected" : void 0,
-                  ...rowHoverProps?.(row),
-                  ...href ? rowNavProps(href) : { onClick: onRowClick ? () => onRowClick(row) : void 0 },
-                  role: !href && onRowClick ? "button" : void 0,
-                  tabIndex: !href && onRowClick ? 0 : void 0,
-                  onKeyDown: !href && onRowClick ? (e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onRowClick(row);
-                    }
-                  } : void 0,
-                  children: [
-                    leading && // onAuxClick además de onClick: sin él, el click de rueda
-                    // sobre el checkbox de selección abría el detalle en una
-                    // pestaña nueva.
-                    /* @__PURE__ */ jsx5(
-                      TableCell,
-                      {
-                        onClick: (e) => e.stopPropagation(),
-                        onAuxClick: (e) => e.stopPropagation(),
-                        children: leading(row)
-                      }
-                    ),
-                    visibleColumns.map((col) => /* @__PURE__ */ jsx5(
-                      TableCell,
+                          style: stickyHeadStyle,
+                          "aria-sort": ariaSort(col),
+                          "data-column-key": draggable ? col.key : void 0,
+                          "data-column-width-key": resizable ? col.key : void 0,
+                          "data-dragging": dragKey === col.key ? "" : void 0,
+                          "data-drop": side ?? void 0,
+                          ...headDragProps(col),
+                          children: [
+                            renderHead(col),
+                            side && !staticHead && /* @__PURE__ */ jsx5(
+                              "span",
+                              {
+                                "aria-hidden": true,
+                                "data-column-drop-indicator": side,
+                                className: cn(
+                                  "pointer-events-none absolute inset-y-0 z-10 w-0.5 bg-primary",
+                                  side === "before" ? "left-0" : "right-0"
+                                )
+                              }
+                            ),
+                            col.action && !col.header && /* @__PURE__ */ jsx5("span", { className: "sr-only", children: labels.actionsColumn }),
+                            resizable && !isLast && resizeHandle(
+                              col.key,
+                              "end",
+                              nodeText(col.header) || (col.action ? labels.actionsColumn : col.key)
+                            ),
+                            isLast && menuOutsideScroll && /* @__PURE__ */ jsx5(
+                              "div",
+                              {
+                                "data-list-columns-menu-head": true,
+                                className: cn(
+                                  "absolute top-0 right-0 z-20 flex h-10 cursor-auto items-center px-1",
+                                  HEAD_INHERIT
+                                ),
+                                onDragOver: (e) => e.stopPropagation(),
+                                onDrop: (e) => e.stopPropagation(),
+                                children: columnsMenu
+                              }
+                            ),
+                            resizable && prevKey && !staticHead && resizeHandle(prevKey, "start"),
+                            resizable && prevKey && staticHead && /* @__PURE__ */ jsx5(
+                              "div",
+                              {
+                                "data-column-resize-anchor": "",
+                                className: "relative -my-20 -ml-4 h-40 w-0",
+                                children: resizeHandle(prevKey, "start")
+                              }
+                            )
+                          ]
+                        },
+                        col.key
+                      );
+                    })
+                  ] }) }),
+                  /* @__PURE__ */ jsx5(TableBody, { children: data.map((row) => {
+                    const href = rowHref?.(row);
+                    const style = rowStyle?.(row);
+                    return /* @__PURE__ */ jsxs3(
+                      TableRow,
                       {
                         className: cn(
-                          // Las `action` quedan fuera del recorte con elipsis: son
-                          // botones (con o sin texto), no texto que deba acortarse.
-                          // Sin esto un botón «Presupuesto de venta» dentro de una
-                          // columna estrecha se recortaba a media palabra.
-                          fixedCellClass && !col.action && fixedCellClass,
-                          col.cellClassName,
-                          !col.action && compactCellClass
+                          (href || onRowClick) && (style ? "cursor-pointer" : "cursor-pointer hover:bg-muted/50"),
+                          style && TINTED_ROW_CLASS,
+                          rowClassName?.(row)
                         ),
-                        children: renderCell(col, row, href)
+                        style,
+                        "data-state": isRowSelected?.(row) ? "selected" : void 0,
+                        ...rowHoverProps?.(row),
+                        ...href ? rowNavProps(href) : { onClick: onRowClick ? () => onRowClick(row) : void 0 },
+                        role: !href && onRowClick ? "button" : void 0,
+                        tabIndex: !href && onRowClick ? 0 : void 0,
+                        onKeyDown: !href && onRowClick ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onRowClick(row);
+                          }
+                        } : void 0,
+                        children: [
+                          leading && // onAuxClick además de onClick: sin él, el click de rueda
+                          // sobre el checkbox de selección abría el detalle en una
+                          // pestaña nueva.
+                          /* @__PURE__ */ jsx5(
+                            TableCell,
+                            {
+                              onClick: (e) => e.stopPropagation(),
+                              onAuxClick: (e) => e.stopPropagation(),
+                              children: leading(row)
+                            }
+                          ),
+                          visibleColumns.map((col) => /* @__PURE__ */ jsx5(
+                            TableCell,
+                            {
+                              className: cn(
+                                // Las `action` quedan fuera del recorte con elipsis: son
+                                // botones (con o sin texto), no texto que deba acortarse.
+                                // Sin esto un botón «Presupuesto de venta» dentro de una
+                                // columna estrecha se recortaba a media palabra.
+                                fixedCellClass && !col.action && fixedCellClass,
+                                col.cellClassName,
+                                !col.action && compactCellClass
+                              ),
+                              children: renderCell(col, row, href)
+                            },
+                            col.key
+                          ))
+                        ]
                       },
-                      col.key
-                    ))
-                  ]
-                },
-                rowKey(row)
-              );
-            }) })
+                      rowKey(row)
+                    );
+                  }) })
+                ]
+              }
+            )
           ]
         }
-      ) }),
+      ),
       /* @__PURE__ */ jsxs3("div", { className: "space-y-2 @3xl:hidden", children: [
         mobileColumnsMenu && columnsMenu && /* @__PURE__ */ jsx5("div", { className: "flex justify-end", "data-list-columns-menu": true, children: columnsMenu }),
         data.map((row) => {
@@ -1942,6 +2055,9 @@ export {
   tableSizing,
   visibleColumnsOf,
   COLUMN_WIDTH_KEY_ATTR,
+  RESIZE_KEY_STEP,
+  RESIZE_KEY_STEP_LARGE,
+  RESIZE_KEY_MAX,
   useColumnResize,
   TINTED_ROW_CLASS,
   rowTone,

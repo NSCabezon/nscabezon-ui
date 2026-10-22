@@ -127,6 +127,11 @@ type Labels = {
     columnMoveUp: (column: string) => string;
     /** Botón «Bajar» de una columna en el menú de columnas (aria-label/title). */
     columnMoveDown: (column: string) => string;
+    /**
+     * Nombre accesible del asa de redimensionar una columna (v0.9.7,
+     * `role="separator"`, se maneja con ←/→ del teclado).
+     */
+    columnResize: (column: string) => string;
     paginationFirst: string;
     paginationPrev: string;
     paginationNext: string;

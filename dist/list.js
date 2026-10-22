@@ -13,6 +13,9 @@ import {
   ListFooter,
   MIN_COLUMN_WIDTH,
   Pagination,
+  RESIZE_KEY_MAX,
+  RESIZE_KEY_STEP,
+  RESIZE_KEY_STEP_LARGE,
   ResponsiveList,
   TINTED_ROW_CLASS,
   TOUCH_TEXT_LINK,
@@ -39,9 +42,9 @@ import {
   usePagination,
   useSupabaseListPrefsStore,
   visibleColumnsOf
-} from "./chunk-WB7ZTYYT.js";
+} from "./chunk-NN7YU7RS.js";
 import "./chunk-6CXBNIIA.js";
-import "./chunk-CH6JC77L.js";
+import "./chunk-3L77SDL2.js";
 export {
   COLUMN_WIDTH_KEY_ATTR,
   ColumnsMenu,
@@ -56,6 +59,9 @@ export {
   ListFooter,
   MIN_COLUMN_WIDTH,
   Pagination,
+  RESIZE_KEY_MAX,
+  RESIZE_KEY_STEP,
+  RESIZE_KEY_STEP_LARGE,
   ResponsiveList,
   TINTED_ROW_CLASS,
   TOUCH_TEXT_LINK,

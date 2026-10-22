@@ -18,6 +18,11 @@ export type Labels = {
   columnMoveUp: (column: string) => string
   /** Botón «Bajar» de una columna en el menú de columnas (aria-label/title). */
   columnMoveDown: (column: string) => string
+  /**
+   * Nombre accesible del asa de redimensionar una columna (v0.9.7,
+   * `role="separator"`, se maneja con ←/→ del teclado).
+   */
+  columnResize: (column: string) => string
   paginationFirst: string
   paginationPrev: string
   paginationNext: string
@@ -64,6 +69,7 @@ export const defaultLabels: Labels = {
   compactMode: 'Modo compacto',
   columnMoveUp: (column) => `Subir ${column}`,
   columnMoveDown: (column) => `Bajar ${column}`,
+  columnResize: (column) => `Ajustar ancho de ${column}`,
   paginationFirst: 'Primera página',
   paginationPrev: 'Página anterior',
   paginationNext: 'Página siguiente',
