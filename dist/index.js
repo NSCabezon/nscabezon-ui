@@ -42,7 +42,7 @@ import {
   usePagination,
   useSupabaseListPrefsStore,
   visibleColumnsOf
-} from "./chunk-NN7YU7RS.js";
+} from "./chunk-DEQYBAGL.js";
 import {
   VERSION_FOCUS_THROTTLE_MS,
   VERSION_POLL_INTERVAL_MS,

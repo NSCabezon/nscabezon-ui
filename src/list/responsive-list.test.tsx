@@ -2,7 +2,7 @@
 import * as React from 'react'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import {
   ResponsiveList,
@@ -1411,11 +1411,52 @@ describe('ResponsiveList (como Excel + relleno)', () => {
     expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM}px` })
   })
 
-  it('arrastrar el relleno parte de su ancho pintado y guarda su base', () => {
+  it('arrastrar el relleno parte de su ancho pintado (sin contenedor medido, el del <th>)', () => {
     measured.desc = 500
     const onChange = renderO()
     dragHandle('desc', -100)
     expect(onChange).toHaveBeenCalledWith({ desc: 400 })
+  })
+
+  it('LIST-6: mide su contenedor; el tope guardado en pantalla grande cabe en una menor y se ve igual en la grande', () => {
+    let boxW = 2 * SUM
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      if (this.getAttribute('data-slot') === 'table-container') return { width: boxW } as DOMRect
+      const key = this.getAttribute('data-column-width-key')
+      return { width: key ? (measured[key] ?? 0) : 0 } as DOMRect
+    }
+    // ResizeObserver de mentira: avisa a mano cuando cambia el contenedor.
+    const observers: (() => void)[] = []
+    const originalRO = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      constructor(cb: () => void) {
+        observers.push(cb)
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver
+    onTestFinished(() => {
+      globalThis.ResizeObserver = originalRO
+    })
+    // Contenedor 1432: relleno libre pintado a 160 + 716 = 876 (sin ancho en su <col>).
+    const onChange = renderO()
+    expect(colWidths().desc).toBeNull()
+    dragHandle('desc', -40)
+    const saved = onChange.mock.calls.at(-1)![0] as Record<string, number>
+    expect(Object.keys(saved)).toEqual(['desc'])
+    // Grande: el borde del relleno quedó 40 px a la izquierda de 410 + 716.
+    renderO({ columnWidths: saved })
+    const px = (k: string) => parseFloat(colWidths()[k] ?? '')
+    const keys = ['num', 'client', 'desc', 'opened', 'status', 'menu']
+    expect(px('desc')).toBe(saved.desc)
+    expect(Math.abs(px('num') + px('client') + px('desc') - (410 + 716 - 40))).toBeLessThanOrEqual(1)
+    expect(Math.abs(keys.reduce((a, k) => a + px(k), 0) - boxW)).toBeLessThanOrEqual(0.5)
+    // Otra pantalla (contenedor justo de lo de serie): cabe, relleno a su base.
+    boxW = SUM
+    act(() => observers.forEach((cb) => cb()))
+    expect(colWidths()).toEqual({ num: '90px', client: '160px', desc: '160px', opened: '120px', status: '130px', menu: '56px' })
+    expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM}px` })
   })
 
   it('RESIZE-CLICK-1: un clic sin mover en el asa (propia o de inicio) no guarda ancho ni ordena; el doble clic sigue restaurando', () => {

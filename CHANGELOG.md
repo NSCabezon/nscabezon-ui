@@ -3,6 +3,62 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.9.8] - 2026-10-22
+
+### Cambiado
+
+- **El ancho guardado de la columna de relleno es ahora su TOPE: «como mucho
+  X»** (LIST-6, decisión del dueño 22/10/2026). Hasta la 0.9.7, arrastrar el
+  relleno guardaba su ancho pintado (base + todo el sobrante de ESA pantalla)
+  como ancho fijo, y como los anchos viajan entre dispositivos rompía las
+  pantallas pequeñas: en `/work-orders` a 1920, estrechar Descripción 40 px
+  guardaba `{description: 566}` y a 1440 la tabla medía 1592 px en 1152 (440 px
+  de scroll lateral). Ahora:
+  - **Pantallas menores:** el relleno con tope encoge hasta lo que quepa,
+    nunca por debajo de su base (`width`/160) ni de su suelo; si lo de serie
+    cabía, sigue cabiendo. El `min-width` de la tabla cuenta el relleno con
+    `min(tope, base)`.
+  - **Pantallas grandes:** se ve a su tope, sin crecer más; lo que sobre va al
+    resto en proporción (como cuando todas las columnas tienen ancho).
+  - **Arrastrarlo no salta:** el borde sigue al ratón desde su ancho pintado y
+    al soltar se guarda el ancho pintado como tope.
+  - **Doble clic, Escape o Supr** quitan el tope (relleno libre otra vez), y
+    también ensancharlo hasta que el tope no limite nada en esa pantalla: no se
+    guarda un tope que no limita.
+  - Con tope, el relleno no puede ser más ancho que el hueco libre: para darle
+    más sitio, se estrechan otras columnas.
+
+  Para aplicar el tope hace falta el ancho del contenedor: `ResponsiveList` lo
+  mide (padre de la `<table>`, `ResizeObserver`) y lo pasa a
+  `useColumnResize({ containerWidth, leadingWidth })` (opciones nuevas). Con
+  tope y contenedor conocido, cada `<col>` lleva su ancho en pantalla
+  calculado (table-fixed no sabe poner un máximo a una columna). Sin
+  contenedor (tablas a mano que no lo pasen, o jsdom, que mide 0), el tope se
+  pinta como el ancho fijo de la 0.9.6.
+
+### Corregido
+
+- **Con el sobrante repartido en proporción, el borde no seguía al ratón**
+  (UI-9): 60 px de arrastre movían el borde 48 (y el relleno, 40 → 26), porque
+  se sumaba el delta a la base y la tabla la pintaba escalada (y reescalaba las
+  demás). Ahora se resuelve, con el mismo modelo con el que se pinta, la base
+  que deja el borde exactamente bajo el ratón (con escala `C / suma`, la base
+  cambia más que `dx / escala` porque las demás se reescalan). Si el borde no
+  puede ir ahí (la última columna, cuyo borde es el del contenedor, o una tras
+  un relleno libre) se sigue su ancho en pantalla. Sin `containerWidth`, el
+  ancho del contenedor se lee de la propia `<table>` cuando mide más que su
+  `min-width`. El teclado (LIST-4) mueve el borde 16 / 64 px **en pantalla**;
+  en el suelo o el techo el paso no se acumula. Sin `columns` (tablas a mano
+  antiguas), sin cambios.
+- Comentarios desfasados que decían «sin relleno queda hueco a la derecha»
+  (falso desde la 0.9.6) en `responsive-list.tsx` y `columnWidth.ts` (UI-10).
+
+> **Consumidores:** nada que cambiar con `ResponsiveList`. Quien ya tenga
+> guardado un ancho de relleno inflado (p. ej. 566) pasa a verlo como tope:
+> deja de desbordar las pantallas pequeñas sin hacer nada. Una tabla a mano con
+> `useColumnResize({ columns })` y columna `fill` debe pasar `containerWidth`
+> (y `leadingWidth` si tiene columna de selección) para que el tope se aplique.
+
 ## [0.9.7] - 2026-10-22
 
 ### Añadido

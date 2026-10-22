@@ -177,19 +177,32 @@ describe('useColumnResize', () => {
       widths = {},
       onChange,
       measured = {},
+      tableWidth,
+      containerWidth,
     }: {
       columns: Col[]
       widths?: Record<string, number>
       onChange: (w: Record<string, number>) => void
       measured?: Record<string, number>
+      /** Ancho pintado de la `<table>` (contenedor): > suma = reparto proporcional. */
+      tableWidth?: number
+      /** Ancho medido del contenedor (como hace `ResponsiveList`). */
+      containerWidth?: number
     }) {
       const { colWidth, resizeHandle, fillKey, flexKey, tableStyle } = useColumnResize({
         columnWidths: widths,
         onColumnWidthsChange: onChange,
         columns,
+        containerWidth,
       })
       return (
-        <table data-testid="t" style={tableStyle()}>
+        <table
+          data-testid="t"
+          style={tableStyle()}
+          ref={(el) => {
+            if (el && tableWidth != null) el.getBoundingClientRect = () => ({ width: tableWidth }) as DOMRect
+          }}
+        >
           <colgroup>
             {columns.map((c) => (
               <col key={c.key} data-testid={`col-${c.key}`} style={{ width: colWidth(c.key) }} />
@@ -266,13 +279,211 @@ describe('useColumnResize', () => {
       expect(onChange).toHaveBeenCalledWith({ date: 420 })
     })
 
-    it('arrastrar el relleno parte de su ancho pintado y guarda su base', () => {
+    it('LIST-6: sin contenedor medido, arrastrar el relleno parte de su ancho pintado (medido)', () => {
       const onChange = vi.fn()
       act(() =>
         root.render(<ExcelHarness columns={cols} onChange={onChange} measured={{ desc: 500 }} />),
       )
       dragKey(1, 40)
       expect(onChange).toHaveBeenCalledWith({ desc: 540 })
+    })
+
+    // Borde derecho EN PANTALLA de la columna i con reparto proporcional:
+    // table-fixed al 100 % pinta cada columna a base × C / suma.
+    function edgeOf(bases: number[], i: number, C: number) {
+      const S = bases.reduce((a, b) => a + b, 0)
+      const s = Math.max(1, C / S)
+      return s * bases.slice(0, i + 1).reduce((a, b) => a + b, 0)
+    }
+    const abc: Col[] = [{ key: 'a', width: 100 }, { key: 'b', width: 100 }, { key: 'c', width: 200 }]
+
+    // `/work-orders` de Gesmoto: 1026 px de columnas + Descripción (relleno,
+    // base 108). A 1920 el contenedor mide 1632; a 1440, 1152.
+    const wo: Col[] = [
+      { key: 'number', width: 108 },
+      { key: 'client', width: 216 },
+      { key: 'vehicle', width: 180 },
+      { key: 'description', width: 108, fill: true },
+      { key: 'opened', width: 144 },
+      { key: 'days', width: 144 },
+      { key: 'status', width: 234 },
+    ]
+    const woW = () => wo.map((c) => parseFloat(colW(c.key)))
+    const sumOf = (xs: number[]) => xs.reduce((a, b) => a + b, 0)
+    const rightOf = (xs: number[], i: number) => sumOf(xs.slice(0, i + 1))
+
+    it('LIST-6: tope guardado a 1920: la tabla cabe a 1440 y a 1920 se ve igual', () => {
+      const onChange = vi.fn()
+      act(() => root.render(<ExcelHarness columns={wo} onChange={onChange} containerWidth={1632} />))
+      // Relleno libre: <col> sin ancho, se pinta a 1632 − 1026 = 606.
+      expect(colW('description')).toBe('')
+      dragKey(3, -40, { release: false })
+      // En vivo: el borde 40 px a la izquierda de 504 + 606 = 1110.
+      const during = woW()
+      expect(Math.abs(rightOf(during, 3) - 1070)).toBeLessThanOrEqual(1)
+      act(() => {
+        container.querySelectorAll('th')[3].querySelector('span')!.dispatchEvent(
+          new FakePointerEvent('pointerup', { clientX: -40 }),
+        )
+      })
+      const saved = onChange.mock.calls.at(-1)![0] as Record<string, number>
+      // Se guarda el ancho PINTADO como tope (0.9.7 guardaba 566 como ancho fijo).
+      expect(saved).toEqual({ description: Math.round(during[3]) })
+
+      // A 1920 con el tope guardado: igual que al soltar, la tabla llena justo
+      // el contenedor y el sobrante va al resto en proporción.
+      act(() => root.render(<ExcelHarness columns={wo} widths={saved} onChange={vi.fn()} containerWidth={1632} />))
+      const at1920 = woW()
+      expect(at1920[3]).toBe(saved.description)
+      expect(Math.abs(rightOf(at1920, 3) - 1070)).toBeLessThanOrEqual(1)
+      expect(Math.abs(sumOf(at1920) - 1632)).toBeLessThanOrEqual(0.5)
+      expect(at1920[0] / at1920[1]).toBeCloseTo(108 / 216, 5)
+
+      // A 1440 (contenedor 1152): el relleno encoge hasta lo que cabe (126) y
+      // la tabla cabe sin scroll; el mínimo de la tabla es lo de serie.
+      act(() => root.render(<ExcelHarness columns={wo} widths={saved} onChange={vi.fn()} containerWidth={1152} />))
+      const at1440 = woW()
+      expect(at1440).toEqual([108, 216, 180, 126, 144, 144, 234])
+      expect(parseFloat(tableEl().style.minWidth)).toBe(1134)
+      // Más estrecho aún: nunca por debajo de su base (y la tabla desborda lo
+      // mismo que sin tope).
+      act(() => root.render(<ExcelHarness columns={wo} widths={saved} onChange={vi.fn()} containerWidth={992} />))
+      expect(parseFloat(colW('description'))).toBe(108)
+    })
+
+    it('LIST-6: arrastrar el relleno no salta: el borde sigue al ratón desde su ancho pintado', () => {
+      act(() => root.render(<ExcelHarness columns={wo} onChange={vi.fn()} containerWidth={1632} />))
+      for (const dx of [-4, -25, -200, 30]) {
+        const h = container.querySelectorAll('th')[3].querySelector('span')!
+        act(() => {
+          h.dispatchEvent(new FakePointerEvent('pointerdown', { button: 0, clientX: 0 }))
+        })
+        act(() => {
+          h.dispatchEvent(new FakePointerEvent('pointermove', { clientX: dx }))
+        })
+        const w = woW()
+        // Hacia la izquierda, el borde va con el ratón; hacia la derecha no
+        // puede pasar del ancho libre (tope = sin límite).
+        const want = dx < 0 ? 1110 + dx : 1110
+        expect(Math.abs(rightOf(w, 3) - want)).toBeLessThanOrEqual(1)
+        expect(Math.abs(sumOf(w) - 1632)).toBeLessThanOrEqual(0.5)
+        act(() => {
+          h.dispatchEvent(new FakePointerEvent('pointercancel', {}))
+        })
+      }
+    })
+
+    it('UI-9: tras un relleno con tope, ensanchar una columna sigue al ratón hasta que el relleno cede; después 1:1 (sin hundir el relleno)', () => {
+      const onChange = vi.fn()
+      act(() =>
+        root.render(<ExcelHarness columns={wo} widths={{ description: 527 }} onChange={onChange} containerWidth={1632} />),
+      )
+      const before = woW()
+      // Poco: el relleno sigue a su tope y el borde de «opened» va con el ratón.
+      dragKey(4, 20, { release: false })
+      expect(Math.abs(rightOf(woW(), 4) - (rightOf(before, 4) + 20))).toBeLessThanOrEqual(1)
+      act(() => {
+        container.querySelectorAll('th')[4].querySelector('span')!.dispatchEvent(new FakePointerEvent('pointercancel', {}))
+      })
+      // Mucho: el relleno cede lo justo (no se hunde a su base para alcanzar
+      // al ratón) y la base de «opened» crece 1:1 desde ahí.
+      dragKey(4, 60)
+      const opened = (onChange.mock.calls.at(-1)![0] as Record<string, number>).opened
+      expect(opened).toBeLessThan(300)
+      act(() =>
+        root.render(<ExcelHarness columns={wo} widths={{ description: 527, opened }} onChange={vi.fn()} containerWidth={1632} />),
+      )
+      expect(parseFloat(colW('description'))).toBeGreaterThan(450)
+    })
+
+    it('LIST-6: doble clic, Escape o ensancharla del todo quitan el tope (vuelve a ser relleno libre)', () => {
+      const onChange = vi.fn()
+      act(() =>
+        root.render(
+          <ExcelHarness columns={wo} widths={{ description: 500, client: 230 }} onChange={onChange} containerWidth={1632} />,
+        ),
+      )
+      expect(colW('description')).toBe('500px')
+      act(() => {
+        container.querySelectorAll('th')[3].querySelector('span')!.dispatchEvent(
+          new MouseEvent('dblclick', { bubbles: true }),
+        )
+      })
+      expect(onChange).toHaveBeenLastCalledWith({ client: 230 })
+      key(sep(3), 'keydown', 'Escape')
+      expect(onChange).toHaveBeenLastCalledWith({ client: 230 })
+      // Arrastrarla hasta su ancho libre: no se guarda un tope que no limita.
+      onChange.mockClear()
+      dragKey(3, 400)
+      expect(onChange).toHaveBeenCalledWith({ client: 230 })
+      // Y con el relleno libre, arrastrar a la derecha no guarda nada.
+      act(() => root.render(<ExcelHarness columns={wo} onChange={onChange} containerWidth={1632} />))
+      onChange.mockClear()
+      dragKey(3, 50)
+      expect(onChange).not.toHaveBeenCalled()
+    })
+
+    it('UI-9: con reparto proporcional (escala 2) el borde sigue al ratón al arrastrar', () => {
+      const onChange = vi.fn()
+      act(() => root.render(<ExcelHarness columns={abc} onChange={onChange} tableWidth={800} />))
+      dragKey(1, 60, { release: false })
+      // En vivo ya con la base que deja el borde en 400 + 60.
+      const live = parseFloat(colW('b'))
+      expect(Math.abs(edgeOf([100, live, 200], 1, 800) - 460)).toBeLessThanOrEqual(1)
+      act(() => {
+        container.querySelectorAll('th')[1].querySelector('span')!.dispatchEvent(
+          new FakePointerEvent('pointerup', { clientX: 60 }),
+        )
+      })
+      expect(onChange).toHaveBeenCalledWith({ b: live })
+      // 0.9.7 guardaba 100 + 60: el borde se movía 60 × (800 / 460) ≈ 104… y
+      // las demás encogían; aquí lo justo para 60 px.
+      expect(live).toBe(171)
+    })
+
+    it('UI-9: si al ensanchar la tabla deja de caber, la escala es 1 y la base es el borde', () => {
+      const onChange = vi.fn()
+      act(() => root.render(<ExcelHarness columns={abc} onChange={onChange} tableWidth={800} />))
+      dragKey(1, 300)
+      // Borde en 400 + 300 = 700 → base 700 − 100 (suma 900 > 800: sin reparto).
+      expect(onChange).toHaveBeenCalledWith({ b: 600 })
+    })
+
+    it('UI-9: la última columna (borde pegado al contenedor) sigue su ANCHO en pantalla', () => {
+      const onChange = vi.fn()
+      act(() => root.render(<ExcelHarness columns={abc} onChange={onChange} tableWidth={800} />))
+      dragKey(2, -40)
+      const c = (onChange.mock.calls.at(-1)![0] as Record<string, number>).c
+      // Se pinta a 400 (200 × 2); 40 px menos = 360 en pantalla.
+      expect(Math.abs((c * 800) / (200 + c) - 360)).toBeLessThanOrEqual(1)
+      expect(c).toBe(164)
+    })
+
+    it('UI-9: ←/→ mueven el borde 16 px EN PANTALLA con escala ≠ 1', () => {
+      const onChange = vi.fn()
+      act(() => root.render(<ExcelHarness columns={abc} onChange={onChange} tableWidth={800} />))
+      key(sep(1), 'keydown', 'ArrowRight')
+      key(sep(1), 'keydown', 'ArrowRight')
+      const live = parseFloat(colW('b'))
+      expect(Math.abs(edgeOf([100, live, 200], 1, 800) - (400 + 2 * RESIZE_KEY_STEP))).toBeLessThanOrEqual(1)
+      key(sep(1), 'keyup', 'ArrowRight')
+      expect(onChange).toHaveBeenCalledTimes(1)
+      expect(onChange).toHaveBeenCalledWith({ b: live })
+      // Y de vuelta: dos ← lo dejan como estaba.
+      act(() => root.render(<ExcelHarness columns={abc} widths={{ b: live }} onChange={onChange} tableWidth={800} />))
+      key(sep(1), 'keydown', 'ArrowLeft')
+      key(sep(1), 'keydown', 'ArrowLeft')
+      key(sep(1), 'keyup', 'ArrowLeft')
+      expect(Math.abs((onChange.mock.calls.at(-1)![0] as Record<string, number>).b - 100)).toBeLessThanOrEqual(1)
+    })
+
+    it('UI-9: con otra columna de relleno no hay reparto: 1:1', () => {
+      const onChange = vi.fn()
+      act(() =>
+        root.render(<ExcelHarness columns={cols} onChange={onChange} tableWidth={1320} />),
+      )
+      dragKey(0, 30)
+      expect(onChange).toHaveBeenCalledWith({ client: 190 })
     })
 
     it('sin relleno: tabla al 100 % con la suma de mínimo (v0.9.6, sin hueco)', () => {
@@ -388,6 +599,16 @@ describe('useColumnResize', () => {
       key(sep(1), 'keydown', 'ArrowRight')
       key(sep(1), 'keyup', 'ArrowRight')
       expect(onChange).toHaveBeenCalledWith({ desc: 500 + RESIZE_KEY_STEP })
+    })
+
+    it('LIST-6: ← sobre el relleno a 1920 estrecha 16 px EN PANTALLA y guarda el tope', () => {
+      const onChange = vi.fn()
+      act(() => root.render(<ExcelHarness columns={wo} onChange={onChange} containerWidth={1632} />))
+      key(sep(3), 'keydown', 'ArrowLeft')
+      expect(Math.abs(rightOf(woW(), 3) - (1110 - RESIZE_KEY_STEP))).toBeLessThanOrEqual(1)
+      const live = parseFloat(colW('description'))
+      key(sep(3), 'keyup', 'ArrowLeft')
+      expect(onChange).toHaveBeenCalledWith({ description: Math.round(live) })
     })
 
     it('LIST-4: perder el foco a mitad guarda lo pendiente', () => {

@@ -3,6 +3,7 @@ import * as React from 'react'
 import {
   MIN_COLUMN_WIDTH,
   columnFloor,
+  isFillColumn,
   resolveColumnWidth,
   resolveFillColumnKey,
   tableSizing,
@@ -23,13 +24,153 @@ type DragState = {
   width: number
 }
 
-type DragRef = {
+/**
+ * Estado de anchos de una tabla con `columns`, para pintarla o para simular un
+ * arrastre (v0.9.8). `bases`: base de cada columna (la de relleno: su base de
+ * serie si es `free`, su tope si es `cap`). `extra`: columna fuera de
+ * `columns`, delante (selección). `container`: ancho del contenedor, si se sabe.
+ */
+type Layout = {
+  bases: number[]
+  fill: number
+  mode: 'none' | 'free' | 'cap'
+  /** Con tope: lo mínimo a lo que encoge el relleno (min(tope, base de serie)). */
+  lo: number
+  extra: number
+  container: number | null
+}
+
+/**
+ * Anchos EN PANTALLA de cada columna (y de la extra) según el modelo:
+ * - `free`: el relleno se queda el sobrante; las demás, su base.
+ * - `cap` con contenedor conocido (LIST-6): el relleno ocupa como mucho su
+ *   tope. Si sobra más, el resto se reparte en proporción entre las demás; si
+ *   no cabe, encoge hasta lo que quepa, nunca por debajo de `lo`.
+ * - `none` (y `cap` sin contenedor): table-fixed al 100 % reparte el sobrante
+ *   en proporción entre todas (extra incluida).
+ */
+function paint(l: Layout): { widths: number[]; extra: number } {
+  const C = l.container
+  const others = l.bases.reduce((s, b, i) => (i === l.fill ? s : s + b), 0)
+  if (l.mode === 'free') {
+    const widths = l.bases.slice()
+    if (C != null) widths[l.fill] = Math.max(l.bases[l.fill], C - l.extra - others)
+    return { widths, extra: l.extra }
+  }
+  if (l.mode === 'cap' && C != null) {
+    const cap = l.bases[l.fill]
+    const room = C - l.extra - others
+    if (room >= cap) {
+      const k = others > 0 ? (C - l.extra - cap) / others : 1
+      return { widths: l.bases.map((b, i) => (i === l.fill ? cap : b * k)), extra: l.extra }
+    }
+    const widths = l.bases.slice()
+    widths[l.fill] = Math.max(l.lo, room)
+    return { widths, extra: l.extra }
+  }
+  const sum = l.extra + l.bases.reduce((s, b) => s + b, 0)
+  const k = C != null && sum > 0 ? Math.max(1, C / sum) : 1
+  return { widths: l.bases.map((b) => b * k), extra: l.extra * k }
+}
+
+/** Borde derecho EN PANTALLA de la columna `i`, desde el borde izquierdo de la tabla. */
+function edgeAt(p: { widths: number[]; extra: number }, i: number): number {
+  let e = p.extra
+  for (let j = 0; j <= i; j++) e += p.widths[j]
+  return e
+}
+
+/**
+ * Geometría de un arrastre o de una tecla (v0.9.8): con `columns`, `at(v)` es
+ * el modelo con la columna arrastrada a `v` (su base; en la de relleno, su
+ * tope) y el resto como está. Sin `columns`, `at` es `null`: 1:1.
+ */
+type ResizeGeo = {
   key: string
-  startX: number
-  startW: number
+  index: number
   min: number
+  max: number
+  /** Valor de partida: la base; en la de relleno, su ancho PINTADO. */
+  start: number
+  at: ((v: number) => Layout) | null
+  /** Borde derecho y ancho EN PANTALLA al empezar. */
+  edge0: number
+  width0: number
+  /** Contenedor; si no se sabía, se aprende de la tabla en cuanto se estira. */
+  container: number | null
+  table: Element | null
+  /**
+   * Columna DETRÁS de un relleno con tope: a partir de este valor el relleno
+   * ya no está a su tope y empieza a ceder sitio, así que el borde no se mueve
+   * (lo que crece la columna lo pierde el relleno). Más allá, 1:1, como tras
+   * un relleno libre: no se encoge el relleno de golpe para alcanzar al ratón.
+   */
+  breakAt?: number
+}
+
+type DragRef = {
+  startX: number
+  geo: ResizeGeo
   /** El puntero ya se alejó `DRAG_THRESHOLD` px: es un arrastre, no un clic. */
   moved: boolean
+}
+
+/**
+ * Ancho del contenedor de la tabla, si la tabla está estirada por encima de su
+ * `min-width` en línea (de `tableStyle`): entonces mide lo mismo que el
+ * contenedor (`width: 100%`). Si no lo está, `null`. Para tablas a mano que no
+ * pasan `containerWidth`.
+ */
+function stretchedWidth(table: Element | null): number | null {
+  if (!(table instanceof HTMLElement)) return null
+  const min = parseFloat(table.style.minWidth)
+  if (!(min > 0)) return null
+  const w = table.getBoundingClientRect().width
+  return w > min + 0.5 ? w : null
+}
+
+/** Menor `v` en [lo, hi] con `ok(v)` (monótona); `hi` si ninguno. */
+function bisect(lo: number, hi: number, ok: (v: number) => boolean): number {
+  if (ok(lo)) return lo
+  if (!ok(hi)) return hi
+  for (let n = 0; n < 40 && hi - lo > 0.01; n++) {
+    const mid = (lo + hi) / 2
+    if (ok(mid)) hi = mid
+    else lo = mid
+  }
+  return hi
+}
+
+/**
+ * Valor nuevo (base o tope) para un desplazamiento `dx` (px EN PANTALLA) del
+ * borde derecho (v0.9.8, LIST-6/UI-9). Con reparto proporcional mover una base
+ * 1 px mueve su borde más (y reescala las demás): se busca el valor que deja
+ * el borde EXACTAMENTE en `edge0 + dx` (el borde sigue al ratón). Si el borde
+ * no puede ir ahí (la última columna, cuyo borde es el del contenedor, o una
+ * columna tras un relleno que se queda el sobrante), se sigue su ANCHO en
+ * pantalla.
+ */
+function baseFor(g: ResizeGeo, dx: number): number {
+  const clamp = (v: number) => Math.round(Math.min(g.max, Math.max(g.min, v)))
+  if (!g.at) return clamp(g.start + dx)
+  const at = g.at
+  const hi = Number.isFinite(g.max) ? g.max : Math.max(g.start, g.min) + Math.abs(dx) * 4 + 4000
+  const measure = (v: number) => {
+    const p = paint(at(v))
+    return { edge: edgeAt(p, g.index), width: p.widths[g.index] }
+  }
+  const target = g.edge0 + dx
+  if (g.breakAt != null && g.start <= g.breakAt) {
+    const atBreak = measure(g.breakAt).edge
+    if (target > atBreak) return clamp(g.breakAt + (target - atBreak))
+  }
+  const top = g.breakAt != null && g.start <= g.breakAt ? Math.min(hi, g.breakAt) : hi
+  let v = bisect(g.min, top, (x) => measure(x).edge >= target)
+  if (Math.abs(measure(v).edge - target) > 0.75) {
+    const w = g.width0 + dx
+    v = bisect(g.min, hi, (x) => measure(x).width >= w)
+  }
+  return clamp(v)
 }
 
 /**
@@ -72,11 +213,22 @@ export const RESIZE_KEY_MAX = 1600
  * - La de relleno (`fill: true`, alias `flex`) tiene un ancho BASE como las
  *   demás (cuenta en la suma) y se estira encima si sobra sitio: su `<col>`
  *   va sin ancho (`colWidth` → `undefined`) y la tabla lleva `tableStyle`
- *   (`tableSizing`). Sin relleno, hueco a la derecha.
- *   Al arrastrar la de relleno se parte de su ancho PINTADO (medido del
- *   `<th>`, estiramiento incluido), para que el asa siga al puntero. Desde
- *   v0.9.3, en cuanto se arrastra deja de rellenar: su ancho guardado manda
- *   (se puede estrechar; queda hueco a la derecha) hasta el doble clic.
+ *   (`tableSizing`). Sin relleno, la tabla sigue al 100 % y table-fixed
+ *   reparte el sobrante en proporción entre todas.
+ * - Relleno con TOPE (v0.9.8, LIST-6; dueño 22/10/2026): al arrastrar la de
+ *   relleno, el borde sigue al ratón desde su ancho PINTADO (sin saltos) y al
+ *   soltar ese ancho pintado se guarda como su tope: «como mucho X». Con el
+ *   ancho del contenedor (`containerWidth`), en una pantalla mayor se ve a X y
+ *   el sobrante va al resto en proporción; en una menor encoge hasta lo que
+ *   quepa (nunca por debajo de su base ni de su suelo) y sin scroll si lo de
+ *   serie cabía. Antes ese ancho pintado (base + el sobrante de ESA pantalla)
+ *   era un ancho fijo, y como los anchos viajan entre dispositivos, a 1440 la
+ *   tabla de `/work-orders` medía 1592 px en 1152. Doble clic, Escape o Supr
+ *   quitan el tope (relleno libre); ensancharla hasta que el tope no limite
+ *   nada, también.
+ * - El borde sigue al ratón también con reparto proporcional (v0.9.8, UI-9):
+ *   el delta en pantalla se convierte a base resolviendo el modelo (la base
+ *   de una columna escalada cambia `dx × suma / C`, y las demás se reescalan).
  * Sin `columns` (tablas a mano antiguas): cambia la arrastrada, partiendo del
  * ancho guardado o, si no hay, del medido; suelo `MIN_COLUMN_WIDTH`.
  *
@@ -92,12 +244,23 @@ export function useColumnResize({
   columnWidths,
   onColumnWidthsChange,
   columns,
+  containerWidth,
+  leadingWidth = 0,
   labels: labelsProp,
 }: {
   columnWidths?: Record<string, number>
   onColumnWidthsChange?: (widths: Record<string, number>) => void
   /** Columnas VISIBLES, en orden: activa el modelo «como Excel + relleno». */
   columns?: SizedColumn[]
+  /**
+   * Ancho (px) del contenedor de la `<table>` (v0.9.8, LIST-6). Con él, el
+   * tope de la columna de relleno se aplica (encoge hasta lo que quepa y el
+   * sobrante va al resto). Sin él (o 0, como en jsdom), el tope se pinta como
+   * un ancho fijo (lo de 0.9.6). `ResponsiveList` lo mide con un ResizeObserver.
+   */
+  containerWidth?: number
+  /** Px de columnas fuera de `columns`, DELANTE (p. ej. la de selección). */
+  leadingWidth?: number
   /** Textos propios (`columnResize`); ganan al `UiProvider`. */
   labels?: Partial<Labels>
 }) {
@@ -106,16 +269,21 @@ export function useColumnResize({
   const dragRef = React.useRef<DragRef | null>(null)
   // Teclado (v0.9.7): ancho en curso de ←/→ sobre el asa enfocada. Vive en
   // `drag` (en vivo) y se guarda al soltar la tecla o al perder el foco: una
-  // tecla mantenida son decenas de `keydown` y una sola escritura.
-  const keyRef = React.useRef<{ key: string; width: number } | null>(null)
+  // tecla mantenida son decenas de `keydown` y una sola escritura. Desde
+  // v0.9.8 guarda también la geometría de partida y el delta EN PANTALLA.
+  const keyRef = React.useRef<{ geo: ResizeGeo; dx: number; width: number } | null>(null)
 
-  // Relleno «de reposo»: la columna `fill` mientras el usuario no le haya
-  // guardado un ancho (v0.9.3, ver `resolveFillColumnKey`). Mientras se
-  // ARRASTRA esa columna deja de rellenar ya (`fillKey` undefined): su `<col>`
-  // sigue al puntero en vivo también al estrecharla, como quedará al soltar.
+  const colOf = (key: string) => columns?.find((c) => c.key === key)
+  const container = containerWidth && containerWidth > 0 ? containerWidth : null
+
+  // Columna de relleno: la primera `fill`. Sin ancho guardado es relleno
+  // LIBRE (se queda el sobrante). Con ancho guardado, o mientras se arrastra,
+  // ese ancho es su TOPE (v0.9.8, LIST-6): ocupa como mucho eso.
+  const fillIndex = columns ? columns.findIndex(isFillColumn) : -1
+  const fillCol = fillIndex >= 0 ? columns![fillIndex] : undefined
   const restingFillKey = columns ? resolveFillColumnKey(columns, columnWidths) : undefined
   const fillKey = drag?.key === restingFillKey ? undefined : restingFillKey
-  const colOf = (key: string) => columns?.find((c) => c.key === key)
+  const fillMode: Layout['mode'] = !fillCol ? 'none' : fillKey ? 'free' : 'cap'
 
   /** Ancho efectivo sin arrastre (con `columns`): guardado/`width`/defecto, con suelo. */
   function baseWidth(key: string): number | undefined {
@@ -130,28 +298,63 @@ export function useColumnResize({
 
   /**
    * Ancho de la columna en el modelo: el del arrastre en curso o el efectivo.
-   * En la de relleno es su BASE (lo que cuenta en la suma).
+   * En la de relleno libre es su BASE; con tope, el tope.
    */
   function liveWidth(key: string): number | undefined {
     return drag?.key === key ? drag.width : baseWidth(key)
   }
 
+  /** Modelo actual (o con la columna `key` a `v`, para simular un arrastre). */
+  function layoutWith(key?: string, v?: number, at: number | null = container, extra = leadingWidth): Layout {
+    const cols = columns ?? []
+    const bases = cols.map((c) => (c.key === key ? v! : (liveWidth(c.key) ?? 0)))
+    const dragsFill = key != null && key === fillCol?.key
+    const mode: Layout['mode'] = dragsFill ? 'cap' : fillMode
+    const fillDefault = fillCol ? resolveColumnWidth(fillCol, undefined) : 0
+    return {
+      bases,
+      fill: fillIndex,
+      mode,
+      lo: mode === 'cap' ? Math.min(bases[fillIndex], fillDefault) : 0,
+      extra,
+      container: at,
+    }
+  }
+
+  // Con tope y contenedor conocido, cada `<col>` lleva su ancho EN PANTALLA
+  // (calculado aquí): table-fixed no sabe poner un máximo a una columna.
+  const painted = columns && fillMode === 'cap' && container != null ? paint(layoutWith()) : null
+
   /**
-   * Ancho para el `<col>`: el vivo de cada columna; la de relleno, ninguno
-   * (`undefined`): table-fixed le da todo el sobrante.
+   * Ancho para el `<col>`: el vivo de cada columna; la de relleno libre,
+   * ninguno (`undefined`): table-fixed le da todo el sobrante. Con tope y
+   * contenedor, el ancho en pantalla de cada columna.
    */
   function colWidth(key: string): number | undefined {
     if (key === fillKey) return undefined
+    if (painted) {
+      const i = columns!.findIndex((c) => c.key === key)
+      if (i >= 0) return painted.widths[i]
+    }
     return liveWidth(key)
   }
 
-  /** Suma de los anchos de `columns` (la de relleno, con su base). */
+  /**
+   * Suma de los anchos de `columns`: el mínimo de la tabla. La de relleno
+   * libre cuenta con su base; con tope, con lo mínimo a lo que encoge.
+   */
   const totalWidth = columns
-    ? columns.reduce((sum, c) => sum + (liveWidth(c.key) ?? 0), 0)
+    ? columns.reduce((sum, c, i) => {
+        const w = liveWidth(c.key) ?? 0
+        if (i === fillIndex && fillMode === 'cap' && container != null) {
+          return sum + Math.min(w, resolveColumnWidth(c, undefined))
+        }
+        return sum + w
+      }, 0)
     : undefined
 
   /** Estilo de la `<table>` para `extra` px fuera de `columns` (p. ej. una columna de selección). */
-  function tableStyle(extra = 0): React.CSSProperties | undefined {
+  function tableStyle(extra = leadingWidth): React.CSSProperties | undefined {
     return totalWidth == null ? undefined : tableSizing(totalWidth + extra, !!fillKey)
   }
 
@@ -171,17 +374,66 @@ export function useColumnResize({
     return edge === 'start' ? (own?.previousElementSibling ?? null) : own
   }
 
-  function clamp(d: DragRef, clientX: number) {
-    return Math.round(Math.max(d.min, d.startW + clientX - d.startX))
+  /**
+   * Geometría de partida de un arrastre o de una tecla sobre `columnKey`
+   * (v0.9.8). Las columnas normales parten de su base; la de relleno, de su
+   * ancho PINTADO (sin saltos), que al soltar queda como su tope (LIST-6). El
+   * delta en pantalla se pasa a base/tope con el modelo (`baseFor`): el borde
+   * sigue al ratón también con el sobrante repartido (UI-9).
+   *
+   * Sin `columns` (tablas a mano antiguas): ancho guardado o medido, 1:1.
+   */
+  function geometryOf(columnKey: string, handle: Element, edge: 'end' | 'start', max: number): ResizeGeo {
+    const table = handle.closest('table')
+    const min = floorOf(columnKey)
+    const index = columns ? columns.findIndex((c) => c.key === columnKey) : -1
+    const measured = () => headOf(handle, columnKey, edge)?.getBoundingClientRect().width || 0
+    if (!columns || index < 0) {
+      const start = columnWidths?.[columnKey] ?? measured()
+      return { key: columnKey, index, min, max: Math.max(max, start), start, at: null, edge0: 0, width0: start, container: null, table }
+    }
+    // Columna extra (selección): la que diga el consumidor o, en tablas a
+    // mano, la diferencia entre el `min-width` pintado y la suma de `columns`.
+    const minW = table instanceof HTMLElement ? parseFloat(table.style.minWidth) : NaN
+    const extra =
+      leadingWidth || (minW > 0 && totalWidth != null ? Math.max(0, minW - totalWidth) : 0)
+    const C = container ?? stretchedWidth(table)
+    const isFill = columnKey === fillCol?.key
+    let start = baseWidth(columnKey)!
+    if (isFill) {
+      // Ancho pintado del relleno: el del modelo si se sabe el contenedor; si
+      // no, el medido del `<th>`.
+      start =
+        C != null
+          ? paint(layoutWith(undefined, undefined, C, extra)).widths[index]
+          : measured() || start
+    }
+    const geo: ResizeGeo = {
+      key: columnKey,
+      index,
+      min,
+      max: Math.max(max, start),
+      start,
+      at: (v) => layoutWith(columnKey, v, geo.container, extra),
+      edge0: 0,
+      width0: start,
+      container: C,
+      table,
+    }
+    const p = paint(geo.at!(start))
+    geo.edge0 = edgeAt(p, index)
+    geo.width0 = p.widths[index]
+    if (fillMode === 'cap' && !isFill && index > fillIndex && C != null) {
+      const l = geo.at!(start)
+      const othersButThis = l.bases.reduce((s, b, i) => (i === fillIndex || i === index ? s : s + b), 0)
+      geo.breakAt = C - extra - l.bases[fillIndex] - othersButThis
+    }
+    return geo
   }
 
-  /** Ancho de partida de un arrastre o de una tecla (px). */
-  function startWidthOf(columnKey: string, th: Element | null): number {
-    const measured = () => th?.getBoundingClientRect().width || undefined
-    const col = colOf(columnKey)
-    if (!col) return columnWidths?.[columnKey] ?? measured() ?? 0
-    if (columnKey === restingFillKey) return Math.max(measured() ?? 0, baseWidth(columnKey)!)
-    return baseWidth(columnKey)!
+  /** Aprende el ancho del contenedor (tablas a mano) en cuanto la tabla se pinta estirada. */
+  function learn(g: ResizeGeo) {
+    if (g.at && g.container == null) g.container = stretchedWidth(g.table)
   }
 
   function floorOf(columnKey: string): number {
@@ -202,13 +454,31 @@ export function useColumnResize({
     onColumnWidthsChange?.(next)
   }
 
+  /**
+   * Fin de un arrastre o de una tecla con valor `v`. En la de relleno, si el
+   * tope no limita nada en esta pantalla (se ve tan ancha como la libre), no
+   * se guarda tope: vuelve a ser relleno libre (LIST-6). Así, ensancharla del
+   * todo es lo mismo que el doble clic.
+   */
+  function finish(g: ResizeGeo, v: number) {
+    if (g.at && g.key === fillCol?.key && g.container != null) {
+      const free = paint({ ...g.at(v), mode: 'free', bases: g.at(v).bases.map((b, i) => (i === g.index ? resolveColumnWidth(fillCol, undefined) : b)) })
+      const capped = paint(g.at(v))
+      if (capped.widths[g.index] >= free.widths[g.index] - 0.5) {
+        if (columnWidths?.[g.key] != null) restore(g.key)
+        return
+      }
+    }
+    commit(g.key, v)
+  }
+
   /** Guarda el ancho de teclado pendiente, si lo hay. */
   function flushKey() {
     const k = keyRef.current
     if (!k) return
     keyRef.current = null
     setDrag(null)
-    commit(k.key, k.width)
+    if (k.dx !== 0) finish(k.geo, k.width)
   }
 
   function nameOf(columnKey: string, name?: string): string {
@@ -279,16 +549,23 @@ export function useColumnResize({
                 if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
                   e.preventDefault()
                   e.stopPropagation()
+                  // Los pasos son px EN PANTALLA (v0.9.8, UI-9): con reparto
+                  // proporcional el borde se mueve 16 px, no 16 × escala.
                   const step = e.shiftKey ? RESIZE_KEY_STEP_LARGE : RESIZE_KEY_STEP
-                  const from =
-                    keyRef.current?.key === columnKey
-                      ? keyRef.current.width
-                      : startWidthOf(columnKey, headOf(e.currentTarget, columnKey, edge))
-                  const delta = e.key === 'ArrowRight' ? step : -step
-                  const width = Math.round(
-                    Math.max(floorOf(columnKey), Math.min(Math.max(RESIZE_KEY_MAX, from), from + delta)),
-                  )
-                  keyRef.current = { key: columnKey, width }
+                  const cur =
+                    keyRef.current?.geo.key === columnKey
+                      ? keyRef.current
+                      : {
+                          geo: geometryOf(columnKey, e.currentTarget, edge, RESIZE_KEY_MAX),
+                          dx: 0,
+                          width: baseWidth(columnKey) ?? 0,
+                        }
+                  learn(cur.geo)
+                  const dx = cur.dx + (e.key === 'ArrowRight' ? step : -step)
+                  const width = baseFor(cur.geo, dx)
+                  // En el suelo o el techo el delta no se acumula: la tecla
+                  // contraria responde a la primera.
+                  keyRef.current = width === cur.width ? cur : { geo: cur.geo, dx, width }
                   setDrag({ key: columnKey, width })
                   return
                 }
@@ -314,12 +591,10 @@ export function useColumnResize({
         onBlur={focusable ? flushKey : undefined}
         onPointerDown={(e) => {
           if (e.button !== 0) return
-          const th = headOf(e.currentTarget, columnKey, edge)
           const d: DragRef = {
-            key: columnKey,
             startX: e.clientX,
-            startW: startWidthOf(columnKey, th),
-            min: floorOf(columnKey),
+            // El ratón no tiene techo.
+            geo: geometryOf(columnKey, e.currentTarget, edge, Infinity),
             moved: false,
           }
           e.currentTarget.setPointerCapture(e.pointerId)
@@ -333,7 +608,8 @@ export function useColumnResize({
           if (!d) return
           if (!d.moved && Math.abs(e.clientX - d.startX) < DRAG_THRESHOLD) return
           d.moved = true
-          setDrag({ key: d.key, width: clamp(d, e.clientX) })
+          learn(d.geo)
+          setDrag({ key: d.geo.key, width: baseFor(d.geo, e.clientX - d.startX) })
         }}
         onPointerUp={(e) => {
           const d = dragRef.current
@@ -344,7 +620,8 @@ export function useColumnResize({
           // llegando a `onDoubleClick` (dos clics sin mover).
           const moved = d.moved || Math.abs(e.clientX - d.startX) >= DRAG_THRESHOLD
           if (!moved) return
-          commit(d.key, clamp(d, e.clientX))
+          learn(d.geo)
+          finish(d.geo, baseFor(d.geo, e.clientX - d.startX))
         }}
         onPointerCancel={() => {
           dragRef.current = null

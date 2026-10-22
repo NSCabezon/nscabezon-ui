@@ -105,8 +105,12 @@ declare function isFillColumn(col: {
 /**
  * Columna de relleno de un listado `resizable`: la PRIMERA marcada con `fill`
  * (o `flex`) entre las visibles. Sin ninguna marcada, `undefined`: NO hay
- * relleno y, si las columnas no llegan al ancho del contenedor, queda hueco a
- * la derecha. Nunca se elige sola (ni la `primary`): la decide el consumidor.
+ * relleno y, si las columnas no llegan al ancho del contenedor, el sobrante se
+ * reparte en proporción entre todas (v0.9.6, ver `tableSizing`). Nunca se
+ * elige sola (ni la `primary`): la decide el consumidor.
+ *
+ * v0.9.8 (LIST-6): en `useColumnResize`, ese ancho guardado es su TOPE (ocupa
+ * como mucho eso; si no cabe, encoge hasta su base), no un ancho fijo.
  *
  * v0.9.6: con `widths` (los anchos guardados del usuario), si esa columna
  * tiene ancho guardado deja de ser LA de relleno: manda su ancho (también para

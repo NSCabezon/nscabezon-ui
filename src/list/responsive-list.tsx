@@ -64,7 +64,9 @@ export type ResponsiveColumn<T> = {
   // Columna de relleno de `resizable` (v0.9.0), UNA por tabla (si hay varias
   // marcadas, la primera): si las columnas no llenan el contenedor, ella se
   // estira para ocupar el hueco (solo crece, nunca baja de su ancho base). Sin
-  // ninguna marcada no hay relleno: queda hueco a la derecha. No se elige
+  // ninguna marcada no hay relleno: la tabla sigue al 100 % y el sobrante se
+  // reparte en proporción entre todas (v0.9.6). Con ancho guardado, ese ancho
+  // es su TOPE (v0.9.8): como mucho eso, y si no cabe encoge. No se elige
   // sola: márcala en la columna de texto principal (descripción, cliente…),
   // nunca en un Nº.
   fill?: boolean
@@ -131,8 +133,9 @@ export type ResponsiveListProps<T> = {
   // la columna, ver `minWidth`) y sin esa clave al hacer doble click en el
   // asa. Modelo «como Excel + relleno» (v0.9.0): arrastrar cambia SOLO esa
   // columna; la tabla mide máx(contenedor, suma de anchos) y, si la suma no
-  // cabe, el contenedor hace scroll horizontal; el hueco, si sobra, lo ocupa
-  // la columna `fill` (o queda a la derecha si no hay).
+  // cabe, el contenedor hace scroll horizontal; lo que sobre lo ocupa la
+  // columna `fill` (hasta su tope, si lo tiene) y, si no hay, se reparte en
+  // proporción entre todas: nunca hueco a la derecha (v0.9.6).
   resizable?: boolean
   columnWidths?: Record<string, number>
   onColumnWidthsChange?: (widths: Record<string, number>) => void
@@ -369,10 +372,36 @@ export function ResponsiveList<T>({
   // Redimensión de columnas (asa + ancho en vivo del arrastre + relleno): el
   // hook se exporta aparte para tablas hechas a mano (ver useColumnResize).
   // Recibe las columnas VISIBLES en su orden: la suma y el relleno salen de ellas.
+  // Ancho del contenedor de la <table> (v0.9.8, LIST-6): el tope de la
+  // columna de relleno se calcula con él. Se mide el padre de la tabla (su
+  // bloque contenedor) con un ResizeObserver; sin él o en jsdom (0), el hook
+  // pinta el tope como un ancho fijo.
+  const [containerWidth, setContainerWidth] = React.useState(0)
+  const observerRef = React.useRef<ResizeObserver | null>(null)
+  const measureContainer = React.useCallback((table: HTMLTableElement | null) => {
+    observerRef.current?.disconnect()
+    observerRef.current = null
+    const box = table?.parentElement
+    if (!box) return
+    const measure = () => {
+      // Por lo bajo (clientWidth es entero y la caja puede tener decimales): un
+      // px de más haría que la tabla desbordara y saliera scroll lateral.
+      const w = Math.floor(Math.min(box.clientWidth || Infinity, box.getBoundingClientRect().width))
+      setContainerWidth(Number.isFinite(w) && w > 0 ? w : 0)
+    }
+    measure()
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(measure)
+      ro.observe(box)
+      observerRef.current = ro
+    }
+  }, [])
   const { colWidth, tableStyle, totalWidth, resizeHandle } = useColumnResize({
     columnWidths,
     onColumnWidthsChange,
     columns: visibleColumns,
+    containerWidth,
+    leadingWidth: leading ? 40 : 0,
     labels: labelsProp,
   })
   const mobileColumns = visibleColumns.filter((c) => !c.hideOnMobile)
@@ -590,11 +619,15 @@ export function ResponsiveList<T>({
                 'border-separate border-spacing-0 [&_tbody_td]:border-b [&_tbody_tr:last-child_td]:border-b-0',
               resizable && 'table-fixed',
             )}
-            // Modelo «como Excel + relleno» (ver `tableSizing`): con columna
-            // `fill`, width 100% + min-width = suma (la <col> del relleno va
-            // sin ancho y table-fixed le da el sobrante, que nunca es menor
-            // que su base); sin relleno, width = suma exacta (hueco a la
-            // derecha). Si la suma supera el contenedor, scroll horizontal.
+            // Modelo «como Excel + relleno» (ver `tableSizing`): SIEMPRE width
+            // 100% + min-width = suma (v0.9.6: nunca hueco a la derecha). Con
+            // relleno libre, su <col> va sin ancho y table-fixed le da el
+            // sobrante (nunca menos que su base); sin relleno, table-fixed
+            // reparte el sobrante en proporción entre todas; con relleno con
+            // tope (v0.9.8), cada <col> lleva su ancho en pantalla, calculado
+            // con el ancho del contenedor. Si la suma supera el contenedor,
+            // scroll horizontal.
+            ref={resizable ? measureContainer : undefined}
             style={resizable ? tableStyle(leading ? 40 : 0) : undefined}
           >
             {resizable && (

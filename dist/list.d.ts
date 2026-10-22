@@ -133,8 +133,12 @@ declare function isFillColumn(col: {
 /**
  * Columna de relleno de un listado `resizable`: la PRIMERA marcada con `fill`
  * (o `flex`) entre las visibles. Sin ninguna marcada, `undefined`: NO hay
- * relleno y, si las columnas no llegan al ancho del contenedor, queda hueco a
- * la derecha. Nunca se elige sola (ni la `primary`): la decide el consumidor.
+ * relleno y, si las columnas no llegan al ancho del contenedor, el sobrante se
+ * reparte en proporción entre todas (v0.9.6, ver `tableSizing`). Nunca se
+ * elige sola (ni la `primary`): la decide el consumidor.
+ *
+ * v0.9.8 (LIST-6): en `useColumnResize`, ese ancho guardado es su TOPE (ocupa
+ * como mucho eso; si no cabe, encoge hasta su base), no un ancho fijo.
  *
  * v0.9.6: con `widths` (los anchos guardados del usuario), si esa columna
  * tiene ancho guardado deja de ser LA de relleno: manda su ancho (también para
@@ -217,11 +221,22 @@ declare const RESIZE_KEY_MAX = 1600;
  * - La de relleno (`fill: true`, alias `flex`) tiene un ancho BASE como las
  *   demás (cuenta en la suma) y se estira encima si sobra sitio: su `<col>`
  *   va sin ancho (`colWidth` → `undefined`) y la tabla lleva `tableStyle`
- *   (`tableSizing`). Sin relleno, hueco a la derecha.
- *   Al arrastrar la de relleno se parte de su ancho PINTADO (medido del
- *   `<th>`, estiramiento incluido), para que el asa siga al puntero. Desde
- *   v0.9.3, en cuanto se arrastra deja de rellenar: su ancho guardado manda
- *   (se puede estrechar; queda hueco a la derecha) hasta el doble clic.
+ *   (`tableSizing`). Sin relleno, la tabla sigue al 100 % y table-fixed
+ *   reparte el sobrante en proporción entre todas.
+ * - Relleno con TOPE (v0.9.8, LIST-6; dueño 22/10/2026): al arrastrar la de
+ *   relleno, el borde sigue al ratón desde su ancho PINTADO (sin saltos) y al
+ *   soltar ese ancho pintado se guarda como su tope: «como mucho X». Con el
+ *   ancho del contenedor (`containerWidth`), en una pantalla mayor se ve a X y
+ *   el sobrante va al resto en proporción; en una menor encoge hasta lo que
+ *   quepa (nunca por debajo de su base ni de su suelo) y sin scroll si lo de
+ *   serie cabía. Antes ese ancho pintado (base + el sobrante de ESA pantalla)
+ *   era un ancho fijo, y como los anchos viajan entre dispositivos, a 1440 la
+ *   tabla de `/work-orders` medía 1592 px en 1152. Doble clic, Escape o Supr
+ *   quitan el tope (relleno libre); ensancharla hasta que el tope no limite
+ *   nada, también.
+ * - El borde sigue al ratón también con reparto proporcional (v0.9.8, UI-9):
+ *   el delta en pantalla se convierte a base resolviendo el modelo (la base
+ *   de una columna escalada cambia `dx × suma / C`, y las demás se reescalan).
  * Sin `columns` (tablas a mano antiguas): cambia la arrastrada, partiendo del
  * ancho guardado o, si no hay, del medido; suelo `MIN_COLUMN_WIDTH`.
  *
@@ -233,11 +248,20 @@ declare const RESIZE_KEY_MAX = 1600;
  * Supr o Retroceso borran el ancho guardado, como el doble clic. La mitad
  * `'start'` no es enfocable (sería la misma columna dos veces en el Tab).
  */
-declare function useColumnResize({ columnWidths, onColumnWidthsChange, columns, labels: labelsProp, }: {
+declare function useColumnResize({ columnWidths, onColumnWidthsChange, columns, containerWidth, leadingWidth, labels: labelsProp, }: {
     columnWidths?: Record<string, number>;
     onColumnWidthsChange?: (widths: Record<string, number>) => void;
     /** Columnas VISIBLES, en orden: activa el modelo «como Excel + relleno». */
     columns?: SizedColumn[];
+    /**
+     * Ancho (px) del contenedor de la `<table>` (v0.9.8, LIST-6). Con él, el
+     * tope de la columna de relleno se aplica (encoge hasta lo que quepa y el
+     * sobrante va al resto). Sin él (o 0, como en jsdom), el tope se pinta como
+     * un ancho fijo (lo de 0.9.6). `ResponsiveList` lo mide con un ResizeObserver.
+     */
+    containerWidth?: number;
+    /** Px de columnas fuera de `columns`, DELANTE (p. ej. la de selección). */
+    leadingWidth?: number;
     /** Textos propios (`columnResize`); ganan al `UiProvider`. */
     labels?: Partial<Labels>;
 }): {

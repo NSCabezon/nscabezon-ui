@@ -310,6 +310,16 @@ const view = useListView('orders', {
     relleno no pasa a otra columna `fill`. Doble clic en su asa o
     «Restablecer columnas» la devuelven a relleno
     (`resolveFillColumnKey(columns, widths)`).
+  - Relleno con **tope** (v0.9.8, LIST-6): el ancho guardado del relleno es
+    «como mucho X». Al arrastrarlo, el borde sigue al ratón desde su ancho
+    pintado y al soltar se guarda ese ancho. En pantallas mayores se ve a X y
+    el sobrante va al resto en proporción; en menores encoge hasta lo que
+    quepa, nunca por debajo de su base. Doble clic / Escape / Supr lo quitan.
+    Necesita el ancho del contenedor (`ResponsiveList` lo mide; tablas a mano:
+    `useColumnResize({ containerWidth })`).
+  - Con reparto proporcional el borde sigue al ratón (v0.9.8, UI-9): se
+    resuelve la base que deja el borde bajo el puntero; el teclado mueve
+    16/64 px en pantalla.
   - Suelo (`columnFloor`): `minWidth` de la columna o `MIN_COLUMN_WIDTH`
     (64 px; menos si su propio ancho por defecto es menor, p. ej. un icono).
     Un ancho guardado por debajo se pinta al suelo.

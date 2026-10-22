@@ -496,6 +496,73 @@ function visibleColumnsOf(columns, hidden) {
 // src/list/useColumnResize.tsx
 import { jsx as jsx3 } from "react/jsx-runtime";
 var COLUMN_WIDTH_KEY_ATTR = "data-column-width-key";
+function paint(l) {
+  const C = l.container;
+  const others = l.bases.reduce((s, b, i) => i === l.fill ? s : s + b, 0);
+  if (l.mode === "free") {
+    const widths = l.bases.slice();
+    if (C != null) widths[l.fill] = Math.max(l.bases[l.fill], C - l.extra - others);
+    return { widths, extra: l.extra };
+  }
+  if (l.mode === "cap" && C != null) {
+    const cap = l.bases[l.fill];
+    const room = C - l.extra - others;
+    if (room >= cap) {
+      const k2 = others > 0 ? (C - l.extra - cap) / others : 1;
+      return { widths: l.bases.map((b, i) => i === l.fill ? cap : b * k2), extra: l.extra };
+    }
+    const widths = l.bases.slice();
+    widths[l.fill] = Math.max(l.lo, room);
+    return { widths, extra: l.extra };
+  }
+  const sum = l.extra + l.bases.reduce((s, b) => s + b, 0);
+  const k = C != null && sum > 0 ? Math.max(1, C / sum) : 1;
+  return { widths: l.bases.map((b) => b * k), extra: l.extra * k };
+}
+function edgeAt(p, i) {
+  let e = p.extra;
+  for (let j = 0; j <= i; j++) e += p.widths[j];
+  return e;
+}
+function stretchedWidth(table) {
+  if (!(table instanceof HTMLElement)) return null;
+  const min = parseFloat(table.style.minWidth);
+  if (!(min > 0)) return null;
+  const w = table.getBoundingClientRect().width;
+  return w > min + 0.5 ? w : null;
+}
+function bisect(lo, hi, ok) {
+  if (ok(lo)) return lo;
+  if (!ok(hi)) return hi;
+  for (let n = 0; n < 40 && hi - lo > 0.01; n++) {
+    const mid = (lo + hi) / 2;
+    if (ok(mid)) hi = mid;
+    else lo = mid;
+  }
+  return hi;
+}
+function baseFor(g, dx) {
+  const clamp = (v2) => Math.round(Math.min(g.max, Math.max(g.min, v2)));
+  if (!g.at) return clamp(g.start + dx);
+  const at = g.at;
+  const hi = Number.isFinite(g.max) ? g.max : Math.max(g.start, g.min) + Math.abs(dx) * 4 + 4e3;
+  const measure = (v2) => {
+    const p = paint(at(v2));
+    return { edge: edgeAt(p, g.index), width: p.widths[g.index] };
+  };
+  const target = g.edge0 + dx;
+  if (g.breakAt != null && g.start <= g.breakAt) {
+    const atBreak = measure(g.breakAt).edge;
+    if (target > atBreak) return clamp(g.breakAt + (target - atBreak));
+  }
+  const top = g.breakAt != null && g.start <= g.breakAt ? Math.min(hi, g.breakAt) : hi;
+  let v = bisect(g.min, top, (x) => measure(x).edge >= target);
+  if (Math.abs(measure(v).edge - target) > 0.75) {
+    const w = g.width0 + dx;
+    v = bisect(g.min, hi, (x) => measure(x).width >= w);
+  }
+  return clamp(v);
+}
 var DRAG_THRESHOLD = 3;
 var RESIZE_KEY_STEP = 16;
 var RESIZE_KEY_STEP_LARGE = 64;
@@ -504,15 +571,21 @@ function useColumnResize({
   columnWidths,
   onColumnWidthsChange,
   columns,
+  containerWidth,
+  leadingWidth = 0,
   labels: labelsProp
 }) {
   const labels = useLabels(labelsProp);
   const [drag, setDrag] = React5.useState(null);
   const dragRef = React5.useRef(null);
   const keyRef = React5.useRef(null);
+  const colOf = (key) => columns?.find((c) => c.key === key);
+  const container = containerWidth && containerWidth > 0 ? containerWidth : null;
+  const fillIndex = columns ? columns.findIndex(isFillColumn) : -1;
+  const fillCol = fillIndex >= 0 ? columns[fillIndex] : void 0;
   const restingFillKey = columns ? resolveFillColumnKey(columns, columnWidths) : void 0;
   const fillKey = drag?.key === restingFillKey ? void 0 : restingFillKey;
-  const colOf = (key) => columns?.find((c) => c.key === key);
+  const fillMode = !fillCol ? "none" : fillKey ? "free" : "cap";
   function baseWidth(key) {
     const col = colOf(key);
     return col ? resolveColumnWidth(col, columnWidths?.[key]) : columnWidths?.[key];
@@ -523,12 +596,38 @@ function useColumnResize({
   function liveWidth(key) {
     return drag?.key === key ? drag.width : baseWidth(key);
   }
+  function layoutWith(key, v, at = container, extra = leadingWidth) {
+    const cols = columns ?? [];
+    const bases = cols.map((c) => c.key === key ? v : liveWidth(c.key) ?? 0);
+    const dragsFill = key != null && key === fillCol?.key;
+    const mode = dragsFill ? "cap" : fillMode;
+    const fillDefault = fillCol ? resolveColumnWidth(fillCol, void 0) : 0;
+    return {
+      bases,
+      fill: fillIndex,
+      mode,
+      lo: mode === "cap" ? Math.min(bases[fillIndex], fillDefault) : 0,
+      extra,
+      container: at
+    };
+  }
+  const painted = columns && fillMode === "cap" && container != null ? paint(layoutWith()) : null;
   function colWidth(key) {
     if (key === fillKey) return void 0;
+    if (painted) {
+      const i = columns.findIndex((c) => c.key === key);
+      if (i >= 0) return painted.widths[i];
+    }
     return liveWidth(key);
   }
-  const totalWidth = columns ? columns.reduce((sum, c) => sum + (liveWidth(c.key) ?? 0), 0) : void 0;
-  function tableStyle(extra = 0) {
+  const totalWidth = columns ? columns.reduce((sum, c, i) => {
+    const w = liveWidth(c.key) ?? 0;
+    if (i === fillIndex && fillMode === "cap" && container != null) {
+      return sum + Math.min(w, resolveColumnWidth(c, void 0));
+    }
+    return sum + w;
+  }, 0) : void 0;
+  function tableStyle(extra = leadingWidth) {
     return totalWidth == null ? void 0 : tableSizing(totalWidth + extra, !!fillKey);
   }
   function headOf(handle, columnKey, edge) {
@@ -541,15 +640,47 @@ function useColumnResize({
     }
     return edge === "start" ? own?.previousElementSibling ?? null : own;
   }
-  function clamp(d, clientX) {
-    return Math.round(Math.max(d.min, d.startW + clientX - d.startX));
+  function geometryOf(columnKey, handle, edge, max) {
+    const table = handle.closest("table");
+    const min = floorOf(columnKey);
+    const index = columns ? columns.findIndex((c) => c.key === columnKey) : -1;
+    const measured = () => headOf(handle, columnKey, edge)?.getBoundingClientRect().width || 0;
+    if (!columns || index < 0) {
+      const start2 = columnWidths?.[columnKey] ?? measured();
+      return { key: columnKey, index, min, max: Math.max(max, start2), start: start2, at: null, edge0: 0, width0: start2, container: null, table };
+    }
+    const minW = table instanceof HTMLElement ? parseFloat(table.style.minWidth) : NaN;
+    const extra = leadingWidth || (minW > 0 && totalWidth != null ? Math.max(0, minW - totalWidth) : 0);
+    const C = container ?? stretchedWidth(table);
+    const isFill = columnKey === fillCol?.key;
+    let start = baseWidth(columnKey);
+    if (isFill) {
+      start = C != null ? paint(layoutWith(void 0, void 0, C, extra)).widths[index] : measured() || start;
+    }
+    const geo = {
+      key: columnKey,
+      index,
+      min,
+      max: Math.max(max, start),
+      start,
+      at: (v) => layoutWith(columnKey, v, geo.container, extra),
+      edge0: 0,
+      width0: start,
+      container: C,
+      table
+    };
+    const p = paint(geo.at(start));
+    geo.edge0 = edgeAt(p, index);
+    geo.width0 = p.widths[index];
+    if (fillMode === "cap" && !isFill && index > fillIndex && C != null) {
+      const l = geo.at(start);
+      const othersButThis = l.bases.reduce((s, b, i) => i === fillIndex || i === index ? s : s + b, 0);
+      geo.breakAt = C - extra - l.bases[fillIndex] - othersButThis;
+    }
+    return geo;
   }
-  function startWidthOf(columnKey, th) {
-    const measured = () => th?.getBoundingClientRect().width || void 0;
-    const col = colOf(columnKey);
-    if (!col) return columnWidths?.[columnKey] ?? measured() ?? 0;
-    if (columnKey === restingFillKey) return Math.max(measured() ?? 0, baseWidth(columnKey));
-    return baseWidth(columnKey);
+  function learn(g) {
+    if (g.at && g.container == null) g.container = stretchedWidth(g.table);
   }
   function floorOf(columnKey) {
     const col = colOf(columnKey);
@@ -564,12 +695,23 @@ function useColumnResize({
     delete next[key];
     onColumnWidthsChange?.(next);
   }
+  function finish(g, v) {
+    if (g.at && g.key === fillCol?.key && g.container != null) {
+      const free = paint({ ...g.at(v), mode: "free", bases: g.at(v).bases.map((b, i) => i === g.index ? resolveColumnWidth(fillCol, void 0) : b) });
+      const capped = paint(g.at(v));
+      if (capped.widths[g.index] >= free.widths[g.index] - 0.5) {
+        if (columnWidths?.[g.key] != null) restore(g.key);
+        return;
+      }
+    }
+    commit(g.key, v);
+  }
   function flushKey() {
     const k = keyRef.current;
     if (!k) return;
     keyRef.current = null;
     setDrag(null);
-    commit(k.key, k.width);
+    if (k.dx !== 0) finish(k.geo, k.width);
   }
   function nameOf(columnKey, name) {
     return name ?? (nodeText(colOf(columnKey)?.header) || columnKey);
@@ -602,12 +744,15 @@ function useColumnResize({
             e.preventDefault();
             e.stopPropagation();
             const step = e.shiftKey ? RESIZE_KEY_STEP_LARGE : RESIZE_KEY_STEP;
-            const from = keyRef.current?.key === columnKey ? keyRef.current.width : startWidthOf(columnKey, headOf(e.currentTarget, columnKey, edge));
-            const delta = e.key === "ArrowRight" ? step : -step;
-            const width = Math.round(
-              Math.max(floorOf(columnKey), Math.min(Math.max(RESIZE_KEY_MAX, from), from + delta))
-            );
-            keyRef.current = { key: columnKey, width };
+            const cur = keyRef.current?.geo.key === columnKey ? keyRef.current : {
+              geo: geometryOf(columnKey, e.currentTarget, edge, RESIZE_KEY_MAX),
+              dx: 0,
+              width: baseWidth(columnKey) ?? 0
+            };
+            learn(cur.geo);
+            const dx = cur.dx + (e.key === "ArrowRight" ? step : -step);
+            const width = baseFor(cur.geo, dx);
+            keyRef.current = width === cur.width ? cur : { geo: cur.geo, dx, width };
             setDrag({ key: columnKey, width });
             return;
           }
@@ -627,12 +772,10 @@ function useColumnResize({
         onBlur: focusable ? flushKey : void 0,
         onPointerDown: (e) => {
           if (e.button !== 0) return;
-          const th = headOf(e.currentTarget, columnKey, edge);
           const d = {
-            key: columnKey,
             startX: e.clientX,
-            startW: startWidthOf(columnKey, th),
-            min: floorOf(columnKey),
+            // El ratón no tiene techo.
+            geo: geometryOf(columnKey, e.currentTarget, edge, Infinity),
             moved: false
           };
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -644,7 +787,8 @@ function useColumnResize({
           if (!d) return;
           if (!d.moved && Math.abs(e.clientX - d.startX) < DRAG_THRESHOLD) return;
           d.moved = true;
-          setDrag({ key: d.key, width: clamp(d, e.clientX) });
+          learn(d.geo);
+          setDrag({ key: d.geo.key, width: baseFor(d.geo, e.clientX - d.startX) });
         },
         onPointerUp: (e) => {
           const d = dragRef.current;
@@ -653,7 +797,8 @@ function useColumnResize({
           setDrag(null);
           const moved = d.moved || Math.abs(e.clientX - d.startX) >= DRAG_THRESHOLD;
           if (!moved) return;
-          commit(d.key, clamp(d, e.clientX));
+          learn(d.geo);
+          finish(d.geo, baseFor(d.geo, e.clientX - d.startX));
         },
         onPointerCancel: () => {
           dragRef.current = null;
@@ -874,10 +1019,30 @@ function ResponsiveList({
   }
   const orderedColumns = orderColumns(columns, columnOrder);
   const visibleColumns = visibleColumnsOf(orderedColumns, hiddenColumns);
+  const [containerWidth, setContainerWidth] = React7.useState(0);
+  const observerRef = React7.useRef(null);
+  const measureContainer = React7.useCallback((table) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    const box = table?.parentElement;
+    if (!box) return;
+    const measure = () => {
+      const w = Math.floor(Math.min(box.clientWidth || Infinity, box.getBoundingClientRect().width));
+      setContainerWidth(Number.isFinite(w) && w > 0 ? w : 0);
+    };
+    measure();
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(measure);
+      ro.observe(box);
+      observerRef.current = ro;
+    }
+  }, []);
   const { colWidth, tableStyle, totalWidth, resizeHandle } = useColumnResize({
     columnWidths,
     onColumnWidthsChange,
     columns: visibleColumns,
+    containerWidth,
+    leadingWidth: leading ? 40 : 0,
     labels: labelsProp
   });
   const mobileColumns = visibleColumns.filter((c) => !c.hideOnMobile);
@@ -1029,6 +1194,7 @@ function ResponsiveList({
                   stickyHeader && "border-separate border-spacing-0 [&_tbody_td]:border-b [&_tbody_tr:last-child_td]:border-b-0",
                   resizable && "table-fixed"
                 ),
+                ref: resizable ? measureContainer : void 0,
                 style: resizable ? tableStyle(leading ? 40 : 0) : void 0,
                 children: [
                   resizable && /* @__PURE__ */ jsxs3("colgroup", { children: [
@@ -1638,7 +1804,7 @@ function ListFooter({
 import { useMemo as useMemo2 } from "react";
 
 // src/prefs/useListPrefs.ts
-import { useCallback, useEffect as useEffect2, useMemo, useRef as useRef3, useSyncExternalStore } from "react";
+import { useCallback as useCallback2, useEffect as useEffect2, useMemo, useRef as useRef3, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 // src/prefs/stores.ts
@@ -1753,7 +1919,7 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
   const queryClient = useQueryClient();
   const knownKey = columnKeys.join("|");
   const defaultsJson = JSON.stringify(resolveListDefaults(defaults));
-  const normalize = useCallback(
+  const normalize = useCallback2(
     (raw) => normalizeListPrefs(
       raw,
       knownKey ? knownKey.split("|") : [],
@@ -1762,12 +1928,12 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
     [knownKey, defaultsJson]
   );
   const snapshot = useSyncExternalStore(
-    useCallback((cb) => subscribe(key, cb), [key]),
+    useCallback2((cb) => subscribe(key, cb), [key]),
     () => readSnapshot(key),
     () => null
   );
   const prefs = useMemo(() => normalize(parse(snapshot)), [normalize, snapshot]);
-  const current = useCallback(() => normalize(parse(readSnapshot(key))), [normalize, key]);
+  const current = useCallback2(() => normalize(parse(readSnapshot(key))), [normalize, key]);
   const queryKey = useMemo(() => ["list-prefs", userId, listKey], [userId, listKey]);
   const query = useQuery({
     queryKey,
@@ -1798,7 +1964,7 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
   }, [userId, listKey, key, query.isSuccess, query.data, normalize, current]);
   const timerRef = useRef3(null);
   const pendingRef = useRef3(null);
-  const commit = useCallback(
+  const commit = useCallback2(
     (next) => {
       pendingRef.current = null;
       if (!userId) return;
@@ -1807,7 +1973,7 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
     },
     [userId, listKey, queryClient]
   );
-  const persist = useCallback(
+  const persist = useCallback2(
     (next, { debounce }) => {
       writeLocal(key, next);
       if (timerRef.current) {
@@ -1836,31 +2002,31 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
     },
     [commit]
   );
-  const setHidden = useCallback(
+  const setHidden = useCallback2(
     (hidden) => persist({ ...current(), hidden }, { debounce: false }),
     [persist, current]
   );
-  const setWidths = useCallback(
+  const setWidths = useCallback2(
     (widths) => persist({ ...current(), widths }, { debounce: true }),
     [persist, current]
   );
-  const setSort = useCallback(
+  const setSort = useCallback2(
     (sort) => persist({ ...current(), sort }, { debounce: false }),
     [persist, current]
   );
-  const setPageSize = useCallback(
+  const setPageSize = useCallback2(
     (pageSize) => persist({ ...current(), pageSize }, { debounce: false }),
     [persist, current]
   );
-  const setCompact = useCallback(
+  const setCompact = useCallback2(
     (compact) => persist({ ...current(), compact }, { debounce: false }),
     [persist, current]
   );
-  const setOrder = useCallback(
+  const setOrder = useCallback2(
     (order) => persist({ ...current(), order }, { debounce: false }),
     [persist, current]
   );
-  const reset = useCallback(() => {
+  const reset = useCallback2(() => {
     const base = normalize(null);
     persist(
       { ...current(), hidden: base.hidden, widths: base.widths, order: base.order },
