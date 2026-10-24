@@ -13,6 +13,7 @@ export {
   RESIZE_KEY_MAX,
   RESIZE_KEY_STEP,
   RESIZE_KEY_STEP_LARGE,
+  STORED_WIDTH_MAX_FACTOR,
   useColumnResize,
 } from './list/useColumnResize'
 export {
@@ -66,6 +67,8 @@ export {
   EMPTY_LIST_PREFS,
   LIST_PAGE_SIZES,
   LIST_PREFS_STORAGE_PREFIX,
+  LIST_WIDTHS_VERSION,
+  hasLegacyWidths,
   isListPageSize,
   listPrefsEqual,
   normalizeListPrefs,

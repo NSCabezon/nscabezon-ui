@@ -10,6 +10,7 @@ import {
   LIST_PAGE_SIZES,
   LIST_PREFS_STORAGE_PREFIX,
   LIST_PREFS_WIDTHS_DEBOUNCE_MS,
+  LIST_WIDTHS_VERSION,
   ListFooter,
   MIN_COLUMN_WIDTH,
   Pagination,
@@ -17,10 +18,12 @@ import {
   RESIZE_KEY_STEP,
   RESIZE_KEY_STEP_LARGE,
   ResponsiveList,
+  STORED_WIDTH_MAX_FACTOR,
   TINTED_ROW_CLASS,
   TOUCH_TEXT_LINK,
   columnFloor,
   createSupabaseListPrefsStore,
+  hasLegacyWidths,
   isFillColumn,
   isListPageSize,
   listPrefsEqual,
@@ -42,9 +45,9 @@ import {
   usePagination,
   useSupabaseListPrefsStore,
   visibleColumnsOf
-} from "./chunk-WHXSXQ6J.js";
+} from "./chunk-UZFQYPA5.js";
 import "./chunk-6CXBNIIA.js";
-import "./chunk-3L77SDL2.js";
+import "./chunk-U5QM4MNB.js";
 export {
   COLUMN_WIDTH_KEY_ATTR,
   ColumnsMenu,
@@ -56,6 +59,7 @@ export {
   LIST_PAGE_SIZES,
   LIST_PREFS_STORAGE_PREFIX,
   LIST_PREFS_WIDTHS_DEBOUNCE_MS,
+  LIST_WIDTHS_VERSION,
   ListFooter,
   MIN_COLUMN_WIDTH,
   Pagination,
@@ -63,10 +67,12 @@ export {
   RESIZE_KEY_STEP,
   RESIZE_KEY_STEP_LARGE,
   ResponsiveList,
+  STORED_WIDTH_MAX_FACTOR,
   TINTED_ROW_CLASS,
   TOUCH_TEXT_LINK,
   columnFloor,
   createSupabaseListPrefsStore,
+  hasLegacyWidths,
   isFillColumn,
   isListPageSize,
   listPrefsEqual,

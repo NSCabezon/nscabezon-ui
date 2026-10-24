@@ -29,6 +29,10 @@ function cn(...inputs) {
 }
 
 // src/prefs/listPrefs.ts
+var LIST_WIDTHS_VERSION = 2;
+function hasLegacyWidths(prefs) {
+  return prefs.widthsV !== LIST_WIDTHS_VERSION && Object.keys(prefs.widths).length > 0;
+}
 var LIST_PAGE_SIZES = [10, 25, 50, 100];
 var DEFAULT_LIST_PAGE_SIZE = 25;
 function isListPageSize(value) {
@@ -48,6 +52,7 @@ function normalizeListPrefs(raw, knownKeys, defaults) {
     compact: typeof defaults.compact === "boolean" ? defaults.compact : false,
     order: cleanOrder(defaults.order, knownKeys)
   };
+  if (Object.keys(base.widths).length > 0) base.widthsV = LIST_WIDTHS_VERSION;
   if (!isRecord(raw)) return base;
   const hidden = Array.isArray(raw.hidden) ? Array.from(
     new Set(raw.hidden.filter((k) => typeof k === "string" && known.has(k)))
@@ -57,7 +62,17 @@ function normalizeListPrefs(raw, knownKeys, defaults) {
   const pageSize = isListPageSize(raw.pageSize) ? raw.pageSize : base.pageSize;
   const compact = typeof raw.compact === "boolean" ? raw.compact : base.compact;
   const order = Array.isArray(raw.order) ? cleanOrder(raw.order, knownKeys) : base.order;
-  return { hidden, widths, sort, pageSize, compact, order };
+  const legacy = isRecord(raw.widths) && raw.widthsV !== LIST_WIDTHS_VERSION;
+  const marked = Object.keys(widths).length > 0 && !legacy;
+  return {
+    hidden,
+    widths,
+    sort,
+    pageSize,
+    compact,
+    order,
+    ...marked ? { widthsV: LIST_WIDTHS_VERSION } : {}
+  };
 }
 function cleanOrder(raw, knownKeys) {
   if (!Array.isArray(raw)) return [];
@@ -93,6 +108,7 @@ function listPrefsEqual(a, b) {
   const bw = Object.entries(b.widths);
   if (aw.length !== bw.length || aw.some(([k, v]) => b.widths[k] !== v)) return false;
   if (a.pageSize !== b.pageSize) return false;
+  if (a.widthsV !== b.widthsV) return false;
   if (a.compact !== b.compact) return false;
   if (a.order.length !== b.order.length || a.order.some((k, i) => k !== b.order[i])) return false;
   if (a.sort === null || b.sort === null) return a.sort === b.sort;
@@ -178,11 +194,13 @@ export {
   EMPTY_LIST_PREFS,
   LIST_PAGE_SIZES,
   LIST_PREFS_STORAGE_PREFIX,
+  LIST_WIDTHS_VERSION,
   MIN_COLUMN_WIDTH,
   TINTED_ROW_CLASS,
   cn,
   columnFloor,
   getLastAuthMethod,
+  hasLegacyWidths,
   isFillColumn,
   isListPageSize,
   listPrefsEqual,

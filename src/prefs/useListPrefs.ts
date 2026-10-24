@@ -7,6 +7,7 @@ import {
   LIST_PREFS_STORAGE_PREFIX,
   listPrefsEqual,
   normalizeListPrefs,
+  LIST_WIDTHS_VERSION,
   resolveListDefaults,
   type ListPrefs,
   type ListPrefsDefaults,
@@ -307,7 +308,14 @@ export function useListPrefs(
     [persist, current],
   )
   const setWidths = useCallback(
-    (widths: Record<string, number>) => persist({ ...current(), widths }, { debounce: true }),
+    // Los anchos se escriben siempre con la marca del modelo proporcional
+    // (v0.9.10, UI-RESIZE-2): desde aquí ya no son «viejos».
+    (widths: Record<string, number>) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { widthsV, ...rest } = current()
+      const marked = Object.keys(widths).length > 0 ? { widthsV: LIST_WIDTHS_VERSION } : {}
+      persist({ ...rest, widths, ...marked }, { debounce: true })
+    },
     [persist, current],
   )
   const setSort = useCallback(
@@ -332,8 +340,16 @@ export function useListPrefs(
   // `defaults` (sin ellos, `{}` y `[]`: anchos y orden de serie).
   const reset = useCallback(() => {
     const base = normalize(null)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { widthsV, ...rest } = current()
     persist(
-      { ...current(), hidden: base.hidden, widths: base.widths, order: base.order },
+      {
+        ...rest,
+        hidden: base.hidden,
+        widths: base.widths,
+        ...(base.widthsV ? { widthsV: base.widthsV } : {}),
+        order: base.order,
+      },
       { debounce: false },
     )
   }, [persist, current, normalize])

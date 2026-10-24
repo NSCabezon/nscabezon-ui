@@ -7,6 +7,8 @@ export {
   EMPTY_LIST_PREFS,
   LIST_PAGE_SIZES,
   LIST_PREFS_STORAGE_PREFIX,
+  LIST_WIDTHS_VERSION,
+  hasLegacyWidths,
   isListPageSize,
   listPrefsEqual,
   normalizeListPrefs,

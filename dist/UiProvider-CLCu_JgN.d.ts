@@ -14,7 +14,15 @@ type ListPrefs = {
     pageSize: number;
     compact: boolean;
     order: string[];
+    widthsV?: typeof LIST_WIDTHS_VERSION;
 };
+/** Valor actual de `ListPrefs.widthsV` (v0.9.10). */
+declare const LIST_WIDTHS_VERSION: 2;
+/**
+ * ¿Los anchos de estas prefs son de antes de la marca (v0.9.10, UI-RESIZE-2)?
+ * Sí si hay anchos guardados y no llevan `widthsV: 2`.
+ */
+declare function hasLegacyWidths(prefs: Pick<ListPrefs, 'widths' | 'widthsV'>): boolean;
 declare const LIST_PAGE_SIZES: readonly [10, 25, 50, 100];
 type ListPageSize = (typeof LIST_PAGE_SIZES)[number];
 declare const DEFAULT_LIST_PAGE_SIZE: ListPageSize;
@@ -33,6 +41,9 @@ declare const LIST_PREFS_STORAGE_PREFIX = "list-prefs:";
  *   columna: `knownKeys` no le afecta.
  * - Compacto: solo un booleano; si no, el de `defaults` (y si ese tampoco lo
  *   es, `false`).
+ * - Marca de anchos (`widthsV`, v0.9.10): solo con anchos no vacíos. `2` si
+ *   `raw` la trae (o los anchos son los de `defaults`); unos `widths` de
+ *   `raw` sin ella son viejos y la marca se omite (ver `hasLegacyWidths`).
  * - Orden de columnas: solo claves conocidas, sin repetidas, y las columnas
  *   conocidas que falten se AÑADEN AL FINAL (una columna nueva aparece detrás
  *   de las que el usuario ya colocó). Si no es un array, el de `defaults`; un
@@ -170,6 +181,12 @@ type Labels = {
     actionsColumn: string;
     /** Nombre accesible (sr-only) de la cabecera de la columna `leading` (selección). */
     selectColumn: string;
+    /**
+     * Texto del control de teclado que abre una fila con `onRowClick` (v0.9.10,
+     * A11Y-4). Su nombre accesible es este texto seguido del de la celda
+     * principal de la fila («Abrir factura-123.pdf»).
+     */
+    openRow: string;
 };
 declare const defaultLabels: Labels;
 /** Props mínimas que el paquete pasa al `Link` de la app. */
@@ -211,4 +228,4 @@ declare function useUi(): UiContextValue;
 /** Textos efectivos: defecto < `UiProvider` < `override` (prop del componente). */
 declare function useLabels(override?: Partial<Labels>): Labels;
 
-export { DEFAULT_LIST_PAGE_SIZE as D, EMPTY_LIST_PREFS as E, LIST_PAGE_SIZES as L, type SortDir as S, type UiContextValue as U, LIST_PREFS_STORAGE_PREFIX as a, type Labels as b, type ListPageSize as c, type ListPrefs as d, type ListPrefsDefaults as e, type ListPrefsStore as f, type ListSort as g, type SupabaseLikeClient as h, type SupabaseListPrefsStoreOptions as i, type UiLinkProps as j, UiProvider as k, type UiProviderProps as l, createSupabaseListPrefsStore as m, defaultLabels as n, isListPageSize as o, listPrefsEqual as p, localOnlyListPrefsStore as q, normalizeListPrefs as r, resolveListDefaults as s, useUi as t, useLabels as u };
+export { DEFAULT_LIST_PAGE_SIZE as D, EMPTY_LIST_PREFS as E, LIST_PAGE_SIZES as L, type SortDir as S, type UiContextValue as U, LIST_PREFS_STORAGE_PREFIX as a, LIST_WIDTHS_VERSION as b, type Labels as c, type ListPageSize as d, type ListPrefs as e, type ListPrefsDefaults as f, type ListPrefsStore as g, type ListSort as h, type SupabaseLikeClient as i, type SupabaseListPrefsStoreOptions as j, type UiLinkProps as k, UiProvider as l, type UiProviderProps as m, createSupabaseListPrefsStore as n, defaultLabels as o, hasLegacyWidths as p, isListPageSize as q, listPrefsEqual as r, localOnlyListPrefsStore as s, normalizeListPrefs as t, resolveListDefaults as u, useLabels as v, useUi as w };

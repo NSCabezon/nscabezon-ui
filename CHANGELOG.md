@@ -3,6 +3,84 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.9.10] - 2026-10-25
+
+### Corregido
+
+- **A11Y-4 — filas con `onRowClick` sin controles anidados.** El `<tr>` (y la
+  tarjeta móvil) era `role="button" tabindex=0` con enlaces y botones dentro:
+  axe `nested-interactive` (serious). Ahora:
+  - El `<tr>`/tarjeta **no** lleva `role` ni `tabindex`; lleva
+    `data-list-row-click` (gancho para tests). El clic de ratón en cualquier
+    parte de la fila sigue abriendo.
+  - El teclado entra por un `<button type="button" data-list-row-open>`
+    **sr-only** al principio de la celda `primary` (o de la primera columna no
+    `action`; en móvil, junto al título de la tarjeta). Su nombre es
+    `labels.openRow` (nuevo, «Abrir») + el contenido de la celda principal
+    (`aria-labelledby`; el contenido va en un `<div class="contents">`, sin
+    cambio de maquetación). Tab llega a él; Enter/Espacio son los del botón.
+    Con su foco visible la fila pinta un anillo (`has-[…:focus-visible]:ring-2
+    ring-ring ring-inset`).
+  - El clic de ratón en la fila le da el foco a ese botón (`preventScroll`)
+    salvo que el clic ya lo dejara en algo de la fila: un diálogo que devuelva
+    el foco al cerrar (Radix) vuelve a la fila, con ratón o con teclado.
+  - Se eligió el control hermano y no envolver la celda principal en un
+    `<button>`: en el Buzón de Gesmoto la celda principal ya trae un `<a>` (el
+    fichero), y un botón que lo envuelva vuelve a ser `nested-interactive`.
+    Un `<tr tabindex=0>` sin rol tampoco vale: es un foco sin nombre ni rol
+    (los lectores no lo anuncian como accionable).
+- **UI-RESIZE-1 — nada se sale de su columna en su suelo.** En
+  `/work-orders/history` (Gesmoto, 1440) con las columnas en su suelo
+  (64 px) el contenedor scrolleaba 28 px de más: el texto de la celda
+  `action` «Estado» («Entregada») asomaba por la derecha (las `action` no se
+  recortaban), y el botón de ordenar de la cabecera (`-mx-4`) medía su texto
+  y quedaba bajo el botón de columnas. Con `resizable`: las celdas `action`
+  llevan `overflow-x-clip` (sin elipsis; no recorta en vertical, los anillos
+  de foco siguen enteros), el botón de ordenar lleva
+  `min-w-0 max-w-[calc(100%+2rem)] overflow-hidden` y su texto va en un
+  `<span>` que se corta con el `text-overflow` de la `<th>` (elipsis o el
+  `text-clip` del consumidor); en la última cabecera con menú de columnas,
+  `max-w-[calc(100%+1rem)]` (no entra en el `pr-10` del menú). Sin
+  `resizable`, sin cambios.
+- **UI-RESIZE-2 — anchos guardados antes de 0.9.9: con techo, solo esos.**
+  Con 0.9.6-0.9.8 un ancho guardado era fijo (y uno grande daba scroll) o,
+  en el relleno, un tope; leído con el reparto proporcional de 0.9.9, un
+  `client: 566` de entonces apretaba a las demás (Apertura a 100 px, fechas
+  cortadas). Ahora:
+  - **Marca de versión en las prefs:** `ListPrefs.widthsV` (opcional,
+    `LIST_WIDTHS_VERSION = 2`). `useListPrefs.setWidths` la escribe con
+    cualquier ancho no vacío; viaja en el mismo objeto que ya se guarda en
+    `user_list_prefs.prefs` (y en la caché local). `normalizeListPrefs` solo
+    la deja con anchos no vacíos: unos `widths` leídos sin ella son
+    **viejos** (`hasLegacyWidths(prefs)`); los de `defaults` de la página, no.
+    `listPrefsEqual` la compara.
+  - `useListView` pasa `listProps.columnWidthsLegacy` (y `useListColumns`, `columnWidthsLegacy`); `ResponsiveList`
+    (`columnWidthsLegacy`) y `useColumnResize` (`legacyWidths`) leen entonces
+    cada ancho guardado como mucho a `máx(1,5 × su ancho de serie,
+    contenedor − selección − las demás a su ancho de serie (o a su base, si es
+    menor))`, nunca bajo su suelo (`STORED_WIDTH_MAX_FACTOR = 1.5`). En una
+    pantalla ancha el techo es el sobrante (se respeta lo guardado). Sin
+    contenedor medido, sin techo.
+  - **La primera escritura** (arrastre, teclado, doble clic, Escape/Supr)
+    guarda los anchos viejos ya LIMITADOS (lo que se ve) y con la marca:
+    desde ahí no hay techo.
+  - **Arrastre y teclado sin techo nunca** (el modelo de 0.9.9 intacto: una
+    columna puede crecer mucho y las demás encogen hasta su suelo). Tests
+    PROP-1…7 sin cambios.
+
+> **Consumidores (Gesmoto):** nada obligatorio en el código de las listas.
+> Tests que buscaban `tr[role="button"]` deben pasar a
+> `tr[data-list-row-click]` y abrir con un clic en la fila o en
+> `[data-list-row-open]`; `keyDown(Enter)` sobre el `<tr>` ya no abre (en el
+> navegador, Enter/Espacio sobre el botón hacen clic; en jsdom, `click()`).
+> Traducir `labels.openRow` («Open» en inglés) en el `UiProvider`.
+> UI-RESIZE-2: con `{...view.listProps}` no hay nada que hacer. Donde se
+> pasen los anchos a mano desde un `useListView` (un subconjunto de
+> `listProps`, `embeddedWidthProps`…), añadir
+> `columnWidthsLegacy: view.listProps.columnWidthsLegacy`; si no, los anchos
+> viejos se leen sin techo (como en 0.9.9). Tests que comprueben lo que se
+> guarda al cambiar anchos verán además `widthsV: 2`.
+
 ## [0.9.9] - 2026-10-24
 
 ### Cambiado

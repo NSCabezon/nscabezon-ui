@@ -20,6 +20,24 @@ export type ListPrefs = {
   // Orden de las columnas elegido por el usuario (claves). `[]` = orden de
   // serie (el de `columns`). Ver `normalizeListPrefs` y `orderColumns`.
   order: string[]
+  // Marca de los anchos (v0.9.10, UI-RESIZE-2): `2` = guardados con el
+  // modelo proporcional (0.9.10 en adelante; `useListPrefs.setWidths` la pone
+  // al escribir). Sin ella, unos `widths` no vacíos vienen de antes (ancho
+  // fijo con scroll, o tope del relleno) y `ResponsiveList` los lee con techo
+  // (`hasLegacyWidths`, `listProps.columnWidthsLegacy`). Opcional: unas prefs
+  // escritas a mano sin ella siguen siendo válidas.
+  widthsV?: typeof LIST_WIDTHS_VERSION
+}
+
+/** Valor actual de `ListPrefs.widthsV` (v0.9.10). */
+export const LIST_WIDTHS_VERSION = 2 as const
+
+/**
+ * ¿Los anchos de estas prefs son de antes de la marca (v0.9.10, UI-RESIZE-2)?
+ * Sí si hay anchos guardados y no llevan `widthsV: 2`.
+ */
+export function hasLegacyWidths(prefs: Pick<ListPrefs, 'widths' | 'widthsV'>): boolean {
+  return prefs.widthsV !== LIST_WIDTHS_VERSION && Object.keys(prefs.widths).length > 0
 }
 
 // Tamaños de página que ofrece el selector. Si se cambia esta lista, las
@@ -51,6 +69,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  *   columna: `knownKeys` no le afecta.
  * - Compacto: solo un booleano; si no, el de `defaults` (y si ese tampoco lo
  *   es, `false`).
+ * - Marca de anchos (`widthsV`, v0.9.10): solo con anchos no vacíos. `2` si
+ *   `raw` la trae (o los anchos son los de `defaults`); unos `widths` de
+ *   `raw` sin ella son viejos y la marca se omite (ver `hasLegacyWidths`).
  * - Orden de columnas: solo claves conocidas, sin repetidas, y las columnas
  *   conocidas que falten se AÑADEN AL FINAL (una columna nueva aparece detrás
  *   de las que el usuario ya colocó). Si no es un array, el de `defaults`; un
@@ -73,6 +94,8 @@ export function normalizeListPrefs(
     compact: typeof defaults.compact === 'boolean' ? defaults.compact : false,
     order: cleanOrder(defaults.order, knownKeys),
   }
+  // Los anchos de `defaults` los pone la página: no son viejos.
+  if (Object.keys(base.widths).length > 0) base.widthsV = LIST_WIDTHS_VERSION
   if (!isRecord(raw)) return base
 
   const hidden = Array.isArray(raw.hidden)
@@ -91,7 +114,18 @@ export function normalizeListPrefs(
 
   const order = Array.isArray(raw.order) ? cleanOrder(raw.order, knownKeys) : base.order
 
-  return { hidden, widths, sort, pageSize, compact, order }
+  // Marca: solo con anchos. Viejos = leídos de `raw`, no vacíos y sin marca.
+  const legacy = isRecord(raw.widths) && raw.widthsV !== LIST_WIDTHS_VERSION
+  const marked = Object.keys(widths).length > 0 && !legacy
+  return {
+    hidden,
+    widths,
+    sort,
+    pageSize,
+    compact,
+    order,
+    ...(marked ? { widthsV: LIST_WIDTHS_VERSION } : {}),
+  }
 }
 
 function cleanOrder(raw: unknown, knownKeys: string[]): string[] {
@@ -132,6 +166,7 @@ export function listPrefsEqual(a: ListPrefs, b: ListPrefs): boolean {
   const bw = Object.entries(b.widths)
   if (aw.length !== bw.length || aw.some(([k, v]) => b.widths[k] !== v)) return false
   if (a.pageSize !== b.pageSize) return false
+  if (a.widthsV !== b.widthsV) return false
   if (a.compact !== b.compact) return false
   if (a.order.length !== b.order.length || a.order.some((k, i) => k !== b.order[i])) return false
   if (a.sort === null || b.sort === null) return a.sort === b.sort

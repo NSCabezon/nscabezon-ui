@@ -23,7 +23,15 @@ type ListPrefs = {
     pageSize: number;
     compact: boolean;
     order: string[];
+    widthsV?: typeof LIST_WIDTHS_VERSION;
 };
+/** Valor actual de `ListPrefs.widthsV` (v0.9.10). */
+declare const LIST_WIDTHS_VERSION: 2;
+/**
+ * ¿Los anchos de estas prefs son de antes de la marca (v0.9.10, UI-RESIZE-2)?
+ * Sí si hay anchos guardados y no llevan `widthsV: 2`.
+ */
+declare function hasLegacyWidths(prefs: Pick<ListPrefs, 'widths' | 'widthsV'>): boolean;
 declare const LIST_PAGE_SIZES: readonly [10, 25, 50, 100];
 type ListPageSize = (typeof LIST_PAGE_SIZES)[number];
 declare const DEFAULT_LIST_PAGE_SIZE: ListPageSize;
@@ -42,6 +50,9 @@ declare const LIST_PREFS_STORAGE_PREFIX = "list-prefs:";
  *   columna: `knownKeys` no le afecta.
  * - Compacto: solo un booleano; si no, el de `defaults` (y si ese tampoco lo
  *   es, `false`).
+ * - Marca de anchos (`widthsV`, v0.9.10): solo con anchos no vacíos. `2` si
+ *   `raw` la trae (o los anchos son los de `defaults`); unos `widths` de
+ *   `raw` sin ella son viejos y la marca se omite (ver `hasLegacyWidths`).
  * - Orden de columnas: solo claves conocidas, sin repetidas, y las columnas
  *   conocidas que falten se AÑADEN AL FINAL (una columna nueva aparece detrás
  *   de las que el usuario ya colocó). Si no es un array, el de `defaults`; un
@@ -199,4 +210,4 @@ declare function getLastAuthMethod(storageKey?: string): AuthMethod | null;
 /** Guarda el método. Si no hay storage (modo privado / bloqueado) se ignora: el hint es opcional. */
 declare function setLastAuthMethod(method: AuthMethod, storageKey?: string): void;
 
-export { type AuthMethod, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, DEFAULT_LAST_AUTH_METHOD_KEY, DEFAULT_LIST_PAGE_SIZE, EMPTY_LIST_PREFS, LIST_PAGE_SIZES, LIST_PREFS_STORAGE_PREFIX, type ListPageSize, type ListPrefs, type ListPrefsDefaults, type ListSort, MIN_COLUMN_WIDTH, type OAuthProvider, type SizedColumn, type SortDir, TINTED_ROW_CLASS, cn, columnFloor, getLastAuthMethod, isFillColumn, isListPageSize, listPrefsEqual, normalizeListPrefs, resolveColumnWidth, resolveFillColumnKey, resolveListDefaults, rowTone, safeStorage, setLastAuthMethod, tableSizing, visibleColumnsOf };
+export { type AuthMethod, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, DEFAULT_LAST_AUTH_METHOD_KEY, DEFAULT_LIST_PAGE_SIZE, EMPTY_LIST_PREFS, LIST_PAGE_SIZES, LIST_PREFS_STORAGE_PREFIX, LIST_WIDTHS_VERSION, type ListPageSize, type ListPrefs, type ListPrefsDefaults, type ListSort, MIN_COLUMN_WIDTH, type OAuthProvider, type SizedColumn, type SortDir, TINTED_ROW_CLASS, cn, columnFloor, getLastAuthMethod, hasLegacyWidths, isFillColumn, isListPageSize, listPrefsEqual, normalizeListPrefs, resolveColumnWidth, resolveFillColumnKey, resolveListDefaults, rowTone, safeStorage, setLastAuthMethod, tableSizing, visibleColumnsOf };

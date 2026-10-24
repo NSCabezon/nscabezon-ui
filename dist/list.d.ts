@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { CSSProperties } from 'react';
-import { g as ListSort, b as Labels, d as ListPrefs, e as ListPrefsDefaults, f as ListPrefsStore, h as SupabaseLikeClient, i as SupabaseListPrefsStoreOptions } from './UiProvider-Ql4_gFkZ.js';
-export { D as DEFAULT_LIST_PAGE_SIZE, E as EMPTY_LIST_PREFS, L as LIST_PAGE_SIZES, a as LIST_PREFS_STORAGE_PREFIX, c as ListPageSize, S as SortDir, m as createSupabaseListPrefsStore, o as isListPageSize, p as listPrefsEqual, q as localOnlyListPrefsStore, r as normalizeListPrefs, s as resolveListDefaults } from './UiProvider-Ql4_gFkZ.js';
+import { h as ListSort, c as Labels, e as ListPrefs, f as ListPrefsDefaults, g as ListPrefsStore, i as SupabaseLikeClient, j as SupabaseListPrefsStoreOptions } from './UiProvider-CLCu_JgN.js';
+export { D as DEFAULT_LIST_PAGE_SIZE, E as EMPTY_LIST_PREFS, L as LIST_PAGE_SIZES, a as LIST_PREFS_STORAGE_PREFIX, b as LIST_WIDTHS_VERSION, d as ListPageSize, S as SortDir, n as createSupabaseListPrefsStore, p as hasLegacyWidths, q as isListPageSize, r as listPrefsEqual, s as localOnlyListPrefsStore, t as normalizeListPrefs, u as resolveListDefaults } from './UiProvider-CLCu_JgN.js';
 
 type ResponsiveColumn<T> = {
     key: string;
@@ -40,6 +40,7 @@ type ResponsiveListProps<T> = {
     onSortChange?: (next: ListSort) => void;
     resizable?: boolean;
     columnWidths?: Record<string, number>;
+    columnWidthsLegacy?: boolean;
     onColumnWidthsChange?: (widths: Record<string, number>) => void;
     hiddenColumns?: string[];
     onHiddenColumnsChange?: (hidden: string[]) => void;
@@ -58,7 +59,7 @@ type ResponsiveListProps<T> = {
     labels?: Partial<Labels>;
 };
 declare const TOUCH_TEXT_LINK = "pointer-coarse:-my-3 pointer-coarse:min-h-11 pointer-coarse:py-3 pointer-coarse:-mx-3 pointer-coarse:min-w-11 pointer-coarse:px-3";
-declare function ResponsiveList<T>({ columns, data, rowKey, rowHref, onRowClick, rowHoverProps, leading, isRowSelected, rowClassName, rowStyle, sort, onSortChange, resizable, columnWidths, onColumnWidthsChange, hiddenColumns, onHiddenColumnsChange, onColumnsReset, mobileColumnsMenu, compact, onCompactChange, columnOrder, onColumnOrderChange, pageSize, onPageSizeChange, stickyHeader, stickyHeaderTop, ready, className, labels: labelsProp, }: ResponsiveListProps<T>): React.JSX.Element;
+declare function ResponsiveList<T>({ columns, data, rowKey, rowHref, onRowClick, rowHoverProps, leading, isRowSelected, rowClassName, rowStyle, sort, onSortChange, resizable, columnWidths, columnWidthsLegacy, onColumnWidthsChange, hiddenColumns, onHiddenColumnsChange, onColumnsReset, mobileColumnsMenu, compact, onCompactChange, columnOrder, onColumnOrderChange, pageSize, onPageSizeChange, stickyHeader, stickyHeaderTop, ready, className, labels: labelsProp, }: ResponsiveListProps<T>): React.JSX.Element;
 
 type ColumnsMenuColumn = {
     key: string;
@@ -196,6 +197,12 @@ declare function visibleColumnsOf<C extends {
 
 /** Atributo que marca cada `<th>` medible con la clave de su columna. */
 declare const COLUMN_WIDTH_KEY_ATTR = "data-column-width-key";
+/**
+ * Techo de un ancho guardado ANTES de 0.9.9 (sin marca `widthsV: 2`), en
+ * múltiplos de su ancho de serie (v0.9.10, UI-RESIZE-2). Ver
+ * `useColumnResize` («Anchos viejos»).
+ */
+declare const STORED_WIDTH_MAX_FACTOR = 1.5;
 /** Paso (px) de ←/→ en el asa enfocada (v0.9.7): 1 rem. */
 declare const RESIZE_KEY_STEP = 16;
 /** Paso (px) de Mayús+←/→ en el asa enfocada (v0.9.7): 4 rem. */
@@ -254,6 +261,18 @@ declare const RESIZE_KEY_MAX = 1600;
  *   vuelven a hacer relleno. El ancho guardado de un relleno (también el de
  *   0.9.6-0.9.8, p. ej. 566 a 1920) ya no trae scroll en pantallas menores:
  *   lo impide `minColumns`.
+ * - Anchos viejos (v0.9.10, UI-RESIZE-2; `legacyWidths`, con contenedor
+ *   medido): hasta la 0.9.8 un ancho guardado era un ancho fijo (con scroll si
+ *   no cabía) o, en el relleno, un tope; con el reparto proporcional un
+ *   `client: 566` de entonces apretaba a las demás (Apertura a 100 px). Si
+ *   los anchos vienen de antes de la marca (`widthsV: 2`, ver
+ *   `hasLegacyWidths`), cada ancho guardado se lee como mucho a `capOf`: lo
+ *   mayor entre 1,5 × su ancho de serie (`STORED_WIDTH_MAX_FACTOR`) y lo que
+ *   le dejan las demás a su ancho de serie dentro del contenedor. La primera
+ *   escritura (arrastre, teclado, doble clic) guarda ya los anchos LIMITADOS
+ *   (los que se ven) y `useListPrefs.setWidths` les pone la marca: desde ahí
+ *   no hay techo. El arrastre y el teclado no tienen techo nunca (el modelo
+ *   de 0.9.9: las demás encogen hasta su suelo).
  * Sin `columns` (tablas a mano antiguas, p. ej. las líneas de presupuesto de
  * Gesmoto): cambia la arrastrada, 1:1, partiendo del ancho guardado o, si no
  * hay, del medido; suelo `MIN_COLUMN_WIDTH`.
@@ -268,7 +287,7 @@ declare const RESIZE_KEY_MAX = 1600;
  * columna que controla, como el doble clic. La mitad `'start'` no es
  * enfocable (sería el mismo borde dos veces en el Tab).
  */
-declare function useColumnResize({ columnWidths, onColumnWidthsChange, columns, containerWidth, leadingWidth, labels: labelsProp, }: {
+declare function useColumnResize({ columnWidths, onColumnWidthsChange, columns, containerWidth, leadingWidth, legacyWidths, labels: labelsProp, }: {
     columnWidths?: Record<string, number>;
     onColumnWidthsChange?: (widths: Record<string, number>) => void;
     /** Columnas VISIBLES, en orden: activa el modelo proporcional. */
@@ -283,6 +302,12 @@ declare function useColumnResize({ columnWidths, onColumnWidthsChange, columns, 
     containerWidth?: number;
     /** Px de columnas fuera de `columns`, DELANTE (p. ej. la de selección). */
     leadingWidth?: number;
+    /**
+     * `columnWidths` viene de antes de 0.9.9 (sin `widthsV: 2`; v0.9.10,
+     * UI-RESIZE-2): se lee con techo y la primera escritura lo guarda limitado.
+     * `useListView` lo pasa en `listProps.columnWidthsLegacy`.
+     */
+    legacyWidths?: boolean;
     /** Textos propios (`columnResize`); ganan al `UiProvider`. */
     labels?: Partial<Labels>;
 }): {
@@ -370,6 +395,7 @@ type ListViewListProps = {
     onSortChange: (next: ListSort) => void;
     resizable: true;
     columnWidths: Record<string, number>;
+    columnWidthsLegacy?: boolean;
     onColumnWidthsChange: (widths: Record<string, number>) => void;
     hiddenColumns: string[];
     onHiddenColumnsChange: (hidden: string[]) => void;
@@ -551,6 +577,7 @@ declare function useListColumns(listKey: string, columnKeys: readonly string[], 
 }): {
     resizable: true;
     columnWidths: Record<string, number>;
+    columnWidthsLegacy: boolean;
     onColumnWidthsChange: (widths: Record<string, number>) => void;
     hiddenColumns: string[];
     onHiddenColumnsChange: (hidden: string[]) => void;
@@ -666,4 +693,4 @@ type SupabaseLikeAuthClient = SupabaseLikeClient & {
  */
 declare function useSupabaseListPrefsStore(client: SupabaseLikeAuthClient, { table, onError }?: SupabaseListPrefsStoreOptions): ListPrefsStore;
 
-export { COLUMN_WIDTH_KEY_ATTR, ColumnsMenu, type ColumnsMenuColumn, type ColumnsMenuProps, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, DEFAULT_PAGE_SIZE, LIST_PREFS_WIDTHS_DEBOUNCE_MS, ListFooter, type ListFooterProps, ListPrefs, ListPrefsDefaults, ListPrefsStore, ListSort, type ListView, type ListViewDefaults, type ListViewFooterProps, type ListViewListProps, MIN_COLUMN_WIDTH, Pagination, type PaginationProps, RESIZE_KEY_MAX, RESIZE_KEY_STEP, RESIZE_KEY_STEP_LARGE, type ResponsiveColumn, ResponsiveList, type ResponsiveListProps, type SizedColumn, type SupabaseLikeAuthClient, SupabaseLikeClient, SupabaseListPrefsStoreOptions, TINTED_ROW_CLASS, TOUCH_TEXT_LINK, type UnpaginatedListView, type UseListPrefsOptions, type UseListPrefsResult, type UseListViewOptions, columnFloor, isFillColumn, listPrefsStorageKey, moveColumn, orderColumns, resolveColumnWidth, resolveFillColumnKey, rowTone, tableSizing, useColumnResize, useListColumns, useListCompact, useListPrefs, useListView, usePagination, useSupabaseListPrefsStore, visibleColumnsOf };
+export { COLUMN_WIDTH_KEY_ATTR, ColumnsMenu, type ColumnsMenuColumn, type ColumnsMenuProps, DEFAULT_ACTION_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, DEFAULT_PAGE_SIZE, LIST_PREFS_WIDTHS_DEBOUNCE_MS, ListFooter, type ListFooterProps, ListPrefs, ListPrefsDefaults, ListPrefsStore, ListSort, type ListView, type ListViewDefaults, type ListViewFooterProps, type ListViewListProps, MIN_COLUMN_WIDTH, Pagination, type PaginationProps, RESIZE_KEY_MAX, RESIZE_KEY_STEP, RESIZE_KEY_STEP_LARGE, type ResponsiveColumn, ResponsiveList, type ResponsiveListProps, STORED_WIDTH_MAX_FACTOR, type SizedColumn, type SupabaseLikeAuthClient, SupabaseLikeClient, SupabaseListPrefsStoreOptions, TINTED_ROW_CLASS, TOUCH_TEXT_LINK, type UnpaginatedListView, type UseListPrefsOptions, type UseListPrefsResult, type UseListViewOptions, columnFloor, isFillColumn, listPrefsStorageKey, moveColumn, orderColumns, resolveColumnWidth, resolveFillColumnKey, rowTone, tableSizing, useColumnResize, useListColumns, useListCompact, useListPrefs, useListView, usePagination, useSupabaseListPrefsStore, visibleColumnsOf };

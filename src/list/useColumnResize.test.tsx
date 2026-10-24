@@ -181,7 +181,9 @@ describe('useColumnResize', () => {
       measured = {},
       tableWidth,
       containerWidth,
+      legacy,
     }: {
+      legacy?: boolean
       columns: Col[]
       widths?: Record<string, number>
       onChange: (w: Record<string, number>) => void
@@ -196,6 +198,7 @@ describe('useColumnResize', () => {
         onColumnWidthsChange: onChange,
         columns,
         containerWidth,
+        legacyWidths: legacy,
       })
       return (
         <table
@@ -354,6 +357,82 @@ describe('useColumnResize', () => {
       expect(actions).toBeLessThan(5000)
       act(() => root.render(<PropHarness columns={acts} widths={{ actions }} onChange={vi.fn()} containerWidth={420} />))
       expect(Math.abs(px('actions') - 292)).toBeLessThanOrEqual(0.5)
+    })
+
+    // UI-RESIZE-2 (v0.9.10): con 0.9.6-0.9.8 un ancho guardado era fijo (o
+    // el tope del relleno); leído con el modelo proporcional, un `client: 566`
+    // de entonces apretaba a las demás (Apertura a 100 px). Solo los anchos
+    // VIEJOS (prefs sin `widthsV: 2` → `legacyWidths`) se leen con techo:
+    // máx(1,5 × su serie, lo que dejan las demás a su serie en el contenedor).
+    describe('UI-RESIZE-2: techo solo para anchos viejos', () => {
+      const hist: Col[] = [
+        { key: 'client', width: 216 },
+        { key: 'opened', width: 144 },
+        { key: 'status', width: 180 },
+      ]
+      const render = (widths: Record<string, number>, legacy: boolean, onChange = vi.fn(), containerWidth: number | undefined = 540) =>
+        act(() =>
+          root.render(
+            <PropHarness columns={hist} widths={widths} onChange={onChange} containerWidth={containerWidth} legacy={legacy} />,
+          ),
+        )
+
+      it('viejo: un ancho enorme se lee a 1,5 × su serie y no aprieta a las demás', () => {
+        render({ client: 566 }, true)
+        // Techo: máx(324, 540 − 324 = 216) = 324 → suma 648, escala 540/648.
+        expect(Math.abs(px('client') - 270)).toBeLessThanOrEqual(0.5)
+        expect(Math.abs(px('opened') - 120)).toBeLessThanOrEqual(0.5)
+        expect(Math.abs(px('status') - 150)).toBeLessThanOrEqual(0.5)
+        expect(sep(0).getAttribute('aria-valuenow')).toBe('324')
+      })
+
+      it('viejo en un contenedor ancho: el techo es el sobrante y se respeta', () => {
+        render({ client: 566 }, true, vi.fn(), 1200)
+        expect([px('client'), px('opened'), px('status')]).toEqual([566, 144, 180])
+      })
+
+      it('nuevo (con marca): sin techo, como 0.9.9', () => {
+        render({ client: 566 }, false)
+        // Suma 890 en 540: encogen todas en proporción (Apertura a 87).
+        expect(Math.abs(px('client') - (566 * 540) / 890)).toBeLessThanOrEqual(0.5)
+        expect(Math.abs(px('opened') - (144 * 540) / 890)).toBeLessThanOrEqual(0.5)
+      })
+
+      it('el arrastre no tiene techo, tampoco con anchos viejos; la primera escritura guarda lo viejo limitado', () => {
+        const onChange = vi.fn()
+        render({ client: 566, opened: 400 }, true, onChange)
+        // Estado (último borde → controla Estado) muy a la izquierda: las demás
+        // a su suelo. Las viejas, leídas con techo (324 y 216).
+        dragKey(1, -1000)
+        const saved = lastSaved(onChange)
+        expect(saved.client).toBe(324)
+        expect(saved.opened).toBe(216)
+        expect(saved.status).toBeGreaterThan(270)
+      })
+
+      it('nuevo: el arrastre lleva a las demás hasta su suelo y guarda la base sin techo', () => {
+        const onChange = vi.fn()
+        render({}, false, onChange)
+        dragKey(0, 2000, { release: false })
+        expect(Math.abs(px('opened') - 64)).toBeLessThanOrEqual(0.5)
+        expect(Math.abs(px('status') - 64)).toBeLessThanOrEqual(0.5)
+        pointer(0, 'pointerup', 2000)
+        expect(lastSaved(onChange).client).toBeGreaterThan(324)
+      })
+
+      it('el doble clic sigue borrando el guardado (y deja las demás viejas limitadas)', () => {
+        const onChange = vi.fn()
+        render({ client: 566, opened: 400 }, true, onChange)
+        act(() => {
+          sep(0).dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+        })
+        expect(onChange).toHaveBeenLastCalledWith({ opened: 216 })
+      })
+
+      it('sin contenedor medido no hay techo (tablas a mano)', () => {
+        act(() => root.render(<PropHarness columns={hist} widths={{ client: 566 }} onChange={vi.fn()} legacy />))
+        expect(colW('client')).toBe('566px')
+      })
     })
 
     it('PROP-4: con reparto proporcional (escala 2) el borde de la izquierda sigue al ratón', () => {

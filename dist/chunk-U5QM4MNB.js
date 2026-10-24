@@ -30,7 +30,8 @@ var defaultLabels = {
   oauthApple: "Continuar con Apple",
   lastUsed: "\xDAltima vez",
   actionsColumn: "Acciones",
-  selectColumn: "Seleccionar"
+  selectColumn: "Seleccionar",
+  openRow: "Abrir"
 };
 function DefaultLink({ href, ...props }) {
   return /* @__PURE__ */ jsx("a", { href, ...props });

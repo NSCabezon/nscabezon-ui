@@ -159,7 +159,7 @@ describe('useListPrefs', () => {
     expect(save).not.toHaveBeenCalled()
     act(() => vi.advanceTimersByTime(1))
     expect(save).toHaveBeenCalledTimes(1)
-    expect(save).toHaveBeenCalledWith('orders', { ...DEFAULT_PREFS, widths: { number: 120 } })
+    expect(save).toHaveBeenCalledWith('orders', { ...DEFAULT_PREFS, widths: { number: 120 }, widthsV: 2 })
   })
 
   it('desmontar con un ancho pendiente lo escribe en el acto (flush)', async () => {
@@ -170,7 +170,7 @@ describe('useListPrefs', () => {
     act(() => result.current.setWidths({ client: 150 }))
     expect(save).not.toHaveBeenCalled()
     unmount()
-    expect(save).toHaveBeenCalledWith('orders', { ...DEFAULT_PREFS, widths: { client: 150 } })
+    expect(save).toHaveBeenCalledWith('orders', { ...DEFAULT_PREFS, widths: { client: 150 }, widthsV: 2 })
   })
 
   it('reset limpia ocultas, anchos y orden de columnas pero conserva orden de filas, tamaño de página y compacto', async () => {

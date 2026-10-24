@@ -1,5 +1,6 @@
 import { useListPrefs } from '../prefs/useListPrefs'
 import type { ListPrefsStore } from '../prefs/stores'
+import { hasLegacyWidths } from '../prefs/listPrefs'
 
 /**
  * Solo las columnas configurables de un `ResponsiveList` (sin orden ni
@@ -26,6 +27,8 @@ export function useListColumns(
   return {
     resizable: true as const,
     columnWidths: prefs.widths,
+    // v0.9.10 (UI-RESIZE-2): anchos de antes de 0.9.9, leídos con techo.
+    columnWidthsLegacy: hasLegacyWidths(prefs),
     onColumnWidthsChange: setWidths,
     hiddenColumns: prefs.hidden,
     onHiddenColumnsChange: setHidden,

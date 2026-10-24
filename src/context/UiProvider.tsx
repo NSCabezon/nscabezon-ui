@@ -61,6 +61,12 @@ export type Labels = {
   actionsColumn: string
   /** Nombre accesible (sr-only) de la cabecera de la columna `leading` (selección). */
   selectColumn: string
+  /**
+   * Texto del control de teclado que abre una fila con `onRowClick` (v0.9.10,
+   * A11Y-4). Su nombre accesible es este texto seguido del de la celda
+   * principal de la fila («Abrir factura-123.pdf»).
+   */
+  openRow: string
 }
 
 export const defaultLabels: Labels = {
@@ -92,6 +98,7 @@ export const defaultLabels: Labels = {
   lastUsed: 'Última vez',
   actionsColumn: 'Acciones',
   selectColumn: 'Seleccionar',
+  openRow: 'Abrir',
 }
 
 /** Props mínimas que el paquete pasa al `Link` de la app. */

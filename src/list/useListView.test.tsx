@@ -425,3 +425,30 @@ describe('rowTone', () => {
     })
   })
 })
+
+// UI-RESIZE-2 (v0.9.10): anchos guardados antes de la marca `widthsV: 2`.
+describe('UI-RESIZE-2: listProps.columnWidthsLegacy', () => {
+  it('anchos viejos (sin marca) → legacy; al reescribirlos se guardan con la marca', () => {
+    localStorage.setItem('list-prefs:test-list', JSON.stringify({ widths: { client: 566 } }))
+    mount()
+    expect(latest.listProps.columnWidths).toEqual({ client: 566 })
+    expect(latest.listProps.columnWidthsLegacy).toBe(true)
+    act(() => latest.listProps.onColumnWidthsChange({ client: 324, number: 90 }))
+    expect(latest.listProps.columnWidthsLegacy).toBe(false)
+    const stored = JSON.parse(localStorage.getItem('list-prefs:test-list')!)
+    expect(stored.widthsV).toBe(2)
+    expect(stored.widths).toEqual({ client: 324, number: 90 })
+  })
+
+  it('anchos con marca o sin anchos → no legacy', () => {
+    localStorage.setItem('list-prefs:test-list', JSON.stringify({ widths: { client: 566 }, widthsV: 2 }))
+    mount()
+    expect(latest.listProps.columnWidthsLegacy).toBe(false)
+    act(() => root.unmount())
+    localStorage.clear()
+    __resetListPrefsCache()
+    root = createRoot(container)
+    mount()
+    expect(latest.listProps.columnWidthsLegacy).toBe(false)
+  })
+})

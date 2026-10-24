@@ -7,7 +7,7 @@ import {
 import {
   useLabels,
   useUi
-} from "./chunk-3L77SDL2.js";
+} from "./chunk-U5QM4MNB.js";
 
 // src/list/responsive-list.tsx
 import * as React7 from "react";
@@ -213,6 +213,10 @@ function nodeText(node) {
 }
 
 // src/prefs/listPrefs.ts
+var LIST_WIDTHS_VERSION = 2;
+function hasLegacyWidths(prefs) {
+  return prefs.widthsV !== LIST_WIDTHS_VERSION && Object.keys(prefs.widths).length > 0;
+}
 var LIST_PAGE_SIZES = [10, 25, 50, 100];
 var DEFAULT_LIST_PAGE_SIZE = 25;
 function isListPageSize(value) {
@@ -232,6 +236,7 @@ function normalizeListPrefs(raw, knownKeys, defaults) {
     compact: typeof defaults.compact === "boolean" ? defaults.compact : false,
     order: cleanOrder(defaults.order, knownKeys)
   };
+  if (Object.keys(base.widths).length > 0) base.widthsV = LIST_WIDTHS_VERSION;
   if (!isRecord(raw)) return base;
   const hidden = Array.isArray(raw.hidden) ? Array.from(
     new Set(raw.hidden.filter((k) => typeof k === "string" && known.has(k)))
@@ -241,7 +246,17 @@ function normalizeListPrefs(raw, knownKeys, defaults) {
   const pageSize = isListPageSize(raw.pageSize) ? raw.pageSize : base.pageSize;
   const compact = typeof raw.compact === "boolean" ? raw.compact : base.compact;
   const order = Array.isArray(raw.order) ? cleanOrder(raw.order, knownKeys) : base.order;
-  return { hidden, widths, sort, pageSize, compact, order };
+  const legacy = isRecord(raw.widths) && raw.widthsV !== LIST_WIDTHS_VERSION;
+  const marked = Object.keys(widths).length > 0 && !legacy;
+  return {
+    hidden,
+    widths,
+    sort,
+    pageSize,
+    compact,
+    order,
+    ...marked ? { widthsV: LIST_WIDTHS_VERSION } : {}
+  };
 }
 function cleanOrder(raw, knownKeys) {
   if (!Array.isArray(raw)) return [];
@@ -277,6 +292,7 @@ function listPrefsEqual(a, b) {
   const bw = Object.entries(b.widths);
   if (aw.length !== bw.length || aw.some(([k, v]) => b.widths[k] !== v)) return false;
   if (a.pageSize !== b.pageSize) return false;
+  if (a.widthsV !== b.widthsV) return false;
   if (a.compact !== b.compact) return false;
   if (a.order.length !== b.order.length || a.order.some((k, i) => k !== b.order[i])) return false;
   if (a.sort === null || b.sort === null) return a.sort === b.sort;
@@ -583,6 +599,7 @@ function screenDelta(g, v) {
   return g.follow === "width-rev" ? g.ref0 - m : m - g.ref0;
 }
 var DRAG_THRESHOLD = 3;
+var STORED_WIDTH_MAX_FACTOR = 1.5;
 var RESIZE_KEY_STEP = 16;
 var RESIZE_KEY_STEP_LARGE = 64;
 var RESIZE_KEY_MAX = 1600;
@@ -592,6 +609,7 @@ function useColumnResize({
   columns,
   containerWidth,
   leadingWidth = 0,
+  legacyWidths = false,
   labels: labelsProp
 }) {
   const labels = useLabels(labelsProp);
@@ -603,9 +621,27 @@ function useColumnResize({
   const restingFillKey = columns ? resolveFillColumnKey(columns, columnWidths) : void 0;
   const fillKey = drag?.key === restingFillKey ? void 0 : restingFillKey;
   const fillIndex = fillKey ? columns.findIndex((c) => c.key === fillKey) : -1;
+  function capOf(key) {
+    const col = colOf(key);
+    if (!legacyWidths || !col || container == null) return Infinity;
+    const own = resolveColumnWidth(col, void 0);
+    let others = 0;
+    for (const c of columns) {
+      if (c.key === key) continue;
+      const stored = columnWidths?.[c.key];
+      const def = resolveColumnWidth(c, void 0);
+      others += stored != null ? Math.min(resolveColumnWidth(c, stored), def) : def;
+    }
+    return Math.floor(
+      Math.max(own * STORED_WIDTH_MAX_FACTOR, container - leadingWidth - others, columnFloor(col))
+    );
+  }
   function baseWidth(key) {
     const col = colOf(key);
-    return col ? resolveColumnWidth(col, columnWidths?.[key]) : columnWidths?.[key];
+    if (!col) return columnWidths?.[key];
+    const stored = columnWidths?.[key];
+    const base = resolveColumnWidth(col, stored);
+    return stored != null ? Math.min(base, capOf(key)) : base;
   }
   function widthOf(key) {
     return drag?.key === key ? drag.width : columnWidths?.[key];
@@ -696,12 +732,21 @@ function useColumnResize({
     const col = colOf(columnKey);
     return col ? columnFloor(col) : MIN_COLUMN_WIDTH;
   }
+  function storedForWrite() {
+    if (!legacyWidths || !columnWidths) return { ...columnWidths };
+    const out = {};
+    for (const [k, v] of Object.entries(columnWidths)) {
+      const cap = capOf(k);
+      out[k] = Number.isFinite(cap) ? Math.min(v, cap) : v;
+    }
+    return out;
+  }
   function commit(key, px) {
-    if (columnWidths?.[key] === px) return;
-    onColumnWidthsChange?.({ ...columnWidths, [key]: px });
+    if (columnWidths?.[key] === px && !legacyWidths) return;
+    onColumnWidthsChange?.({ ...storedForWrite(), [key]: px });
   }
   function restore(key) {
-    const next = { ...columnWidths };
+    const next = storedForWrite();
     delete next[key];
     onColumnWidthsChange?.(next);
   }
@@ -910,8 +955,9 @@ function TableCell({ className, ...props }) {
 }
 
 // src/list/responsive-list.tsx
-import { jsx as jsx5, jsxs as jsxs3 } from "react/jsx-runtime";
+import { Fragment as Fragment2, jsx as jsx5, jsxs as jsxs3 } from "react/jsx-runtime";
 var HEAD_INHERIT = "bg-inherit";
+var ROW_OPEN_FOCUS = "has-[[data-list-row-open]:focus-visible]:ring-2 has-[[data-list-row-open]:focus-visible]:ring-ring has-[[data-list-row-open]:focus-visible]:ring-inset";
 var HEAD_BG = "bg-[color:var(--list-head-bg,var(--list-auto-head-bg,var(--color-background)))]";
 var AUTO_HEAD_BG = "[.bg-card_&]:[--list-auto-head-bg:var(--color-card)]";
 var TOUCH_TEXT_LINK = "pointer-coarse:-my-3 pointer-coarse:min-h-11 pointer-coarse:py-3 pointer-coarse:-mx-3 pointer-coarse:min-w-11 pointer-coarse:px-3";
@@ -930,6 +976,7 @@ function ResponsiveList({
   onSortChange,
   resizable,
   columnWidths,
+  columnWidthsLegacy,
   onColumnWidthsChange,
   hiddenColumns,
   onHiddenColumnsChange,
@@ -949,6 +996,38 @@ function ResponsiveList({
 }) {
   const { Link, navigate } = useUi();
   const labels = useLabels(labelsProp);
+  const listId = React7.useId();
+  const opensRow = (href) => !href && !!onRowClick;
+  function rowOpener(row, selfId, labelId) {
+    return /* @__PURE__ */ jsx5(
+      "button",
+      {
+        type: "button",
+        id: selfId,
+        "data-list-row-open": "",
+        "aria-labelledby": labelId ? `${selfId} ${labelId}` : void 0,
+        className: "sr-only",
+        onClick: (e) => {
+          e.stopPropagation();
+          onRowClick?.(row);
+        },
+        children: labels.openRow
+      }
+    );
+  }
+  function rowClickProps(row) {
+    return {
+      "data-list-row-click": "",
+      onClick: (e) => {
+        const box = e.currentTarget;
+        const active = document.activeElement;
+        if (!active || active === document.body || !box.contains(active)) {
+          box.querySelector("[data-list-row-open]")?.focus({ preventScroll: true });
+        }
+        onRowClick?.(row);
+      }
+    };
+  }
   function rowNavProps(href) {
     if (!href) return {};
     return {
@@ -968,9 +1047,9 @@ function ResponsiveList({
     if (!col.primary || col.noRowLink || !href) return col.cell(row);
     return /* @__PURE__ */ jsx5(Link, { href, className: "min-w-0 rounded-sm", onClick: (e) => e.stopPropagation(), children: col.cell(row) });
   }
-  function renderCardTitle(col, row, href) {
+  function renderCardTitle(col, row, href, id) {
     if (!href || col.noRowLink) {
-      return /* @__PURE__ */ jsx5("div", { className: cn(col.noRowLink && href ? "min-w-0" : "truncate", "font-medium"), children: col.cell(row) });
+      return /* @__PURE__ */ jsx5("div", { id, className: cn(col.noRowLink && href ? "min-w-0" : "truncate", "font-medium"), children: col.cell(row) });
     }
     return /* @__PURE__ */ jsx5(
       Link,
@@ -982,7 +1061,7 @@ function ResponsiveList({
       }
     );
   }
-  function renderHead(col) {
+  function renderHead(col, reserveMenu = false) {
     if (!col.sortable || !onSortChange) return col.header;
     const active = sort?.key === col.key;
     const Icon = !active ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
@@ -990,10 +1069,16 @@ function ResponsiveList({
       "button",
       {
         type: "button",
-        className: "-mx-4 inline-flex h-10 cursor-pointer items-center gap-1 rounded-sm px-4 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        className: cn(
+          "-mx-4 inline-flex h-10 cursor-pointer items-center gap-1 rounded-sm px-4 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          resizable && cn(
+            "min-w-0 overflow-hidden align-top [text-overflow:inherit]",
+            reserveMenu ? "max-w-[calc(100%+1rem)]" : "max-w-[calc(100%+2rem)]"
+          )
+        ),
         onClick: () => onSortChange({ key: col.key, dir: active && sort.dir === "asc" ? "desc" : "asc" }),
         children: [
-          col.header,
+          resizable ? /* @__PURE__ */ jsx5("span", { className: "min-w-0 overflow-hidden [text-overflow:inherit]", children: col.header }) : col.header,
           /* @__PURE__ */ jsx5(
             Icon,
             {
@@ -1039,12 +1124,14 @@ function ResponsiveList({
     columns: visibleColumns,
     containerWidth,
     leadingWidth: leading ? 40 : 0,
+    legacyWidths: columnWidthsLegacy,
     labels: labelsProp
   });
   const mobileColumns = visibleColumns.filter((c) => !c.hideOnMobile);
   const primary = mobileColumns.find((c) => c.primary);
   const actions = mobileColumns.filter((c) => c.action);
   const body = mobileColumns.filter((c) => !c.primary && !c.action);
+  const openerColKey = onRowClick ? (visibleColumns.find((c) => c.primary) ?? visibleColumns.find((c) => !c.action) ?? visibleColumns[0])?.key : void 0;
   const stickyHeadClass = stickyHeader ? cn("sticky z-10 border-b", HEAD_BG) : void 0;
   const stickyHeadStyle = stickyHeader ? { top: (stickyHeaderTop ?? 0) - 1 } : void 0;
   const fixedCellClass = resizable ? "overflow-hidden text-ellipsis" : void 0;
@@ -1237,7 +1324,7 @@ function ResponsiveList({
                           "data-drop": side ?? void 0,
                           ...headDragProps(col),
                           children: [
-                            renderHead(col),
+                            renderHead(col, isLast && lastHeadPad),
                             side && !staticHead && /* @__PURE__ */ jsx5(
                               "span",
                               {
@@ -1285,29 +1372,25 @@ function ResponsiveList({
                       );
                     })
                   ] }) }),
-                  /* @__PURE__ */ jsx5(TableBody, { children: data.map((row) => {
+                  /* @__PURE__ */ jsx5(TableBody, { children: data.map((row, rowIndex) => {
                     const href = rowHref?.(row);
                     const style = rowStyle?.(row);
+                    const opens = opensRow(href);
+                    const openerId = `${listId}-o${rowIndex}`;
+                    const openerLabelId = `${listId}-l${rowIndex}`;
                     return /* @__PURE__ */ jsxs3(
                       TableRow,
                       {
                         className: cn(
                           (href || onRowClick) && (style ? "cursor-pointer" : "cursor-pointer hover:bg-muted/50"),
                           style && TINTED_ROW_CLASS,
+                          opens && ROW_OPEN_FOCUS,
                           rowClassName?.(row)
                         ),
                         style,
                         "data-state": isRowSelected?.(row) ? "selected" : void 0,
                         ...rowHoverProps?.(row),
-                        ...href ? rowNavProps(href) : { onClick: onRowClick ? () => onRowClick(row) : void 0 },
-                        role: !href && onRowClick ? "button" : void 0,
-                        tabIndex: !href && onRowClick ? 0 : void 0,
-                        onKeyDown: !href && onRowClick ? (e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            onRowClick(row);
-                          }
-                        } : void 0,
+                        ...href ? rowNavProps(href) : opens ? rowClickProps(row) : {},
                         children: [
                           leading && // onAuxClick además de onClick: sin él, el click de rueda
                           // sobre el checkbox de selección abría el detalle en una
@@ -1320,22 +1403,37 @@ function ResponsiveList({
                               children: leading(row)
                             }
                           ),
-                          visibleColumns.map((col) => /* @__PURE__ */ jsx5(
-                            TableCell,
-                            {
-                              className: cn(
-                                // Las `action` quedan fuera del recorte con elipsis: son
-                                // botones (con o sin texto), no texto que deba acortarse.
-                                // Sin esto un botón «Presupuesto de venta» dentro de una
-                                // columna estrecha se recortaba a media palabra.
-                                fixedCellClass && !col.action && fixedCellClass,
-                                col.cellClassName,
-                                !col.action && compactCellClass
-                              ),
-                              children: renderCell(col, row, href)
-                            },
-                            col.key
-                          ))
+                          visibleColumns.map((col) => {
+                            const opener = opens && col.key === openerColKey;
+                            return /* @__PURE__ */ jsx5(
+                              TableCell,
+                              {
+                                className: cn(
+                                  // Ancla del <button> sr-only (absolute) de la fila.
+                                  opener && "relative",
+                                  // Las `action` quedan fuera del recorte con elipsis: son
+                                  // botones (con o sin texto), no texto que deba acortarse.
+                                  // Sin esto un botón «Presupuesto de venta» dentro de una
+                                  // columna estrecha se recortaba a media palabra.
+                                  fixedCellClass && !col.action && fixedCellClass,
+                                  // …pero tampoco pueden salirse de su celda (UI-RESIZE-1,
+                                  // v0.9.10): en su suelo (64 px) el «Entregada» de un
+                                  // Estado `action` asomaba 28 px por la derecha de la
+                                  // última columna y el contenedor daba scroll lateral.
+                                  // Recorte horizontal sin elipsis (`clip` no recorta en
+                                  // vertical: anillos de foco y menús siguen enteros).
+                                  resizable && col.action && "overflow-x-clip",
+                                  col.cellClassName,
+                                  !col.action && compactCellClass
+                                ),
+                                children: opener ? /* @__PURE__ */ jsxs3(Fragment2, { children: [
+                                  rowOpener(row, openerId, openerLabelId),
+                                  /* @__PURE__ */ jsx5("div", { id: openerLabelId, className: "contents", children: renderCell(col, row, href) })
+                                ] }) : renderCell(col, row, href)
+                              },
+                              col.key
+                            );
+                          })
                         ]
                       },
                       rowKey(row)
@@ -1349,9 +1447,12 @@ function ResponsiveList({
       ),
       /* @__PURE__ */ jsxs3("div", { className: "space-y-2 @3xl:hidden", children: [
         mobileColumnsMenu && columnsMenu && /* @__PURE__ */ jsx5("div", { className: "flex justify-end", "data-list-columns-menu": true, children: columnsMenu }),
-        data.map((row) => {
+        data.map((row, rowIndex) => {
           const href = rowHref?.(row);
           const style = rowStyle?.(row);
+          const opens = opensRow(href);
+          const openerId = `${listId}-mo${rowIndex}`;
+          const titleId = primary ? `${listId}-mt${rowIndex}` : void 0;
           return /* @__PURE__ */ jsxs3(
             "div",
             {
@@ -1363,20 +1464,13 @@ function ResponsiveList({
                 "p-4 text-sm ring-1 ring-foreground/10",
                 (href || onRowClick) && "cursor-pointer active:bg-muted/50",
                 isRowSelected?.(row) && "ring-primary",
+                opens && cn("relative", ROW_OPEN_FOCUS),
                 rowClassName?.(row)
               ),
               style,
               "data-compact": compact ? "" : void 0,
               ...rowHoverProps?.(row),
-              ...href ? rowNavProps(href) : { onClick: onRowClick ? () => onRowClick(row) : void 0 },
-              role: !href && onRowClick ? "button" : void 0,
-              tabIndex: !href && onRowClick ? 0 : void 0,
-              onKeyDown: !href && onRowClick ? (e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onRowClick(row);
-                }
-              } : void 0,
+              ...href ? rowNavProps(href) : opens ? rowClickProps(row) : {},
               children: [
                 /* @__PURE__ */ jsxs3("div", { className: "flex flex-wrap items-start justify-between gap-2", children: [
                   /* @__PURE__ */ jsxs3("div", { className: "flex min-w-32 flex-1 items-center gap-2", "data-list-card-title": true, children: [
@@ -1388,7 +1482,8 @@ function ResponsiveList({
                         children: leading(row)
                       }
                     ),
-                    primary && renderCardTitle(primary, row, href)
+                    opens && rowOpener(row, openerId, titleId),
+                    primary && renderCardTitle(primary, row, href, opens ? titleId : void 0)
                   ] }),
                   actions.length > 0 && // `shrink-0` se queda: dentro de SU línea las acciones no se
                   // encogen (un botón a medio recortar no sirve). Lo que evita
@@ -1685,7 +1780,7 @@ function SelectScrollDownButton({
 }
 
 // src/list/ListFooter.tsx
-import { Fragment as Fragment2, jsx as jsx8, jsxs as jsxs6 } from "react/jsx-runtime";
+import { Fragment as Fragment3, jsx as jsx8, jsxs as jsxs6 } from "react/jsx-runtime";
 function ListFooter({
   page,
   pageSize,
@@ -1753,7 +1848,7 @@ function ListFooter({
               {
                 "aria-live": "polite",
                 className: "inline-flex size-4 shrink-0 items-center justify-center",
-                children: loading && /* @__PURE__ */ jsxs6(Fragment2, { children: [
+                children: loading && /* @__PURE__ */ jsxs6(Fragment3, { children: [
                   /* @__PURE__ */ jsx8(Loader2, { className: "size-4 animate-spin text-muted-foreground" }),
                   /* @__PURE__ */ jsx8("span", { className: "sr-only", children: labels.loading })
                 ] })
@@ -2007,7 +2102,13 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
     [persist, current]
   );
   const setWidths = useCallback2(
-    (widths) => persist({ ...current(), widths }, { debounce: true }),
+    // Los anchos se escriben siempre con la marca del modelo proporcional
+    // (v0.9.10, UI-RESIZE-2): desde aquí ya no son «viejos».
+    (widths) => {
+      const { widthsV, ...rest } = current();
+      const marked = Object.keys(widths).length > 0 ? { widthsV: LIST_WIDTHS_VERSION } : {};
+      persist({ ...rest, widths, ...marked }, { debounce: true });
+    },
     [persist, current]
   );
   const setSort = useCallback2(
@@ -2028,8 +2129,15 @@ function useListPrefs(listKey, { columnKeys, defaults, store: storeProp }) {
   );
   const reset = useCallback2(() => {
     const base = normalize(null);
+    const { widthsV, ...rest } = current();
     persist(
-      { ...current(), hidden: base.hidden, widths: base.widths, order: base.order },
+      {
+        ...rest,
+        hidden: base.hidden,
+        widths: base.widths,
+        ...base.widthsV ? { widthsV: base.widthsV } : {},
+        order: base.order
+      },
       { debounce: false }
     );
   }, [persist, current, normalize]);
@@ -2060,6 +2168,7 @@ function useListView(listKey, {
   const { prefs, setSort, setWidths, setHidden, setPageSize, setCompact, setOrder, reset } = listPrefs;
   const { sort, hidden, widths, pageSize, order } = prefs;
   const compact = compactable && prefs.compact;
+  const widthsLegacy = hasLegacyWidths(prefs);
   const ready = listPrefs.isLoaded;
   const { page, setPage, from, to } = usePagination([...deps, sort], pageSize);
   const listProps = useMemo2(
@@ -2068,6 +2177,7 @@ function useListView(listKey, {
       onSortChange: setSort,
       resizable: true,
       columnWidths: widths,
+      columnWidthsLegacy: widthsLegacy,
       onColumnWidthsChange: setWidths,
       hiddenColumns: hidden,
       onHiddenColumnsChange: setHidden,
@@ -2089,6 +2199,7 @@ function useListView(listKey, {
       sort,
       setSort,
       widths,
+      widthsLegacy,
       setWidths,
       hidden,
       setHidden,
@@ -2150,6 +2261,8 @@ function useListColumns(listKey, columnKeys, { store } = {}) {
   return {
     resizable: true,
     columnWidths: prefs.widths,
+    // v0.9.10 (UI-RESIZE-2): anchos de antes de 0.9.9, leídos con techo.
+    columnWidthsLegacy: hasLegacyWidths(prefs),
     onColumnWidthsChange: setWidths,
     hiddenColumns: prefs.hidden,
     onHiddenColumnsChange: setHidden,
@@ -2199,6 +2312,8 @@ function useSupabaseListPrefsStore(client, { table, onError } = {}) {
 }
 
 export {
+  LIST_WIDTHS_VERSION,
+  hasLegacyWidths,
   LIST_PAGE_SIZES,
   DEFAULT_LIST_PAGE_SIZE,
   isListPageSize,
@@ -2221,6 +2336,7 @@ export {
   tableSizing,
   visibleColumnsOf,
   COLUMN_WIDTH_KEY_ATTR,
+  STORED_WIDTH_MAX_FACTOR,
   RESIZE_KEY_STEP,
   RESIZE_KEY_STEP_LARGE,
   RESIZE_KEY_MAX,

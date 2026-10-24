@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   EMPTY_LIST_PREFS,
+  hasLegacyWidths,
   listPrefsEqual,
   normalizeListPrefs,
   resolveListDefaults,
@@ -109,6 +110,35 @@ describe('normalizeListPrefs', () => {
       pageSize: 25,
       compact: false,
       order: [],
+      // Anchos de `defaults` (los pone la página): con marca, no son viejos.
+      widthsV: 2,
+    })
+  })
+
+  // UI-RESIZE-2 (v0.9.10): marca de los anchos guardados.
+  describe('UI-RESIZE-2: marca widthsV', () => {
+    it('anchos guardados sin marca = viejos (sin widthsV); con marca, se conserva', () => {
+      const old = normalizeListPrefs({ widths: { client: 566 } }, KNOWN, DEFAULTS)
+      expect(old.widths).toEqual({ client: 566 })
+      expect(old.widthsV).toBeUndefined()
+      expect(hasLegacyWidths(old)).toBe(true)
+      const fresh = normalizeListPrefs({ widths: { client: 566 }, widthsV: 2 }, KNOWN, DEFAULTS)
+      expect(fresh.widthsV).toBe(2)
+      expect(hasLegacyWidths(fresh)).toBe(false)
+    })
+
+    it('sin anchos no hay marca ni anchos viejos; los de `defaults` no son viejos', () => {
+      const none = normalizeListPrefs({ sort: null }, KNOWN, DEFAULTS)
+      expect(none.widthsV).toBeUndefined()
+      expect(hasLegacyWidths(none)).toBe(false)
+      expect(hasLegacyWidths(normalizeListPrefs({ widths: {} }, KNOWN, DEFAULTS))).toBe(false)
+      const withDefaults = { ...DEFAULTS, widths: { client: 90 } }
+      expect(hasLegacyWidths(normalizeListPrefs({ sort: null }, KNOWN, withDefaults))).toBe(false)
+    })
+
+    it('listPrefsEqual distingue la marca (para reescribir lo viejo con ella)', () => {
+      const old = normalizeListPrefs({ widths: { client: 100 } }, KNOWN, DEFAULTS)
+      expect(listPrefsEqual(old, { ...old, widthsV: 2 })).toBe(false)
     })
   })
 

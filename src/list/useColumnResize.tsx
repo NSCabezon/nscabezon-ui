@@ -223,6 +223,13 @@ function screenDelta(g: ResizeGeo, v: number): number {
  */
 const DRAG_THRESHOLD = 3
 
+/**
+ * Techo de un ancho guardado ANTES de 0.9.9 (sin marca `widthsV: 2`), en
+ * múltiplos de su ancho de serie (v0.9.10, UI-RESIZE-2). Ver
+ * `useColumnResize` («Anchos viejos»).
+ */
+export const STORED_WIDTH_MAX_FACTOR = 1.5
+
 /** Paso (px) de ←/→ en el asa enfocada (v0.9.7): 1 rem. */
 export const RESIZE_KEY_STEP = 16
 /** Paso (px) de Mayús+←/→ en el asa enfocada (v0.9.7): 4 rem. */
@@ -282,6 +289,18 @@ export const RESIZE_KEY_MAX = 1600
  *   vuelven a hacer relleno. El ancho guardado de un relleno (también el de
  *   0.9.6-0.9.8, p. ej. 566 a 1920) ya no trae scroll en pantallas menores:
  *   lo impide `minColumns`.
+ * - Anchos viejos (v0.9.10, UI-RESIZE-2; `legacyWidths`, con contenedor
+ *   medido): hasta la 0.9.8 un ancho guardado era un ancho fijo (con scroll si
+ *   no cabía) o, en el relleno, un tope; con el reparto proporcional un
+ *   `client: 566` de entonces apretaba a las demás (Apertura a 100 px). Si
+ *   los anchos vienen de antes de la marca (`widthsV: 2`, ver
+ *   `hasLegacyWidths`), cada ancho guardado se lee como mucho a `capOf`: lo
+ *   mayor entre 1,5 × su ancho de serie (`STORED_WIDTH_MAX_FACTOR`) y lo que
+ *   le dejan las demás a su ancho de serie dentro del contenedor. La primera
+ *   escritura (arrastre, teclado, doble clic) guarda ya los anchos LIMITADOS
+ *   (los que se ven) y `useListPrefs.setWidths` les pone la marca: desde ahí
+ *   no hay techo. El arrastre y el teclado no tienen techo nunca (el modelo
+ *   de 0.9.9: las demás encogen hasta su suelo).
  * Sin `columns` (tablas a mano antiguas, p. ej. las líneas de presupuesto de
  * Gesmoto): cambia la arrastrada, 1:1, partiendo del ancho guardado o, si no
  * hay, del medido; suelo `MIN_COLUMN_WIDTH`.
@@ -302,6 +321,7 @@ export function useColumnResize({
   columns,
   containerWidth,
   leadingWidth = 0,
+  legacyWidths = false,
   labels: labelsProp,
 }: {
   columnWidths?: Record<string, number>
@@ -318,6 +338,12 @@ export function useColumnResize({
   containerWidth?: number
   /** Px de columnas fuera de `columns`, DELANTE (p. ej. la de selección). */
   leadingWidth?: number
+  /**
+   * `columnWidths` viene de antes de 0.9.9 (sin `widthsV: 2`; v0.9.10,
+   * UI-RESIZE-2): se lee con techo y la primera escritura lo guarda limitado.
+   * `useListView` lo pasa en `listProps.columnWidthsLegacy`.
+   */
+  legacyWidths?: boolean
   /** Textos propios (`columnResize`); ganan al `UiProvider`. */
   labels?: Partial<Labels>
 }) {
@@ -339,10 +365,39 @@ export function useColumnResize({
   const fillKey = drag?.key === restingFillKey ? undefined : restingFillKey
   const fillIndex = fillKey ? columns!.findIndex((c) => c.key === fillKey) : -1
 
-  /** Ancho efectivo sin arrastre (con `columns`): guardado/`width`/defecto, con suelo. */
+  /**
+   * Techo de un ancho guardado VIEJO (v0.9.10, UI-RESIZE-2; con
+   * `legacyWidths`, `columns` y el contenedor medido): lo mayor entre 1,5 ×
+   * su ancho de serie y lo que le dejan las demás a su ancho de serie (o a su
+   * base, si es menor) dentro del contenedor. Nunca por debajo de su suelo.
+   * Sin anchos viejos o sin contenedor, sin techo.
+   */
+  function capOf(key: string): number {
+    const col = colOf(key)
+    if (!legacyWidths || !col || container == null) return Infinity
+    const own = resolveColumnWidth(col, undefined)
+    let others = 0
+    for (const c of columns!) {
+      if (c.key === key) continue
+      const stored = columnWidths?.[c.key]
+      const def = resolveColumnWidth(c, undefined)
+      others += stored != null ? Math.min(resolveColumnWidth(c, stored), def) : def
+    }
+    return Math.floor(
+      Math.max(own * STORED_WIDTH_MAX_FACTOR, container - leadingWidth - others, columnFloor(col)),
+    )
+  }
+
+  /**
+   * Ancho efectivo sin arrastre (con `columns`): guardado/`width`/defecto, con
+   * suelo y, si viene guardado, con techo (`capOf`).
+   */
   function baseWidth(key: string): number | undefined {
     const col = colOf(key)
-    return col ? resolveColumnWidth(col, columnWidths?.[key]) : columnWidths?.[key]
+    if (!col) return columnWidths?.[key]
+    const stored = columnWidths?.[key]
+    const base = resolveColumnWidth(col, stored)
+    return stored != null ? Math.min(base, capOf(key)) : base
   }
 
   /** Ancho vigente de una columna: el del arrastre en curso, o el guardado. */
@@ -499,15 +554,30 @@ export function useColumnResize({
     return col ? columnFloor(col) : MIN_COLUMN_WIDTH
   }
 
+  /**
+   * Anchos guardados tal como se reescriben: con anchos viejos, LIMITADOS
+   * (lo que se ve; UI-RESIZE-2), para que al ponerles la marca no vuelvan a
+   * apretar. Si no, tal cual.
+   */
+  function storedForWrite(): Record<string, number> {
+    if (!legacyWidths || !columnWidths) return { ...columnWidths }
+    const out: Record<string, number> = {}
+    for (const [k, v] of Object.entries(columnWidths)) {
+      const cap = capOf(k)
+      out[k] = Number.isFinite(cap) ? Math.min(v, cap) : v
+    }
+    return out
+  }
+
   /** Guarda `px` para `key` (si cambia), igual que al soltar un arrastre. */
   function commit(key: string, px: number) {
-    if (columnWidths?.[key] === px) return
-    onColumnWidthsChange?.({ ...columnWidths, [key]: px })
+    if (columnWidths?.[key] === px && !legacyWidths) return
+    onColumnWidthsChange?.({ ...storedForWrite(), [key]: px })
   }
 
   /** Borra el ancho guardado de `key`: vuelve a su ancho de serie (doble clic, Escape/Supr). */
   function restore(key: string) {
-    const next = { ...columnWidths }
+    const next = storedForWrite()
     delete next[key]
     onColumnWidthsChange?.(next)
   }

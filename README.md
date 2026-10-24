@@ -13,7 +13,7 @@ hay `prepare`: instalar no compila nada).
 | Área | Exportaciones |
 | --- | --- |
 | Integración | `UiProvider`, `useUi`, `useLabels`, `defaultLabels`, tipos `Labels`, `UiLinkProps` |
-| Listados | `ResponsiveList` (tabla en escritorio / tarjetas en móvil, orden servidor, anchos arrastrables, columnas ocultas, cabecera fija, filas teñidas, `rowHref`, modo compacto, columnas reordenables), `ColumnsMenu`, `useListCompact`, `orderColumns`, `moveColumn`, `useColumnResize`, `MIN_COLUMN_WIDTH`, `TOUCH_TEXT_LINK`, `rowTone`, `TINTED_ROW_CLASS`, `resolveColumnWidth`, `visibleColumnsOf`, `DEFAULT_ACTION_COLUMN_WIDTH`, `DEFAULT_COLUMN_WIDTH`, `columnFloor`, `isFillColumn`, `resolveFillColumnKey`, `tableSizing`, `COLUMN_WIDTH_KEY_ATTR` |
+| Listados | `ResponsiveList` (tabla en escritorio / tarjetas en móvil, orden servidor, `onRowClick` accesible (A11Y-4), anchos arrastrables, columnas ocultas, cabecera fija, filas teñidas, `rowHref`, modo compacto, columnas reordenables), `ColumnsMenu`, `useListCompact`, `orderColumns`, `moveColumn`, `useColumnResize`, `MIN_COLUMN_WIDTH`, `TOUCH_TEXT_LINK`, `rowTone`, `TINTED_ROW_CLASS`, `resolveColumnWidth`, `visibleColumnsOf`, `DEFAULT_ACTION_COLUMN_WIDTH`, `DEFAULT_COLUMN_WIDTH`, `columnFloor`, `isFillColumn`, `resolveFillColumnKey`, `tableSizing`, `COLUMN_WIDTH_KEY_ATTR` |
 | Paginación | `Pagination`, `usePagination`, `DEFAULT_PAGE_SIZE`, `ListFooter` |
 | Estado de listado | `useListView` (preferencias + paginación, `paginated: false` y `compactable` opcionales), `useListColumns` (solo columnas), `useListPrefs` |
 | Preferencias | `ListPrefs`, `ListSort`, `normalizeListPrefs`, `listPrefsEqual`, `resolveListDefaults`, `LIST_PAGE_SIZES`, `DEFAULT_LIST_PAGE_SIZE`, `EMPTY_LIST_PREFS`, almacenes `useSupabaseListPrefsStore` (hook que sigue la sesión), `createSupabaseListPrefsStore` y `localOnlyListPrefsStore` |
@@ -307,6 +307,17 @@ const view = useListView('orders', {
     ancho de la última) va exactamente con el ratón. Se guarda **solo** la base
     de esa columna, calculada para que en ese contenedor se vea lo que se
     soltó (las demás siguen su ancho de serie).
+  - **Anchos viejos** (v0.9.10, UI-RESIZE-2): las prefs marcan los anchos
+    escritos desde 0.9.10 (`widthsV: 2`, lo pone `setWidths`). Unos anchos
+    sin marca (de antes del modelo proporcional; `hasLegacyWidths`) llegan con
+    `listProps.columnWidthsLegacy` y se leen con techo: lo mayor entre 1,5 ×
+    su ancho de serie (`STORED_WIDTH_MAX_FACTOR`) y lo que dejan las demás a
+    su ancho de serie en el contenedor. La primera escritura los guarda ya
+    limitados y con la marca. El arrastre y el teclado no tienen techo.
+  - **Nada se sale de su columna** (v0.9.10, UI-RESIZE-1): el botón de
+    ordenar mide como mucho su `<th>` (texto cortado dentro, con el
+    `text-overflow` de la `<th>`) y las celdas `action` se recortan en
+    horizontal (`overflow-x-clip`, sin elipsis).
   - **Qué columna controla cada asa:** la de la izquierda del borde, salvo el
     **último borde** (penúltima | última), que controla la **última**:
     arrastrarlo a la izquierda agranda la última (p. ej. «Acciones»), a la

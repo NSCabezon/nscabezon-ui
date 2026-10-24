@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 
 import { useListPrefs } from '../prefs/useListPrefs'
 import {
+  hasLegacyWidths,
   resolveListDefaults,
   type ListPrefs,
   type ListPrefsDefaults,
@@ -44,6 +45,10 @@ export type ListViewListProps = {
   onSortChange: (next: ListSort) => void
   resizable: true
   columnWidths: Record<string, number>
+  // v0.9.10 (UI-RESIZE-2): los anchos son de antes de 0.9.9 (sin marca):
+  // `ResponsiveList` los lee con techo. Si se pasan los anchos a mano, pásalo
+  // también (o los anchos viejos se leen sin techo).
+  columnWidthsLegacy?: boolean
   onColumnWidthsChange: (widths: Record<string, number>) => void
   hiddenColumns: string[]
   onHiddenColumnsChange: (hidden: string[]) => void
@@ -165,6 +170,7 @@ export function useListView(
     listPrefs
   const { sort, hidden, widths, pageSize, order } = prefs
   const compact = compactable && prefs.compact
+  const widthsLegacy = hasLegacyWidths(prefs)
   const ready = listPrefs.isLoaded
 
   // Siempre se llama (reglas de los hooks); sin paginación simplemente no se usa.
@@ -176,6 +182,7 @@ export function useListView(
       onSortChange: setSort,
       resizable: true,
       columnWidths: widths,
+      columnWidthsLegacy: widthsLegacy,
       onColumnWidthsChange: setWidths,
       hiddenColumns: hidden,
       onHiddenColumnsChange: setHidden,
@@ -197,6 +204,7 @@ export function useListView(
       sort,
       setSort,
       widths,
+      widthsLegacy,
       setWidths,
       hidden,
       setHidden,

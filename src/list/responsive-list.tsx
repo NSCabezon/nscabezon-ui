@@ -65,8 +65,9 @@ export type ResponsiveColumn<T> = {
   // marcadas, la primera): si las columnas no llenan el contenedor, ella se
   // estira para ocupar el hueco (solo crece, nunca baja de su ancho base). Sin
   // ninguna marcada no hay relleno: la tabla sigue al 100 % y el sobrante se
-  // reparte en proporción entre todas (v0.9.6). Con ancho guardado, ese ancho
-  // es su TOPE (v0.9.8): como mucho eso, y si no cabe encoge. No se elige
+  // reparte en proporción entre todas (v0.9.6). Con ancho guardado es una
+  // columna normal con esa base (v0.9.9); si es de antes de 0.9.9, con techo
+  // (v0.9.10, UI-RESIZE-2, ver `useColumnResize`). No se elige
   // sola: márcala en la columna de texto principal (descripción, cliente…),
   // nunca en un Nº.
   fill?: boolean
@@ -90,8 +91,16 @@ export type ResponsiveListProps<T> = {
   // Devolver undefined deja la fila inerte (p.ej. una cita sin moto asociada).
   rowHref?: (row: T) => string | undefined
   // Solo para filas que NO navegan: abrir un diálogo, seleccionar. Si la fila
-  // va a una ruta, usa `rowHref` — este camino pierde el cmd+click y monta un
-  // role="button" sobre el <tr>, que rompe la semántica de tabla.
+  // va a una ruta, usa `rowHref` (este camino pierde el cmd+click).
+  // v0.9.10 (A11Y-4): el <tr> (y la tarjeta móvil) ya NO es role="button" ni
+  // enfocable —con botones o enlaces dentro, axe `nested-interactive`—. El
+  // ratón sigue abriendo desde toda la fila; el teclado llega por un <button>
+  // sr-only (`data-list-row-open`) al principio de la celda `primary` (o de la
+  // primera columna no `action`), con nombre «Abrir <celda principal>»: Tab,
+  // Enter/Espacio. Al enfocarlo, la fila se marca con el anillo de foco. Un
+  // clic de ratón en la fila también le da el foco (sin scroll), así un
+  // diálogo que devuelva el foco al cerrar vuelve a la fila. El <tr> lleva
+  // `data-list-row-click` (gancho para tests).
   onRowClick?: (row: T) => void
   // Manejadores de RATÓN por fila (opt-in). Pensado para colgar un avance
   // (popover) del hover de la fila ENTERA sin meter un disparador interactivo
@@ -139,6 +148,10 @@ export type ResponsiveListProps<T> = {
   // y solo por debajo del mínimo de serie hay scroll horizontal.
   resizable?: boolean
   columnWidths?: Record<string, number>
+  // v0.9.10 (UI-RESIZE-2): `columnWidths` es de antes de 0.9.9 (prefs sin
+  // `widthsV: 2`): se lee con techo y la primera escritura lo guarda limitado
+  // (ver `useColumnResize`). `useListView` lo pasa en `listProps`.
+  columnWidthsLegacy?: boolean
   onColumnWidthsChange?: (widths: Record<string, number>) => void
   // Columnas ocultas por el usuario (opt-in): se filtran en tabla y tarjetas.
   // La columna `primary` nunca se oculta.
@@ -216,6 +229,11 @@ export type ResponsiveListProps<T> = {
 //   El botón la hereda de su <th> como cualquier otro fondo.
 // Un `headClassName` con su propio `bg-*` gana a los dos (va después en `cn`).
 const HEAD_INHERIT = 'bg-inherit'
+
+// Anillo de foco de una fila/tarjeta con `onRowClick` cuando su control de
+// teclado (sr-only) tiene el foco visible (A11Y-4, v0.9.10).
+const ROW_OPEN_FOCUS =
+  'has-[[data-list-row-open]:focus-visible]:ring-2 has-[[data-list-row-open]:focus-visible]:ring-ring has-[[data-list-row-open]:focus-visible]:ring-inset'
 const HEAD_BG =
   'bg-[color:var(--list-head-bg,var(--list-auto-head-bg,var(--color-background)))]'
 const AUTO_HEAD_BG = '[.bg-card_&]:[--list-auto-head-bg:var(--color-card)]'
@@ -254,6 +272,7 @@ export function ResponsiveList<T>({
   onSortChange,
   resizable,
   columnWidths,
+  columnWidthsLegacy,
   onColumnWidthsChange,
   hiddenColumns,
   onHiddenColumnsChange,
@@ -273,6 +292,45 @@ export function ResponsiveList<T>({
 }: ResponsiveListProps<T>) {
   const { Link, navigate } = useUi()
   const labels = useLabels(labelsProp)
+  const listId = React.useId()
+  // Fila abrible con `onRowClick` (A11Y-4, v0.9.10). Ver la prop: sin role ni
+  // tabindex en el <tr>/tarjeta; el teclado entra por `rowOpener`.
+  const opensRow = (href: string | undefined) => !href && !!onRowClick
+  /** Control de teclado de la fila: sr-only, nombre «Abrir» + `labelId`. */
+  function rowOpener(row: T, selfId: string, labelId: string | undefined) {
+    return (
+      <button
+        type="button"
+        id={selfId}
+        data-list-row-open=""
+        aria-labelledby={labelId ? `${selfId} ${labelId}` : undefined}
+        className="sr-only"
+        onClick={(e) => {
+          // La fila no debe abrir otra vez con el mismo clic.
+          e.stopPropagation()
+          onRowClick?.(row)
+        }}
+      >
+        {labels.openRow}
+      </button>
+    )
+  }
+  /** Clic de ratón en la fila/tarjeta: foco al control de la fila (sin scroll) y abrir. */
+  function rowClickProps(row: T) {
+    return {
+      'data-list-row-click': '',
+      onClick: (e: React.MouseEvent<HTMLElement>) => {
+        const box = e.currentTarget
+        const active = document.activeElement
+        // Si el clic ya dejó el foco en algo de la fila (un campo que no para
+        // el evento), no se lo quitamos.
+        if (!active || active === document.body || !box.contains(active)) {
+          box.querySelector<HTMLElement>('[data-list-row-open]')?.focus({ preventScroll: true })
+        }
+        onRowClick?.(row)
+      },
+    }
+  }
   // Handlers de la fila-enlace. El <Link> de la columna `primary` ya cubre el
   // teclado y el menú contextual; esto es para que el resto de la fila (que no
   // puede ser un <a>: no se puede envolver un <tr>, y un overlay absoluto
@@ -316,10 +374,10 @@ export function ResponsiveList<T>({
   // envoltorio tampoco puede recortar: `min-w-0` (el título largo salta de
   // línea en vez de cortarse sin puntos suspensivos, que es lo que hacía un
   // <a> `block` dentro de `truncate`).
-  function renderCardTitle(col: ResponsiveColumn<T>, row: T, href: string | undefined) {
+  function renderCardTitle(col: ResponsiveColumn<T>, row: T, href: string | undefined, id?: string) {
     if (!href || col.noRowLink) {
       return (
-        <div className={cn(col.noRowLink && href ? 'min-w-0' : 'truncate', 'font-medium')}>
+        <div id={id} className={cn(col.noRowLink && href ? 'min-w-0' : 'truncate', 'font-medium')}>
           {col.cell(row)}
         </div>
       )
@@ -339,19 +397,41 @@ export function ResponsiveList<T>({
   // botón. `-mx-4 px-4` = TABLE_CELL_X, para que el padding lateral de la celda
   // también sea zona de click. `inline-flex` (y no `flex`) para respetar el
   // `text-right` de las columnas numéricas.
-  function renderHead(col: ResponsiveColumn<T>) {
+  //
+  // UI-RESIZE-1 (v0.9.10): con `resizable` el botón NO puede salirse de su
+  // <th>. Con la columna en su suelo (64 px) el botón medía su texto y, con el
+  // `-mx-4`, asomaba por la derecha: el `overflow-hidden` de la <th> lo
+  // recorta al pintar, pero Chrome lo sigue contando en el ancho de scroll del
+  // contenedor (la última cabecera daba +28 px de scroll y el botón quedaba
+  // bajo el del menú de columnas). Ahora mide como mucho su <th> (contenido +
+  // el padding que recupera el `-mx-4`) y el texto se corta dentro (con el
+  // `text-overflow` de la <th>: elipsis o, si el consumidor pone `text-clip`,
+  // recorte). En la última cabecera con el menú de columnas, como mucho hasta
+  // el `pr-10` (lo que hay debajo es del botón del menú).
+  function renderHead(col: ResponsiveColumn<T>, reserveMenu = false) {
     if (!col.sortable || !onSortChange) return col.header
     const active = sort?.key === col.key
     const Icon = !active ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown
     return (
       <button
         type="button"
-        className="-mx-4 inline-flex h-10 cursor-pointer items-center gap-1 rounded-sm px-4 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          '-mx-4 inline-flex h-10 cursor-pointer items-center gap-1 rounded-sm px-4 outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          resizable &&
+            cn(
+              'min-w-0 overflow-hidden align-top [text-overflow:inherit]',
+              reserveMenu ? 'max-w-[calc(100%+1rem)]' : 'max-w-[calc(100%+2rem)]',
+            ),
+        )}
         onClick={() =>
           onSortChange({ key: col.key, dir: active && sort.dir === 'asc' ? 'desc' : 'asc' })
         }
       >
-        {col.header}
+        {resizable ? (
+          <span className="min-w-0 overflow-hidden [text-overflow:inherit]">{col.header}</span>
+        ) : (
+          col.header
+        )}
         <Icon
           aria-hidden
           className={cn(
@@ -403,6 +483,7 @@ export function ResponsiveList<T>({
     columns: visibleColumns,
     containerWidth,
     leadingWidth: leading ? 40 : 0,
+    legacyWidths: columnWidthsLegacy,
     labels: labelsProp,
   })
   const mobileColumns = visibleColumns.filter((c) => !c.hideOnMobile)
@@ -412,6 +493,12 @@ export function ResponsiveList<T>({
   // borrar línea de ReceiveDeliveryPage era inaccesible en teléfono).
   const actions = mobileColumns.filter((c) => c.action)
   const body = mobileColumns.filter((c) => !c.primary && !c.action)
+  // Columna que lleva el control de teclado de la fila (A11Y-4) en la tabla.
+  const openerColKey = onRowClick
+    ? (visibleColumns.find((c) => c.primary) ??
+        visibleColumns.find((c) => !c.action) ??
+        visibleColumns[0])?.key
+    : undefined
   // Sticky: con el border-collapse por defecto los bordes pertenecen al <tr>
   // y NO viajan con las celdas sticky (queda una línea huérfana + un hueco de
   // 1-2px por el que asoma el contenido al scrollear). En modo sticky la tabla
@@ -698,7 +785,7 @@ export function ResponsiveList<T>({
                       data-drop={side ?? undefined}
                       {...headDragProps(col)}
                     >
-                      {renderHead(col)}
+                      {renderHead(col, isLast && lastHeadPad)}
                       {/* Dónde cae la columna arrastrada: una línea en el borde
                           izquierdo (delante) o derecho (detrás) del destino. */}
                       {side && !staticHead && (
@@ -766,9 +853,12 @@ export function ResponsiveList<T>({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.map((row) => {
+              {data.map((row, rowIndex) => {
                 const href = rowHref?.(row)
                 const style = rowStyle?.(row)
+                const opens = opensRow(href)
+                const openerId = `${listId}-o${rowIndex}`
+                const openerLabelId = `${listId}-l${rowIndex}`
                 return (
                   <TableRow
                     key={rowKey(row)}
@@ -776,29 +866,17 @@ export function ResponsiveList<T>({
                       (href || onRowClick) &&
                         (style ? 'cursor-pointer' : 'cursor-pointer hover:bg-muted/50'),
                       style && TINTED_ROW_CLASS,
+                      opens && ROW_OPEN_FOCUS,
                       rowClassName?.(row),
                     )}
                     style={style}
                     data-state={isRowSelected?.(row) ? 'selected' : undefined}
                     {...rowHoverProps?.(row)}
-                    // El camino de role="button" es solo para `onRowClick`: con
-                    // `rowHref` el elemento accesible es el <Link> de `primary` y
-                    // el <tr> sigue siendo una fila de tabla de verdad.
-                    {...(href
-                      ? rowNavProps(href)
-                      : { onClick: onRowClick ? () => onRowClick(row) : undefined })}
-                    role={!href && onRowClick ? 'button' : undefined}
-                    tabIndex={!href && onRowClick ? 0 : undefined}
-                    onKeyDown={
-                      !href && onRowClick
-                        ? (e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              onRowClick(row)
-                            }
-                          }
-                        : undefined
-                    }
+                    // Con `rowHref` el elemento accesible es el <Link> de
+                    // `primary`; con `onRowClick`, el <button> sr-only de
+                    // `rowOpener` (A11Y-4). El <tr> sigue siendo una fila de
+                    // tabla de verdad en los dos casos.
+                    {...(href ? rowNavProps(href) : opens ? rowClickProps(row) : {})}
                   >
                     {leading && (
                       // onAuxClick además de onClick: sin él, el click de rueda
@@ -811,22 +889,45 @@ export function ResponsiveList<T>({
                         {leading(row)}
                       </TableCell>
                     )}
-                    {visibleColumns.map((col) => (
-                      <TableCell
-                        key={col.key}
-                        className={cn(
-                          // Las `action` quedan fuera del recorte con elipsis: son
-                          // botones (con o sin texto), no texto que deba acortarse.
-                          // Sin esto un botón «Presupuesto de venta» dentro de una
-                          // columna estrecha se recortaba a media palabra.
-                          fixedCellClass && !col.action && fixedCellClass,
-                          col.cellClassName,
-                          !col.action && compactCellClass,
-                        )}
-                      >
-                        {renderCell(col, row, href)}
-                      </TableCell>
-                    ))}
+                    {visibleColumns.map((col) => {
+                      const opener = opens && col.key === openerColKey
+                      return (
+                        <TableCell
+                          key={col.key}
+                          className={cn(
+                            // Ancla del <button> sr-only (absolute) de la fila.
+                            opener && 'relative',
+                            // Las `action` quedan fuera del recorte con elipsis: son
+                            // botones (con o sin texto), no texto que deba acortarse.
+                            // Sin esto un botón «Presupuesto de venta» dentro de una
+                            // columna estrecha se recortaba a media palabra.
+                            fixedCellClass && !col.action && fixedCellClass,
+                            // …pero tampoco pueden salirse de su celda (UI-RESIZE-1,
+                            // v0.9.10): en su suelo (64 px) el «Entregada» de un
+                            // Estado `action` asomaba 28 px por la derecha de la
+                            // última columna y el contenedor daba scroll lateral.
+                            // Recorte horizontal sin elipsis (`clip` no recorta en
+                            // vertical: anillos de foco y menús siguen enteros).
+                            resizable && col.action && 'overflow-x-clip',
+                            col.cellClassName,
+                            !col.action && compactCellClass,
+                          )}
+                        >
+                          {opener ? (
+                            <>
+                              {rowOpener(row, openerId, openerLabelId)}
+                              {/* `contents`: no cambia el layout de la celda; solo
+                                  da el nombre del control sin repetir «Abrir». */}
+                              <div id={openerLabelId} className="contents">
+                                {renderCell(col, row, href)}
+                              </div>
+                            </>
+                          ) : (
+                            renderCell(col, row, href)
+                          )}
+                        </TableCell>
+                      )
+                    })}
                   </TableRow>
                 )
               })}
@@ -844,9 +945,12 @@ export function ResponsiveList<T>({
               {columnsMenu}
             </div>
           )}
-          {data.map((row) => {
+          {data.map((row, rowIndex) => {
             const href = rowHref?.(row)
             const style = rowStyle?.(row)
+            const opens = opensRow(href)
+            const openerId = `${listId}-mo${rowIndex}`
+            const titleId = primary ? `${listId}-mt${rowIndex}` : undefined
             return (
               <div
                 key={rowKey(row)}
@@ -858,26 +962,13 @@ export function ResponsiveList<T>({
                   'p-4 text-sm ring-1 ring-foreground/10',
                   (href || onRowClick) && 'cursor-pointer active:bg-muted/50',
                   isRowSelected?.(row) && 'ring-primary',
+                  opens && cn('relative', ROW_OPEN_FOCUS),
                   rowClassName?.(row),
                 )}
                 style={style}
                 data-compact={compact ? '' : undefined}
                 {...rowHoverProps?.(row)}
-                {...(href
-                  ? rowNavProps(href)
-                  : { onClick: onRowClick ? () => onRowClick(row) : undefined })}
-                role={!href && onRowClick ? 'button' : undefined}
-                tabIndex={!href && onRowClick ? 0 : undefined}
-                onKeyDown={
-                  !href && onRowClick
-                    ? (e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          onRowClick(row)
-                        }
-                      }
-                    : undefined
-                }
+                {...(href ? rowNavProps(href) : opens ? rowClickProps(row) : {})}
               >
                 {/* Cabecera de la card: título + slot de acciones.
                     `flex-wrap` + suelo de ancho para el título: el slot de
@@ -913,7 +1004,8 @@ export function ResponsiveList<T>({
                         {leading(row)}
                       </span>
                     )}
-                    {primary && renderCardTitle(primary, row, href)}
+                    {opens && rowOpener(row, openerId, titleId)}
+                    {primary && renderCardTitle(primary, row, href, opens ? titleId : undefined)}
                   </div>
                   {actions.length > 0 && (
                     // `shrink-0` se queda: dentro de SU línea las acciones no se

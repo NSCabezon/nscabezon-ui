@@ -1741,3 +1741,203 @@ describe('ResponsiveList (v0.8.0: ready)', () => {
     expect(container.querySelector('[data-list-pending]')).toBeNull()
   })
 })
+
+// A11Y-4 (v0.9.10): con `onRowClick` la fila ya no es `role="button"` con
+// botones y enlaces dentro (axe `nested-interactive`, serious). El teclado
+// entra por un <button> sr-only en la celda principal; el ratón sigue en toda
+// la fila.
+describe('A11Y-4: filas con onRowClick sin controles anidados', () => {
+  type Item = { id: number; name: string }
+  const items: Item[] = [
+    { id: 1, name: 'Alfa' },
+    { id: 2, name: 'Beta' },
+  ]
+  const onDiscard = vi.fn()
+  const itemColumns: ResponsiveColumn<Item>[] = [
+    {
+      key: 'name',
+      header: 'Nombre',
+      primary: true,
+      cell: (r) => (
+        <a href={`/f/${r.id}`} onClick={(e) => e.stopPropagation()}>
+          {r.name}
+        </a>
+      ),
+    },
+    {
+      key: 'act',
+      header: 'Acciones',
+      action: true,
+      cell: () => (
+        <button type="button" onClick={(e) => (e.stopPropagation(), onDiscard())}>
+          Descartar
+        </button>
+      ),
+    },
+  ]
+  const bodyRows = () => Array.from(table().querySelectorAll('tbody tr')) as HTMLElement[]
+  /** Nombre accesible de `aria-labelledby` (lo que leería un lector). */
+  const labelOf = (el: Element) =>
+    (el.getAttribute('aria-labelledby') ?? '')
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ')
+
+  it('el <tr> y la tarjeta no son role=button ni enfocables', () => {
+    render(<ResponsiveList columns={itemColumns} data={items} rowKey={(r) => r.id} onRowClick={vi.fn()} />)
+    for (const tr of bodyRows()) {
+      expect(tr.getAttribute('role')).toBeNull()
+      expect(tr.hasAttribute('tabindex')).toBe(false)
+      expect(tr.hasAttribute('data-list-row-click')).toBe(true)
+    }
+    for (const card of cards()) {
+      expect(card.getAttribute('role')).toBeNull()
+      expect(card.hasAttribute('tabindex')).toBe(false)
+    }
+    expect(container.querySelector('[role="button"]')).toBeNull()
+  })
+
+  it('cada fila tiene un <button> en la celda principal, con nombre «Abrir <principal>», fuera de los demás controles', () => {
+    render(<ResponsiveList columns={itemColumns} data={items} rowKey={(r) => r.id} onRowClick={vi.fn()} />)
+    const [first] = bodyRows()
+    const opener = first.querySelector<HTMLButtonElement>('[data-list-row-open]')!
+    expect(opener.tagName).toBe('BUTTON')
+    expect(opener.getAttribute('type')).toBe('button')
+    expect(opener.closest('td')).toBe(first.querySelectorAll('td')[0])
+    expect(labelOf(opener)).toBe('Abrir Alfa')
+    // Ningún control dentro de otro.
+    for (const el of container.querySelectorAll('button, a')) {
+      expect(el.parentElement!.closest('button, a, [role="button"]')).toBeNull()
+    }
+    // Tarjeta móvil: igual, nombre con el título.
+    const cardOpener = cards()[1].querySelector('[data-list-row-open]')!
+    expect(labelOf(cardOpener)).toBe('Abrir Beta')
+  })
+
+  it('el control de la fila abre una vez (Enter/Espacio = clic nativo del <button>)', () => {
+    const onRowClick = vi.fn()
+    render(<ResponsiveList columns={itemColumns} data={items} rowKey={(r) => r.id} onRowClick={onRowClick} />)
+    click(bodyRows()[1].querySelector('[data-list-row-open]')!)
+    expect(onRowClick).toHaveBeenCalledTimes(1)
+    expect(onRowClick).toHaveBeenCalledWith(items[1])
+  })
+
+  it('el clic de ratón en la fila abre y deja el foco en su control (para volver a la fila al cerrar)', () => {
+    const onRowClick = vi.fn()
+    render(<ResponsiveList columns={itemColumns} data={items} rowKey={(r) => r.id} onRowClick={onRowClick} />)
+    const row = bodyRows()[0]
+    click(row.querySelectorAll('td')[0])
+    expect(onRowClick).toHaveBeenCalledTimes(1)
+    expect(document.activeElement).toBe(row.querySelector('[data-list-row-open]'))
+    // Un diálogo que devuelva el foco al elemento enfocado vuelve a la fila.
+    expect(row.contains(document.activeElement)).toBe(true)
+  })
+
+  it('los botones internos que paran el evento no abren la fila', () => {
+    const onRowClick = vi.fn()
+    onDiscard.mockClear()
+    render(<ResponsiveList columns={itemColumns} data={items} rowKey={(r) => r.id} onRowClick={onRowClick} />)
+    const discard = Array.from(bodyRows()[0].querySelectorAll('button')).find((b) => b.textContent === 'Descartar')!
+    click(discard)
+    expect(onDiscard).toHaveBeenCalledTimes(1)
+    expect(onRowClick).not.toHaveBeenCalled()
+  })
+
+  it('la tarjeta móvil abre con el ratón y con su control', () => {
+    const onRowClick = vi.fn()
+    render(<ResponsiveList columns={itemColumns} data={items} rowKey={(r) => r.id} onRowClick={onRowClick} />)
+    click(cards()[0])
+    click(cards()[1].querySelector('[data-list-row-open]')!)
+    expect(onRowClick.mock.calls.map((c) => c[0])).toEqual([items[0], items[1]])
+  })
+
+  it('la fila marca el foco visible de su control con un anillo', () => {
+    render(<ResponsiveList columns={itemColumns} data={items} rowKey={(r) => r.id} onRowClick={vi.fn()} />)
+    expect(bodyRows()[0].className).toContain('has-[[data-list-row-open]:focus-visible]:ring-2')
+    expect(cards()[0].className).toContain('has-[[data-list-row-open]:focus-visible]:ring-2')
+  })
+
+  it('sin `onRowClick` (o con `rowHref`) no hay control extra', () => {
+    render(<ResponsiveList columns={itemColumns} data={items} rowKey={(r) => r.id} />)
+    expect(container.querySelector('[data-list-row-open]')).toBeNull()
+    render(
+      <ResponsiveList
+        columns={itemColumns}
+        data={items}
+        rowKey={(r) => r.id}
+        rowHref={(r) => `/x/${r.id}`}
+        onRowClick={vi.fn()}
+      />,
+    )
+    expect(container.querySelector('[data-list-row-open]')).toBeNull()
+  })
+
+  it('el texto del control sale de `labels.openRow`', () => {
+    render(
+      <UiProvider labels={{ openRow: 'Open' }}>
+        <ResponsiveList columns={itemColumns} data={items} rowKey={(r) => r.id} onRowClick={vi.fn()} />
+      </UiProvider>,
+    )
+    expect(labelOf(bodyRows()[0].querySelector('[data-list-row-open]')!)).toBe('Open Alfa')
+  })
+})
+
+// UI-RESIZE-1 (v0.9.10): con `resizable`, en su suelo (64 px) la cabecera
+// ordenable y la celda `action` de la última columna asomaban por la derecha y
+// el contenedor daba +28 px de scroll (/work-orders/history a 1440, medido en
+// Chrome). jsdom no maqueta: se comprueban las clases que lo impiden.
+describe('UI-RESIZE-1: nada se sale de su columna', () => {
+  const sortCols: ResponsiveColumn<Row>[] = [
+    { key: 'name', header: 'Nombre', cell: (r) => r.name, primary: true, sortable: true },
+    { key: 'total', header: 'Total', cell: (r) => String(r.total), sortable: true },
+    { key: 'status', header: 'Estado', cell: () => 'Entregada', sortable: true, action: true },
+  ]
+  function ui(extra: Partial<React.ComponentProps<typeof ResponsiveList<Row>>> = {}) {
+    return (
+      <ResponsiveList
+        columns={sortCols}
+        data={rows}
+        rowKey={(r) => r.id}
+        sort={{ key: 'name', dir: 'asc' }}
+        onSortChange={() => {}}
+        resizable
+        {...extra}
+      />
+    )
+  }
+
+  it('el botón de ordenar mide como mucho su <th> y su texto se corta dentro', () => {
+    render(ui())
+    const button = heads()[0].querySelector('button')!
+    expect(button.className).toContain('max-w-[calc(100%+2rem)]')
+    expect(button.className).toContain('min-w-0')
+    expect(button.className).toContain('overflow-hidden')
+    const label = button.querySelector('span')!
+    expect(label.textContent).toBe('Nombre')
+    expect(label.className).toContain('overflow-hidden')
+    expect(label.className).toContain('[text-overflow:inherit]')
+  })
+
+  it('en la última cabecera con menú de columnas el botón no entra bajo el menú', () => {
+    render(ui({ onHiddenColumnsChange: () => {}, onColumnsReset: () => {} }))
+    const last = heads()[heads().length - 1]
+    expect(last.className).toContain('pr-10')
+    const sortButton = Array.from(last.querySelectorAll('button')).find((b) => b.textContent === 'Estado')!
+    expect(sortButton.className).toContain('max-w-[calc(100%+1rem)]')
+  })
+
+  it('las celdas `action` se recortan en horizontal (sin elipsis)', () => {
+    render(ui())
+    const td = table().querySelectorAll('tbody tr')[0].querySelectorAll('td')[2]
+    expect(td.className).toContain('overflow-x-clip')
+    expect(td.className).not.toContain('text-ellipsis')
+  })
+
+  it('sin `resizable` la cabecera y las celdas quedan como antes', () => {
+    render(ui({ resizable: false }))
+    const button = heads()[0].querySelector('button')!
+    expect(button.className).not.toContain('max-w-')
+    expect(button.querySelector('span')).toBeNull()
+    expect(table().querySelector('tbody td')!.className).not.toContain('overflow-x-clip')
+  })
+})
