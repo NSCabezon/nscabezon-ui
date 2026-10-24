@@ -131,11 +131,12 @@ export type ResponsiveListProps<T> = {
   // su borde derecho. `columnWidths` es el mapa persistido (px por `key`);
   // `onColumnWidthsChange` recibe el mapa completo al soltar (con el suelo de
   // la columna, ver `minWidth`) y sin esa clave al hacer doble click en el
-  // asa. Modelo «como Excel + relleno» (v0.9.0): arrastrar cambia SOLO esa
-  // columna; la tabla mide máx(contenedor, suma de anchos) y, si la suma no
-  // cabe, el contenedor hace scroll horizontal; lo que sobre lo ocupa la
-  // columna `fill` (hasta su tope, si lo tiene) y, si no hay, se reparte en
-  // proporción entre todas: nunca hueco a la derecha (v0.9.6).
+  // asa. Modelo proporcional (v0.9.9, ver `useColumnResize`): agrandar una
+  // columna sube su base y las demás encogen en proporción (hasta su suelo en
+  // pantalla); el último borde controla la última columna. La tabla ocupa el
+  // contenedor; lo que sobre lo ocupa la columna `fill` y, si no hay, se
+  // reparte en proporción entre todas; si falta, encogen todas hasta su suelo
+  // y solo por debajo del mínimo de serie hay scroll horizontal.
   resizable?: boolean
   columnWidths?: Record<string, number>
   onColumnWidthsChange?: (widths: Record<string, number>) => void
@@ -372,10 +373,10 @@ export function ResponsiveList<T>({
   // Redimensión de columnas (asa + ancho en vivo del arrastre + relleno): el
   // hook se exporta aparte para tablas hechas a mano (ver useColumnResize).
   // Recibe las columnas VISIBLES en su orden: la suma y el relleno salen de ellas.
-  // Ancho del contenedor de la <table> (v0.9.8, LIST-6): el tope de la
-  // columna de relleno se calcula con él. Se mide el padre de la tabla (su
-  // bloque contenedor) con un ResizeObserver; sin él o en jsdom (0), el hook
-  // pinta el tope como un ancho fijo.
+  // Ancho del contenedor de la <table> (v0.9.8): con él las columnas encogen
+  // en proporción cuando no caben y el arrastre sabe la escala (v0.9.9). Se
+  // mide el padre de la tabla (su bloque contenedor) con un ResizeObserver;
+  // sin él o en jsdom (0), cada <col> lleva su base y, si no caben, scroll.
   const [containerWidth, setContainerWidth] = React.useState(0)
   const observerRef = React.useRef<ResizeObserver | null>(null)
   const measureContainer = React.useCallback((table: HTMLTableElement | null) => {
@@ -425,6 +426,9 @@ export function ResponsiveList<T>({
   // Con anchos fijos las celdas no pueden envolver: recortan con elipsis.
   const fixedCellClass = resizable ? 'overflow-hidden text-ellipsis' : undefined
   const lastVisibleKey = visibleColumns[visibleColumns.length - 1]?.key
+  /** Nombre de una columna para el `aria-label` de su asa. */
+  const columnName = (c: ResponsiveColumn<T>) =>
+    nodeText(c.header) || (c.action ? labels.actionsColumn : c.key)
   // El menú solo se pinta si la lista trae los dos callbacks (opt-in): sin
   // ellos el markup queda exactamente como antes.
   const columnsMenu =
@@ -576,13 +580,14 @@ export function ResponsiveList<T>({
             'hidden @3xl:block',
             menuOutsideScroll && 'relative',
             // Ancla del menú con cabecera fija (LIST-3): el envoltorio mide lo
-            // que la tabla para que el ancla `sticky` recorra todo su ancho.
+            // que la tabla para que el ancla `sticky` recorra todo su ancho
+            // (su mismo `min-width`, v0.9.9: el mínimo, no la suma de bases).
             menuSticky && 'relative',
             menuSticky && !resizable && 'min-w-fit',
           )}
           style={
             menuSticky && resizable && totalWidth != null
-              ? { minWidth: totalWidth + (leading ? 40 : 0) }
+              ? { minWidth: tableStyle(leading ? 40 : 0)?.minWidth }
               : undefined
           }
         >
@@ -619,14 +624,12 @@ export function ResponsiveList<T>({
                 'border-separate border-spacing-0 [&_tbody_td]:border-b [&_tbody_tr:last-child_td]:border-b-0',
               resizable && 'table-fixed',
             )}
-            // Modelo «como Excel + relleno» (ver `tableSizing`): SIEMPRE width
-            // 100% + min-width = suma (v0.9.6: nunca hueco a la derecha). Con
-            // relleno libre, su <col> va sin ancho y table-fixed le da el
-            // sobrante (nunca menos que su base); sin relleno, table-fixed
-            // reparte el sobrante en proporción entre todas; con relleno con
-            // tope (v0.9.8), cada <col> lleva su ancho en pantalla, calculado
-            // con el ancho del contenedor. Si la suma supera el contenedor,
-            // scroll horizontal.
+            // Anchos (ver `useColumnResize`): SIEMPRE width 100% (v0.9.6:
+            // nunca hueco a la derecha). Con relleno libre, su <col> va sin
+            // ancho y table-fixed le da el sobrante; sin relleno, table-fixed
+            // reparte el sobrante en proporción entre todas. Si no caben, cada
+            // <col> lleva su ancho en pantalla (encogido hasta su suelo) y
+            // solo por debajo del mínimo de serie (`min-width`) hay scroll.
             ref={resizable ? measureContainer : undefined}
             style={resizable ? tableStyle(leading ? 40 : 0) : undefined}
           >
@@ -718,7 +721,9 @@ export function ResponsiveList<T>({
                         resizeHandle(
                           col.key,
                           'end',
-                          nodeText(col.header) || (col.action ? labels.actionsColumn : col.key),
+                          // El último borde controla la última columna
+                          // (v0.9.9): su asa lleva el nombre de esa.
+                          columnName(i === visibleColumns.length - 2 ? visibleColumns[i + 1] : col),
                         )}
                       {isLast && menuOutsideScroll && (
                         <div

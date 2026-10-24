@@ -3,6 +3,62 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/);
 el proyecto sigue [semver](https://semver.org/lang/es/).
 
+## [0.9.9] - 2026-10-24
+
+### Cambiado
+
+- **Modelo proporcional: agrandar una columna encoge a las demás en
+  proporción, y el último borde controla la última columna** (PROP, decisión
+  del dueño 24/10/2026). Hasta la 0.9.8 no se podía agrandar bien la última
+  columna («Acciones»): no tenía asa propia, y su borde izquierdo era el asa
+  de la penúltima, que solo la estrechaba hasta su suelo. Ahora:
+  - **Qué controla cada asa:** la columna de la izquierda del borde, salvo el
+    último borde (penúltima | última), que controla la ÚLTIMA: a la izquierda
+    la agranda, a la derecha la estrecha. Su `aria-label` y su
+    `aria-valuenow/min` son los de la última; ←/→ igual (← la agranda);
+    doble clic / Escape / Supr borran el guardado de la última.
+    `ResponsiveList` le pone el nombre de la última; en tablas a mano,
+    `resizeHandle(penúltima)` y `resizeHandle(penúltima, 'start')` ya lo hacen
+    (el `name` es el de la columna que controla).
+  - **Agrandar = subir SU base:** las demás encogen en proporción
+    (conservando sus proporciones entre sí) y ninguna baja de su suelo
+    (`columnFloor`) EN PANTALLA: las que llegan se quedan ahí y el resto sigue
+    encogiendo; con todas en su suelo, la arrastrada deja de crecer.
+    Estrecharla para en su propio suelo. El borde (o el ancho de la última)
+    va exactamente con el ratón.
+  - **Se guarda solo la base de esa columna**, calculada para que en ESE
+    contenedor se vea exactamente lo que se soltó; las demás no se congelan
+    en px (en Gesmoto siguen en rem y escalan con la fuente).
+  - **La tabla ocupa siempre el contenedor y redimensionar nunca trae
+    scroll.** Con el ancho del contenedor (`containerWidth`, que
+    `ResponsiveList` mide), si las columnas no caben encogen en proporción
+    hasta su suelo (cada `<col>` lleva su ancho calculado) y el `min-width` de
+    la tabla es como mucho el de serie: la suma de bases o la de serie, la
+    menor (nunca menos que los suelos). Así unos anchos guardados en 1920
+    caben en 1440 sin scroll (el problema de LIST-6, ahora para todas las
+    columnas). Sin contenedor (tablas a mano que no lo pasan, jsdom), como
+    antes: cada `<col>` a su base y scroll si no caben.
+  - **Relleno (`fill`):** sin ancho guardado se queda el sobrante; agrandar
+    otra columna le quita primero ese sobrante (las demás no se mueven) y,
+    cuando ya está a su base, encogen todas en proporción. Arrastrar el
+    propio relleno parte de su ancho pintado (sin saltos) y lo deja como
+    columna normal con su base guardada (como en la 0.9.6); doble clic,
+    Escape o Supr lo vuelven a hacer relleno. **Desaparece el «tope» de
+    LIST-6** (0.9.8): un relleno guardado es una base más, y ya no da scroll
+    en pantallas menores porque las columnas encogen.
+  - Tras un relleno libre, una columna sigue su ANCHO (su borde derecho no se
+    mueve mientras el relleno absorbe).
+  - El teclado acumula lo que se movió de verdad: en el suelo o el techo, la
+    tecla contraria responde a la primera.
+  - Sin `columns` (tablas a mano antiguas, p. ej. las líneas de presupuesto
+    de Gesmoto): sin cambios, la arrastrada 1:1.
+
+> **Consumidores:** nada que cambiar con `ResponsiveList`. Los anchos ya
+> guardados se leen igual; uno guardado en la columna de relleno (tope en
+> 0.9.8) vuelve a ser su base, sin scroll en pantallas menores. Una tabla a
+> mano con `columns` debe pasar `containerWidth` (y `leadingWidth`) para que
+> las columnas encojan sin scroll.
+
 ## [0.9.8] - 2026-10-22
 
 ### Cambiado

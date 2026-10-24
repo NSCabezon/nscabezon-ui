@@ -285,10 +285,11 @@ describe('ResponsiveList (opt-in)', () => {
     )
     const seps = Array.from(table().querySelectorAll('[role="separator"]'))
     // Todas menos la última; las mitades `start` (y el ancla de la última) no.
+    // El último borde (Acciones|Id) controla la última columna (v0.9.9).
     expect(seps.map((h) => h.getAttribute('aria-label'))).toEqual([
       'Resize Nombre',
       'Resize Total',
-      'Resize Acciones',
+      'Resize Id',
     ])
     expect(seps.every((h) => h.getAttribute('tabindex') === '0')).toBe(true)
     expect(table().querySelectorAll('[data-column-resize-handle="start"][tabindex]')).toHaveLength(0)
@@ -1189,7 +1190,9 @@ describe('ResponsiveList (orden de columnas)', () => {
       })
       expect(onColumnWidthsChange).toHaveBeenCalledTimes(1)
       const saved = onColumnWidthsChange.mock.calls[0][0] as Record<string, number>
-      expect(Object.keys(saved)).toEqual([heads()[1].getAttribute('data-column-width-key')])
+      // El último borde controla la ÚLTIMA columna (v0.9.9): 30 px a la
+      // derecha la estrechan 30.
+      expect(saved).toEqual({ [heads()[2].getAttribute('data-column-width-key')!]: 130 })
     } finally {
       Element.prototype.setPointerCapture = setPointerCapture
     }
@@ -1267,9 +1270,10 @@ describe('ResponsiveList (orden de columnas)', () => {
     expect(onColumnOrderChange).toHaveBeenCalledWith(['name', 'id', 'total'])
   })
 })
-// v0.9.0 · Modelo «como Excel + relleno»: arrastrar el borde cambia SOLO esa
-// columna; la tabla mide máx(contenedor, suma) y la columna `fill` (si la hay)
-// se estira para ocupar el hueco. jsdom no hace layout: se mide con un
+// v0.9.0 · Anchos con relleno: la tabla ocupa el contenedor y la columna
+// `fill` (si la hay) se estira para ocupar el hueco. v0.9.9 (modelo
+// proporcional): arrastrar cambia la base de la columna que controla el asa y
+// las demás se reescalan solas. jsdom no hace layout: se mide con un
 // getBoundingClientRect falso por `data-column-width-key`, y lo que se
 // comprueba es el <colgroup> y el estilo de la <table> (lo que manda en
 // table-fixed) y lo que se guarda.
@@ -1418,7 +1422,7 @@ describe('ResponsiveList (como Excel + relleno)', () => {
     expect(onChange).toHaveBeenCalledWith({ desc: 400 })
   })
 
-  it('LIST-6: mide su contenedor; el tope guardado en pantalla grande cabe en una menor y se ve igual en la grande', () => {
+  it('PROP-RL-1: mide su contenedor; lo guardado en pantalla grande se ve igual en ella y cabe sin scroll en una menor', () => {
     let boxW = 2 * SUM
     HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
       if (this.getAttribute('data-slot') === 'table-container') return { width: boxW } as DOMRect
@@ -1445,18 +1449,22 @@ describe('ResponsiveList (como Excel + relleno)', () => {
     dragHandle('desc', -40)
     const saved = onChange.mock.calls.at(-1)![0] as Record<string, number>
     expect(Object.keys(saved)).toEqual(['desc'])
-    // Grande: el borde del relleno quedó 40 px a la izquierda de 410 + 716.
+    // Grande: con su base guardada ya no es relleno y table-fixed reparte en
+    // proporción; el borde del relleno quedó 40 px a la izquierda de 410 + 716.
     renderO({ columnWidths: saved })
     const px = (k: string) => parseFloat(colWidths()[k] ?? '')
     const keys = ['num', 'client', 'desc', 'opened', 'status', 'menu']
     expect(px('desc')).toBe(saved.desc)
-    expect(Math.abs(px('num') + px('client') + px('desc') - (410 + 716 - 40))).toBeLessThanOrEqual(1)
-    expect(Math.abs(keys.reduce((a, k) => a + px(k), 0) - boxW)).toBeLessThanOrEqual(0.5)
-    // Otra pantalla (contenedor justo de lo de serie): cabe, relleno a su base.
+    const k = boxW / keys.reduce((a, key) => a + px(key), 0)
+    expect(Math.abs((px('num') + px('client') + px('desc')) * k - (410 + 716 - 40))).toBeLessThanOrEqual(1)
+    // Otra pantalla (contenedor justo de lo de serie): cabe sin scroll; las
+    // columnas encogen en proporción, ninguna bajo su suelo.
     boxW = SUM
     act(() => observers.forEach((cb) => cb()))
-    expect(colWidths()).toEqual({ num: '90px', client: '160px', desc: '160px', opened: '120px', status: '130px', menu: '56px' })
     expect(tableStyle()).toEqual({ width: '100%', minWidth: `${SUM}px` })
+    expect(Math.abs(keys.reduce((a, key) => a + px(key), 0) - SUM)).toBeLessThanOrEqual(0.5)
+    expect(px('menu')).toBeGreaterThanOrEqual(56)
+    expect(px('num')).toBeGreaterThanOrEqual(64)
   })
 
   it('RESIZE-CLICK-1: un clic sin mover en el asa (propia o de inicio) no guarda ancho ni ordena; el doble clic sigue restaurando', () => {

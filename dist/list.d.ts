@@ -137,8 +137,11 @@ declare function isFillColumn(col: {
  * reparte en proporción entre todas (v0.9.6, ver `tableSizing`). Nunca se
  * elige sola (ni la `primary`): la decide el consumidor.
  *
- * v0.9.8 (LIST-6): en `useColumnResize`, ese ancho guardado es su TOPE (ocupa
- * como mucho eso; si no cabe, encoge hasta su base), no un ancho fijo.
+ * v0.9.9: el «tope» de LIST-6 (0.9.8) desaparece: con ancho guardado es una
+ * columna normal más del reparto proporcional. Que un ancho de relleno
+ * guardado en una pantalla grande no dé scroll en una menor lo resuelve ahora
+ * `useColumnResize` (las columnas encogen hasta su suelo y el mínimo de la
+ * tabla es como mucho el de serie).
  *
  * v0.9.6: con `widths` (los anchos guardados del usuario), si esa columna
  * tiene ancho guardado deja de ser LA de relleno: manda su ancho (también para
@@ -174,7 +177,9 @@ declare function resolveColumnWidth(col: Omit<SizedColumn, 'key'>, stored: numbe
  *   `<col>` llevan ancho y table-fixed reparte el sobrante entre ellas en
  *   proporción. Estrechar una columna se nota y se queda.
  * Si la suma supera el contenedor, la tabla lo desborda y el contenedor de
- * scroll la desplaza a lo ancho. `hasFill` se conserva por compatibilidad.
+ * scroll la desplaza a lo ancho; con el contenedor medido, `useColumnResize`
+ * pasa aquí un mínimo menor (el de serie) y encoge las columnas (v0.9.9).
+ * `hasFill` se conserva por compatibilidad.
  */
 declare function tableSizing(totalWidth: number, _hasFill?: boolean): {
     width: string | number;
@@ -201,8 +206,8 @@ declare const RESIZE_KEY_STEP_LARGE = 64;
  */
 declare const RESIZE_KEY_MAX = 1600;
 /**
- * Columnas redimensionables con el ratón: asa en el borde derecho de cada
- * cabecera, doble clic para devolverla a su ancho natural.
+ * Columnas redimensionables con el ratón y el teclado: asa en los bordes entre
+ * cabeceras, doble clic para devolver la columna a su ancho de serie.
  *
  * Vive aparte de `ResponsiveList` porque también lo usan tablas a mano (p. ej.
  * una tabla de líneas con celdas editables). Los anchos se persisten con
@@ -212,52 +217,68 @@ declare const RESIZE_KEY_MAX = 1600;
  * salga de la celda. Mientras se arrastra el ancho vive en el estado local
  * (`drag`) y solo se persiste al soltar: un arrastre son decenas de eventos.
  *
- * Modelo «como Excel + relleno» (v0.9.0, con `columns`):
- * - Arrastrar el borde cambia SOLO esa columna; ninguna otra se mueve ni
- *   encoge, y no hay más tope que el suelo de la propia columna
- *   (`columnFloor`: su `minWidth` o 64 px).
- * - Todas las columnas tienen ancho efectivo (`resolveColumnWidth`): guardado,
- *   `width` o `DEFAULT_COLUMN_WIDTH`. `totalWidth` es su suma.
- * - La de relleno (`fill: true`, alias `flex`) tiene un ancho BASE como las
- *   demás (cuenta en la suma) y se estira encima si sobra sitio: su `<col>`
- *   va sin ancho (`colWidth` → `undefined`) y la tabla lleva `tableStyle`
- *   (`tableSizing`). Sin relleno, la tabla sigue al 100 % y table-fixed
- *   reparte el sobrante en proporción entre todas.
- * - Relleno con TOPE (v0.9.8, LIST-6; dueño 22/10/2026): al arrastrar la de
- *   relleno, el borde sigue al ratón desde su ancho PINTADO (sin saltos) y al
- *   soltar ese ancho pintado se guarda como su tope: «como mucho X». Con el
- *   ancho del contenedor (`containerWidth`), en una pantalla mayor se ve a X y
- *   el sobrante va al resto en proporción; en una menor encoge hasta lo que
- *   quepa (nunca por debajo de su base ni de su suelo) y sin scroll si lo de
- *   serie cabía. Antes ese ancho pintado (base + el sobrante de ESA pantalla)
- *   era un ancho fijo, y como los anchos viajan entre dispositivos, a 1440 la
- *   tabla de `/work-orders` medía 1592 px en 1152. Doble clic, Escape o Supr
- *   quitan el tope (relleno libre); ensancharla hasta que el tope no limite
- *   nada, también.
- * - El borde sigue al ratón también con reparto proporcional (v0.9.8, UI-9):
- *   el delta en pantalla se convierte a base resolviendo el modelo (la base
- *   de una columna escalada cambia `dx × suma / C`, y las demás se reescalan).
- * Sin `columns` (tablas a mano antiguas): cambia la arrastrada, partiendo del
- * ancho guardado o, si no hay, del medido; suelo `MIN_COLUMN_WIDTH`.
+ * Modelo proporcional (v0.9.9, dueño 24/10/2026; con `columns`):
+ * - La tabla mide SIEMPRE el 100 % del contenedor. Cada columna tiene una
+ *   base (`resolveColumnWidth`: guardada, `width` o `DEFAULT_COLUMN_WIDTH`,
+ *   nunca por debajo de su suelo `columnFloor`). Si sobra sitio, table-fixed
+ *   lo reparte en proporción a las bases; si falta, las columnas encogen en
+ *   proporción hasta su suelo EN PANTALLA (las que llegan se quedan en él y el
+ *   resto sigue encogiendo), con los anchos calculados aquí en cada `<col>`.
+ *   El scroll lateral solo aparece por debajo de `minColumns`: la suma de
+ *   bases o la de serie, la menor (nunca menos que los suelos). Así agrandar
+ *   columnas nunca trae scroll, en esta pantalla ni en otra menor (LIST-6).
+ * - Agrandar una columna = subir SU base: las demás encogen en proporción
+ *   (conservan sus proporciones entre sí) y ninguna baja de su suelo en
+ *   pantalla; cuando todas las demás están en su suelo, la arrastrada ya no
+ *   crece más. Estrecharla para en su propio suelo. Se guarda SOLO la base de
+ *   la arrastrada (las demás siguen su `width` de serie, que en Gesmoto va en
+ *   rem y escala con la fuente), calculada para que en ESTE contenedor se vea
+ *   exactamente lo que se soltó.
+ * - Qué columna controla cada asa: la de la IZQUIERDA del borde, salvo el
+ *   último borde (entre la penúltima y la última), que controla la ÚLTIMA:
+ *   arrastrarlo a la izquierda agranda la última (p. ej. «Acciones»), a la
+ *   derecha la estrecha. `resizeHandle(penúltima)` y
+ *   `resizeHandle(penúltima, 'start')` hacen eso solos.
+ * - El ratón manda: se resuelve, con el mismo modelo con el que se pinta, la
+ *   base que deja el borde derecho de la columna exactamente bajo el puntero
+ *   (en el último borde, el ancho de la última). Tras un relleno libre el
+ *   borde derecho no se mueve (el relleno absorbe), así que ahí se sigue el
+ *   ancho de la columna.
+ * - Relleno (`fill: true`, alias `flex`; la primera marcada): sin ancho
+ *   guardado se queda el sobrante (su `<col>` sin ancho). Agrandar otra
+ *   columna le quita primero ese sobrante (las demás no se mueven) y, cuando
+ *   ya está a su base, encogen todas en proporción. Arrastrar el propio
+ *   relleno lo convierte en columna normal: parte de su ancho PINTADO (sin
+ *   saltos) y al soltar se guarda su base; con ancho guardado deja de ser
+ *   relleno (`resolveFillColumnKey`, v0.9.6). Doble clic, Escape o Supr lo
+ *   vuelven a hacer relleno. El ancho guardado de un relleno (también el de
+ *   0.9.6-0.9.8, p. ej. 566 a 1920) ya no trae scroll en pantallas menores:
+ *   lo impide `minColumns`.
+ * Sin `columns` (tablas a mano antiguas, p. ej. las líneas de presupuesto de
+ * Gesmoto): cambia la arrastrada, 1:1, partiendo del ancho guardado o, si no
+ * hay, del medido; suelo `MIN_COLUMN_WIDTH`.
  *
  * Teclado (v0.9.7, LIST-4): el asa `'end'` es un `role="separator"` enfocable
- * (`aria-orientation="vertical"`, `aria-label` = `labels.columnResize(columna)`,
- * `aria-valuenow/min/max` en px). ←/→ cambian 16 px (1 rem), Mayús+←/→ 64 px;
- * se ve en vivo y se guarda al soltar la tecla (o al perder el foco), por el
- * mismo `onColumnWidthsChange` que el arrastre y con el mismo suelo. Escape,
- * Supr o Retroceso borran el ancho guardado, como el doble clic. La mitad
- * `'start'` no es enfocable (sería la misma columna dos veces en el Tab).
+ * (`aria-orientation="vertical"`, `aria-label` = `labels.columnResize(columna
+ * que controla)`, `aria-valuenow/min/max` en px de esa columna). ←/→ mueven el
+ * borde 16 px (1 rem) EN PANTALLA, Mayús+←/→ 64 px (en el último borde, ←
+ * agranda la última); se ve en vivo y se guarda al soltar la tecla (o al
+ * perder el foco), por el mismo `onColumnWidthsChange` que el arrastre y con
+ * el mismo suelo. Escape, Supr o Retroceso borran el ancho guardado de la
+ * columna que controla, como el doble clic. La mitad `'start'` no es
+ * enfocable (sería el mismo borde dos veces en el Tab).
  */
 declare function useColumnResize({ columnWidths, onColumnWidthsChange, columns, containerWidth, leadingWidth, labels: labelsProp, }: {
     columnWidths?: Record<string, number>;
     onColumnWidthsChange?: (widths: Record<string, number>) => void;
-    /** Columnas VISIBLES, en orden: activa el modelo «como Excel + relleno». */
+    /** Columnas VISIBLES, en orden: activa el modelo proporcional. */
     columns?: SizedColumn[];
     /**
-     * Ancho (px) del contenedor de la `<table>` (v0.9.8, LIST-6). Con él, el
-     * tope de la columna de relleno se aplica (encoge hasta lo que quepa y el
-     * sobrante va al resto). Sin él (o 0, como en jsdom), el tope se pinta como
-     * un ancho fijo (lo de 0.9.6). `ResponsiveList` lo mide con un ResizeObserver.
+     * Ancho (px) del contenedor de la `<table>` (v0.9.8). Con él, las columnas
+     * encogen en proporción (hasta su suelo) cuando no caben, en vez de dar
+     * scroll, y el arrastre sabe la escala. Sin él (o 0, como en jsdom), cada
+     * `<col>` lleva su base y la tabla mide como mínimo la suma.
+     * `ResponsiveList` lo mide con un ResizeObserver.
      */
     containerWidth?: number;
     /** Px de columnas fuera de `columns`, DELANTE (p. ej. la de selección). */

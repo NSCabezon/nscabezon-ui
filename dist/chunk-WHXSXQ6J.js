@@ -496,28 +496,49 @@ function visibleColumnsOf(columns, hidden) {
 // src/list/useColumnResize.tsx
 import { jsx as jsx3 } from "react/jsx-runtime";
 var COLUMN_WIDTH_KEY_ATTR = "data-column-width-key";
+function minColumns(bases, defaults, floors) {
+  const sum = (xs) => xs.reduce((s, x) => s + x, 0);
+  return Math.max(sum(floors), Math.min(sum(bases), sum(defaults)));
+}
 function paint(l) {
   const C = l.container;
-  const others = l.bases.reduce((s, b, i) => i === l.fill ? s : s + b, 0);
-  if (l.mode === "free") {
-    const widths = l.bases.slice();
-    if (C != null) widths[l.fill] = Math.max(l.bases[l.fill], C - l.extra - others);
-    return { widths, extra: l.extra };
-  }
-  if (l.mode === "cap" && C != null) {
-    const cap = l.bases[l.fill];
-    const room = C - l.extra - others;
-    if (room >= cap) {
-      const k2 = others > 0 ? (C - l.extra - cap) / others : 1;
-      return { widths: l.bases.map((b, i) => i === l.fill ? cap : b * k2), extra: l.extra };
+  const S = l.bases.reduce((s, b) => s + b, 0);
+  if (C == null) return { widths: l.bases.slice(), extra: l.extra, scaled: false };
+  if (C >= S + l.extra) {
+    if (l.fill >= 0) {
+      const widths = l.bases.slice();
+      widths[l.fill] += C - l.extra - S;
+      return { widths, extra: l.extra, scaled: false };
     }
-    const widths = l.bases.slice();
-    widths[l.fill] = Math.max(l.lo, room);
-    return { widths, extra: l.extra };
+    const k = S + l.extra > 0 ? C / (S + l.extra) : 1;
+    return { widths: l.bases.map((b) => b * k), extra: l.extra * k, scaled: false };
   }
-  const sum = l.extra + l.bases.reduce((s, b) => s + b, 0);
-  const k = C != null && sum > 0 ? Math.max(1, C / sum) : 1;
-  return { widths: l.bases.map((b) => b * k), extra: l.extra * k };
+  const avail = Math.max(C, l.extra + l.minTotal) - l.extra;
+  if (!l.canShrink || avail >= S) return { widths: l.bases.slice(), extra: l.extra, scaled: false };
+  const floored = l.bases.map(() => false);
+  let r = 0;
+  for (let n = 0; n <= l.bases.length; n++) {
+    let fixed = 0;
+    let free = 0;
+    l.bases.forEach((b, i) => {
+      if (floored[i]) fixed += l.floors[i];
+      else free += b;
+    });
+    r = free > 0 ? Math.max(0, avail - fixed) / free : 0;
+    let changed = false;
+    l.bases.forEach((b, i) => {
+      if (!floored[i] && b * r < l.floors[i]) {
+        floored[i] = true;
+        changed = true;
+      }
+    });
+    if (!changed) break;
+  }
+  return {
+    widths: l.bases.map((b, i) => floored[i] ? l.floors[i] : b * r),
+    extra: l.extra,
+    scaled: true
+  };
 }
 function edgeAt(p, i) {
   let e = p.extra;
@@ -534,7 +555,7 @@ function stretchedWidth(table) {
 function bisect(lo, hi, ok) {
   if (ok(lo)) return lo;
   if (!ok(hi)) return hi;
-  for (let n = 0; n < 40 && hi - lo > 0.01; n++) {
+  for (let n = 0; n < 60 && hi - lo > 0.01; n++) {
     const mid = (lo + hi) / 2;
     if (ok(mid)) hi = mid;
     else lo = mid;
@@ -542,26 +563,24 @@ function bisect(lo, hi, ok) {
   return hi;
 }
 function baseFor(g, dx) {
-  const clamp = (v2) => Math.round(Math.min(g.max, Math.max(g.min, v2)));
+  const clamp = (v) => Math.round(Math.min(g.max, Math.max(g.min, v)));
   if (!g.at) return clamp(g.start + dx);
   const at = g.at;
-  const hi = Number.isFinite(g.max) ? g.max : Math.max(g.start, g.min) + Math.abs(dx) * 4 + 4e3;
-  const measure = (v2) => {
-    const p = paint(at(v2));
-    return { edge: edgeAt(p, g.index), width: p.widths[g.index] };
+  const measure = (v) => {
+    const p = paint(at(v));
+    return g.follow === "edge" ? edgeAt(p, g.index) : p.widths[g.index];
   };
-  const target = g.edge0 + dx;
-  if (g.breakAt != null && g.start <= g.breakAt) {
-    const atBreak = measure(g.breakAt).edge;
-    if (target > atBreak) return clamp(g.breakAt + (target - atBreak));
-  }
-  const top = g.breakAt != null && g.start <= g.breakAt ? Math.min(hi, g.breakAt) : hi;
-  let v = bisect(g.min, top, (x) => measure(x).edge >= target);
-  if (Math.abs(measure(v).edge - target) > 0.75) {
-    const w = g.width0 + dx;
-    v = bisect(g.min, hi, (x) => measure(x).width >= w);
-  }
-  return clamp(v);
+  const target = g.ref0 + (g.follow === "width-rev" ? -dx : dx);
+  const hi = Number.isFinite(g.max) ? g.max : Math.max(1e6, g.start * 4);
+  const top = measure(hi);
+  const want = Math.min(target, top - 0.25);
+  return clamp(bisect(g.min, hi, (x) => measure(x) >= want));
+}
+function screenDelta(g, v) {
+  if (!g.at) return v - g.start;
+  const p = paint(g.at(v));
+  const m = g.follow === "edge" ? edgeAt(p, g.index) : p.widths[g.index];
+  return g.follow === "width-rev" ? g.ref0 - m : m - g.ref0;
 }
 var DRAG_THRESHOLD = 3;
 var RESIZE_KEY_STEP = 16;
@@ -581,11 +600,9 @@ function useColumnResize({
   const keyRef = React5.useRef(null);
   const colOf = (key) => columns?.find((c) => c.key === key);
   const container = containerWidth && containerWidth > 0 ? containerWidth : null;
-  const fillIndex = columns ? columns.findIndex(isFillColumn) : -1;
-  const fillCol = fillIndex >= 0 ? columns[fillIndex] : void 0;
   const restingFillKey = columns ? resolveFillColumnKey(columns, columnWidths) : void 0;
   const fillKey = drag?.key === restingFillKey ? void 0 : restingFillKey;
-  const fillMode = !fillCol ? "none" : fillKey ? "free" : "cap";
+  const fillIndex = fillKey ? columns.findIndex((c) => c.key === fillKey) : -1;
   function baseWidth(key) {
     const col = colOf(key);
     return col ? resolveColumnWidth(col, columnWidths?.[key]) : columnWidths?.[key];
@@ -596,39 +613,42 @@ function useColumnResize({
   function liveWidth(key) {
     return drag?.key === key ? drag.width : baseWidth(key);
   }
+  function controlledBy(columnKey) {
+    if (!columns || columns.length < 2) return columnKey;
+    const i = columns.findIndex((c) => c.key === columnKey);
+    return i >= 0 && i === columns.length - 2 ? columns[i + 1].key : columnKey;
+  }
   function layoutWith(key, v, at = container, extra = leadingWidth) {
     const cols = columns ?? [];
     const bases = cols.map((c) => c.key === key ? v : liveWidth(c.key) ?? 0);
-    const dragsFill = key != null && key === fillCol?.key;
-    const mode = dragsFill ? "cap" : fillMode;
-    const fillDefault = fillCol ? resolveColumnWidth(fillCol, void 0) : 0;
+    const floors = cols.map(columnFloor);
+    const defaults = cols.map((c) => resolveColumnWidth(c, void 0));
     return {
       bases,
-      fill: fillIndex,
-      mode,
-      lo: mode === "cap" ? Math.min(bases[fillIndex], fillDefault) : 0,
+      floors,
+      fill: key != null && key === restingFillKey ? -1 : fillIndex,
       extra,
-      container: at
+      container: at,
+      minTotal: minColumns(bases, defaults, floors),
+      canShrink: container != null
     };
   }
-  const painted = columns && fillMode === "cap" && container != null ? paint(layoutWith()) : null;
+  const current = columns ? layoutWith() : null;
+  const painted = current && container != null ? paint(current) : null;
+  const scaled = painted?.scaled ? painted : null;
   function colWidth(key) {
-    if (key === fillKey) return void 0;
-    if (painted) {
+    if (scaled) {
       const i = columns.findIndex((c) => c.key === key);
-      if (i >= 0) return painted.widths[i];
+      if (i >= 0) return scaled.widths[i];
     }
+    if (key === fillKey) return void 0;
     return liveWidth(key);
   }
-  const totalWidth = columns ? columns.reduce((sum, c, i) => {
-    const w = liveWidth(c.key) ?? 0;
-    if (i === fillIndex && fillMode === "cap" && container != null) {
-      return sum + Math.min(w, resolveColumnWidth(c, void 0));
-    }
-    return sum + w;
-  }, 0) : void 0;
+  const totalWidth = columns ? columns.reduce((sum, c) => sum + (liveWidth(c.key) ?? 0), 0) : void 0;
   function tableStyle(extra = leadingWidth) {
-    return totalWidth == null ? void 0 : tableSizing(totalWidth + extra, !!fillKey);
+    if (totalWidth == null) return void 0;
+    const min = current && container != null ? current.minTotal : totalWidth;
+    return tableSizing(min + extra, !!fillKey);
   }
   function headOf(handle, columnKey, edge) {
     const own = handle.parentElement;
@@ -640,47 +660,37 @@ function useColumnResize({
     }
     return edge === "start" ? own?.previousElementSibling ?? null : own;
   }
-  function geometryOf(columnKey, handle, edge, max) {
+  function geometryOf(handleKey, handle, edge, max) {
     const table = handle.closest("table");
-    const min = floorOf(columnKey);
-    const index = columns ? columns.findIndex((c) => c.key === columnKey) : -1;
-    const measured = () => headOf(handle, columnKey, edge)?.getBoundingClientRect().width || 0;
+    const key = controlledBy(handleKey);
+    const min = floorOf(key);
+    const index = columns ? columns.findIndex((c) => c.key === key) : -1;
+    const measured = () => headOf(handle, key, edge)?.getBoundingClientRect().width || 0;
     if (!columns || index < 0) {
-      const start2 = columnWidths?.[columnKey] ?? measured();
-      return { key: columnKey, index, min, max: Math.max(max, start2), start: start2, at: null, edge0: 0, width0: start2, container: null, table };
+      const start2 = columnWidths?.[key] ?? measured();
+      return { key, index, min, max: Math.max(max, start2), start: start2, at: null, follow: "width", ref0: start2 };
     }
     const minW = table instanceof HTMLElement ? parseFloat(table.style.minWidth) : NaN;
-    const extra = leadingWidth || (minW > 0 && totalWidth != null ? Math.max(0, minW - totalWidth) : 0);
+    const extra = leadingWidth || (container == null && minW > 0 && totalWidth != null ? Math.max(0, minW - totalWidth) : 0);
     const C = container ?? stretchedWidth(table);
-    const isFill = columnKey === fillCol?.key;
-    let start = baseWidth(columnKey);
+    const isFill = key === restingFillKey;
+    let start = baseWidth(key);
     if (isFill) {
       start = C != null ? paint(layoutWith(void 0, void 0, C, extra)).widths[index] : measured() || start;
     }
-    const geo = {
-      key: columnKey,
+    const at = (v) => layoutWith(key, v, C, extra);
+    const follow = key !== handleKey ? "width-rev" : index === columns.length - 1 || fillIndex >= 0 && !isFill && index > fillIndex ? "width" : "edge";
+    const p = paint(at(start));
+    return {
+      key,
       index,
       min,
       max: Math.max(max, start),
       start,
-      at: (v) => layoutWith(columnKey, v, geo.container, extra),
-      edge0: 0,
-      width0: start,
-      container: C,
-      table
+      at,
+      follow,
+      ref0: follow === "edge" ? edgeAt(p, index) : p.widths[index]
     };
-    const p = paint(geo.at(start));
-    geo.edge0 = edgeAt(p, index);
-    geo.width0 = p.widths[index];
-    if (fillMode === "cap" && !isFill && index > fillIndex && C != null) {
-      const l = geo.at(start);
-      const othersButThis = l.bases.reduce((s, b, i) => i === fillIndex || i === index ? s : s + b, 0);
-      geo.breakAt = C - extra - l.bases[fillIndex] - othersButThis;
-    }
-    return geo;
-  }
-  function learn(g) {
-    if (g.at && g.container == null) g.container = stretchedWidth(g.table);
   }
   function floorOf(columnKey) {
     const col = colOf(columnKey);
@@ -695,37 +705,27 @@ function useColumnResize({
     delete next[key];
     onColumnWidthsChange?.(next);
   }
-  function finish(g, v) {
-    if (g.at && g.key === fillCol?.key && g.container != null) {
-      const free = paint({ ...g.at(v), mode: "free", bases: g.at(v).bases.map((b, i) => i === g.index ? resolveColumnWidth(fillCol, void 0) : b) });
-      const capped = paint(g.at(v));
-      if (capped.widths[g.index] >= free.widths[g.index] - 0.5) {
-        if (columnWidths?.[g.key] != null) restore(g.key);
-        return;
-      }
-    }
-    commit(g.key, v);
-  }
   function flushKey() {
     const k = keyRef.current;
     if (!k) return;
     keyRef.current = null;
     setDrag(null);
-    if (k.dx !== 0) finish(k.geo, k.width);
+    if (k.dx !== 0) commit(k.geo.key, k.width);
   }
   function nameOf(columnKey, name) {
     return name ?? (nodeText(colOf(columnKey)?.header) || columnKey);
   }
   function resizeHandle(columnKey, edge = "end", name) {
+    const target = controlledBy(columnKey);
     const focusable = edge === "end";
-    const now = focusable ? liveWidth(columnKey) : void 0;
+    const now = focusable ? liveWidth(target) : void 0;
     const a11y = focusable ? {
       role: "separator",
       tabIndex: 0,
       "aria-orientation": "vertical",
-      "aria-label": labels.columnResize(nameOf(columnKey, name)),
+      "aria-label": labels.columnResize(nameOf(target, name)),
       "aria-valuenow": now,
-      "aria-valuemin": floorOf(columnKey),
+      "aria-valuemin": floorOf(target),
       "aria-valuemax": Math.max(RESIZE_KEY_MAX, now ?? 0)
     } : { role: "presentation" };
     return /* @__PURE__ */ jsx3(
@@ -744,16 +744,14 @@ function useColumnResize({
             e.preventDefault();
             e.stopPropagation();
             const step = e.shiftKey ? RESIZE_KEY_STEP_LARGE : RESIZE_KEY_STEP;
-            const cur = keyRef.current?.geo.key === columnKey ? keyRef.current : {
+            const cur = keyRef.current?.geo.key === target ? keyRef.current : {
               geo: geometryOf(columnKey, e.currentTarget, edge, RESIZE_KEY_MAX),
               dx: 0,
-              width: baseWidth(columnKey) ?? 0
+              width: baseWidth(target) ?? 0
             };
-            learn(cur.geo);
-            const dx = cur.dx + (e.key === "ArrowRight" ? step : -step);
-            const width = baseFor(cur.geo, dx);
-            keyRef.current = width === cur.width ? cur : { geo: cur.geo, dx, width };
-            setDrag({ key: columnKey, width });
+            const width = baseFor(cur.geo, cur.dx + (e.key === "ArrowRight" ? step : -step));
+            keyRef.current = width === cur.width ? cur : { geo: cur.geo, dx: screenDelta(cur.geo, width), width };
+            setDrag({ key: target, width });
             return;
           }
           if (e.key === "Escape" || e.key === "Delete" || e.key === "Backspace") {
@@ -761,7 +759,7 @@ function useColumnResize({
             e.stopPropagation();
             keyRef.current = null;
             setDrag(null);
-            if (columnWidths?.[columnKey] != null) restore(columnKey);
+            if (columnWidths?.[target] != null) restore(target);
           }
         } : void 0,
         onKeyUp: focusable ? (e) => {
@@ -774,7 +772,7 @@ function useColumnResize({
           if (e.button !== 0) return;
           const d = {
             startX: e.clientX,
-            // El ratón no tiene techo.
+            // El ratón no tiene techo (salvo el de las demás en su suelo).
             geo: geometryOf(columnKey, e.currentTarget, edge, Infinity),
             moved: false
           };
@@ -787,7 +785,6 @@ function useColumnResize({
           if (!d) return;
           if (!d.moved && Math.abs(e.clientX - d.startX) < DRAG_THRESHOLD) return;
           d.moved = true;
-          learn(d.geo);
           setDrag({ key: d.geo.key, width: baseFor(d.geo, e.clientX - d.startX) });
         },
         onPointerUp: (e) => {
@@ -797,14 +794,13 @@ function useColumnResize({
           setDrag(null);
           const moved = d.moved || Math.abs(e.clientX - d.startX) >= DRAG_THRESHOLD;
           if (!moved) return;
-          learn(d.geo);
-          finish(d.geo, baseFor(d.geo, e.clientX - d.startX));
+          commit(d.geo.key, baseFor(d.geo, e.clientX - d.startX));
         },
         onPointerCancel: () => {
           dragRef.current = null;
           setDrag(null);
         },
-        onDoubleClick: () => restore(columnKey),
+        onDoubleClick: () => restore(target),
         onClick: (e) => e.stopPropagation()
       }
     );
@@ -1053,6 +1049,7 @@ function ResponsiveList({
   const stickyHeadStyle = stickyHeader ? { top: (stickyHeaderTop ?? 0) - 1 } : void 0;
   const fixedCellClass = resizable ? "overflow-hidden text-ellipsis" : void 0;
   const lastVisibleKey = visibleColumns[visibleColumns.length - 1]?.key;
+  const columnName = (c) => nodeText(c.header) || (c.action ? labels.actionsColumn : c.key);
   const columnsMenu = onHiddenColumnsChange && onColumnsReset ? /* @__PURE__ */ jsx5(
     ColumnsMenu,
     {
@@ -1158,11 +1155,12 @@ function ResponsiveList({
             "hidden @3xl:block",
             menuOutsideScroll && "relative",
             // Ancla del menú con cabecera fija (LIST-3): el envoltorio mide lo
-            // que la tabla para que el ancla `sticky` recorra todo su ancho.
+            // que la tabla para que el ancla `sticky` recorra todo su ancho
+            // (su mismo `min-width`, v0.9.9: el mínimo, no la suma de bases).
             menuSticky && "relative",
             menuSticky && !resizable && "min-w-fit"
           ),
-          style: menuSticky && resizable && totalWidth != null ? { minWidth: totalWidth + (leading ? 40 : 0) } : void 0,
+          style: menuSticky && resizable && totalWidth != null ? { minWidth: tableStyle(leading ? 40 : 0)?.minWidth } : void 0,
           children: [
             menuSticky && /* @__PURE__ */ jsx5(
               "div",
@@ -1255,7 +1253,9 @@ function ResponsiveList({
                             resizable && !isLast && resizeHandle(
                               col.key,
                               "end",
-                              nodeText(col.header) || (col.action ? labels.actionsColumn : col.key)
+                              // El último borde controla la última columna
+                              // (v0.9.9): su asa lleva el nombre de esa.
+                              columnName(i === visibleColumns.length - 2 ? visibleColumns[i + 1] : col)
                             ),
                             isLast && menuOutsideScroll && /* @__PURE__ */ jsx5(
                               "div",

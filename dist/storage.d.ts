@@ -109,8 +109,11 @@ declare function isFillColumn(col: {
  * reparte en proporción entre todas (v0.9.6, ver `tableSizing`). Nunca se
  * elige sola (ni la `primary`): la decide el consumidor.
  *
- * v0.9.8 (LIST-6): en `useColumnResize`, ese ancho guardado es su TOPE (ocupa
- * como mucho eso; si no cabe, encoge hasta su base), no un ancho fijo.
+ * v0.9.9: el «tope» de LIST-6 (0.9.8) desaparece: con ancho guardado es una
+ * columna normal más del reparto proporcional. Que un ancho de relleno
+ * guardado en una pantalla grande no dé scroll en una menor lo resuelve ahora
+ * `useColumnResize` (las columnas encogen hasta su suelo y el mínimo de la
+ * tabla es como mucho el de serie).
  *
  * v0.9.6: con `widths` (los anchos guardados del usuario), si esa columna
  * tiene ancho guardado deja de ser LA de relleno: manda su ancho (también para
@@ -146,7 +149,9 @@ declare function resolveColumnWidth(col: Omit<SizedColumn, 'key'>, stored: numbe
  *   `<col>` llevan ancho y table-fixed reparte el sobrante entre ellas en
  *   proporción. Estrechar una columna se nota y se queda.
  * Si la suma supera el contenedor, la tabla lo desborda y el contenedor de
- * scroll la desplaza a lo ancho. `hasFill` se conserva por compatibilidad.
+ * scroll la desplaza a lo ancho; con el contenedor medido, `useColumnResize`
+ * pasa aquí un mínimo menor (el de serie) y encoge las columnas (v0.9.9).
+ * `hasFill` se conserva por compatibilidad.
  */
 declare function tableSizing(totalWidth: number, _hasFill?: boolean): {
     width: string | number;

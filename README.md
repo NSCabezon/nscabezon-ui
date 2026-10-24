@@ -287,54 +287,54 @@ const view = useListView('orders', {
     `ch`): pasar de 9 a 10 resultados o de página no mueve los botones; solo
     el texto se recentra dentro de su caja. Se prefirió a alinearlo a la
     izquierda para no cambiar la composición del pie.
-- Regla de anchos con `resizable` (v0.9.0, «como Excel + relleno»):
-  - Arrastrar el borde de una columna cambia **solo esa columna**. Ninguna
-    otra se mueve ni encoge, y el único tope es el suelo de la propia columna.
-  - Todas las columnas tienen ancho efectivo (`resolveColumnWidth`): el
+- Regla de anchos con `resizable` (v0.9.9, modelo proporcional):
+  - Todas las columnas tienen ancho **base** (`resolveColumnWidth`): el
     guardado en `columnWidths`, si no su `width`, si no
     `DEFAULT_COLUMN_WIDTH` (160 px; las `action` sin cabecera,
     `DEFAULT_ACTION_COLUMN_WIDTH`, 56 px).
-  - La tabla mide **máx(ancho del contenedor, suma de anchos)**. Si la suma
-    no cabe, scroll horizontal (el contenedor de la tabla, o el contenedor de
-    scroll del consumidor con `stickyHeader`).
+  - La tabla ocupa **siempre** el contenedor. Si sobra sitio, se reparte en
+    proporción a las bases (o se lo queda la columna de relleno). Si falta,
+    todas encogen en proporción hasta su suelo **en pantalla** (las que llegan
+    se quedan ahí y el resto sigue encogiendo); hace falta el ancho del
+    contenedor (`ResponsiveList` lo mide; tablas a mano: `containerWidth`).
+    Solo hay scroll lateral por debajo del mínimo: la suma de bases o la de
+    serie, la menor (nunca menos que los suelos). Agrandar columnas nunca trae
+    scroll, ni en esta pantalla ni en otra menor.
+  - **Arrastrar** el asa cambia la base de la columna que controla: las demás
+    encogen (o crecen) en proporción, conservando sus proporciones, y ninguna
+    baja de su suelo; con todas las demás en su suelo, deja de crecer.
+    Estrecharla para en su propio suelo. El borde (o, en el último borde, el
+    ancho de la última) va exactamente con el ratón. Se guarda **solo** la base
+    de esa columna, calculada para que en ese contenedor se vea lo que se
+    soltó (las demás siguen su ancho de serie).
+  - **Qué columna controla cada asa:** la de la izquierda del borde, salvo el
+    **último borde** (penúltima | última), que controla la **última**:
+    arrastrarlo a la izquierda agranda la última (p. ej. «Acciones»), a la
+    derecha la estrecha. Su `aria-label` nombra la última.
   - Columna de **relleno**: una por tabla, marcada con `fill: true` (si hay
-    varias, la primera). Si sobra sitio, se estira para ocuparlo; nunca baja
-    de su ancho base (su `width`/guardado/160), que es el que cuenta en la
-    suma. **Sin ninguna marcada no hay relleno**: queda hueco a la derecha.
-    No se elige sola: márcala en la columna de texto principal (descripción,
-    cliente…), nunca en un Nº. `flex: true` (v0.5.0) sigue valiendo como
-    alias deprecado.
-  - Relleno dimensionado a mano (v0.9.3): en cuanto el usuario arrastra la
-    columna de relleno deja de rellenar y manda su ancho guardado (se puede
-    estrechar); la tabla queda **sin relleno** (hueco a la derecha) y el
-    relleno no pasa a otra columna `fill`. Doble clic en su asa o
-    «Restablecer columnas» la devuelven a relleno
-    (`resolveFillColumnKey(columns, widths)`).
-  - Relleno con **tope** (v0.9.8, LIST-6): el ancho guardado del relleno es
-    «como mucho X». Al arrastrarlo, el borde sigue al ratón desde su ancho
-    pintado y al soltar se guarda ese ancho. En pantallas mayores se ve a X y
-    el sobrante va al resto en proporción; en menores encoge hasta lo que
-    quepa, nunca por debajo de su base. Doble clic / Escape / Supr lo quitan.
-    Necesita el ancho del contenedor (`ResponsiveList` lo mide; tablas a mano:
-    `useColumnResize({ containerWidth })`).
-  - Con reparto proporcional el borde sigue al ratón (v0.9.8, UI-9): se
-    resuelve la base que deja el borde bajo el puntero; el teclado mueve
-    16/64 px en pantalla.
+    varias, la primera); sin ancho guardado se queda el sobrante. Agrandar
+    otra columna le quita primero ese sobrante (las demás no se mueven) y,
+    cuando el relleno está a su base, encogen todas en proporción. Arrastrar
+    el propio relleno parte de su ancho pintado (sin saltos) y lo deja como
+    columna normal con su base guardada (`resolveFillColumnKey(columns,
+    widths)`); doble clic, Escape o Supr lo vuelven a hacer relleno. No se
+    elige sola: márcala en la columna de texto principal, nunca en un Nº.
+    `flex: true` (v0.5.0) sigue valiendo como alias deprecado.
   - Suelo (`columnFloor`): `minWidth` de la columna o `MIN_COLUMN_WIDTH`
     (64 px; menos si su propio ancho por defecto es menor, p. ej. un icono).
     Un ancho guardado por debajo se pinta al suelo.
-  - Al estrechar la ventana no cambia nada salvo que el relleno pierde su
-    estiramiento; si no cabe, scroll. Doble clic en el asa y «Restablecer
-    columnas» devuelven los anchos de serie. La última columna no lleva asa
-    propia.
+  - Doble clic en el asa y «Restablecer columnas» devuelven los anchos de
+    serie. La última columna no lleva asa propia (la controla el último
+    borde).
   - Teclado (v0.9.7, LIST-4): el asa de cada columna es un
     `role="separator"` enfocable (`tabIndex=0`, en el Tab justo detrás del
     botón de ordenar de su cabecera), con `aria-orientation="vertical"`,
     `aria-label` = `labels.columnResize(columna)` (por defecto «Ajustar ancho
-    de {columna}») y `aria-valuenow/min/max` en px. **←/→** cambian 16 px
-    (1 rem; `RESIZE_KEY_STEP`), **Mayús+←/→** 64 px
-    (`RESIZE_KEY_STEP_LARGE`), con el mismo suelo que el ratón y techo de
-    teclado `RESIZE_KEY_MAX` (1600). Se ve en vivo y se guarda al soltar la
+    de {columna que controla}») y `aria-valuenow/min/max` en px. **←/→**
+    mueven el borde 16 px en pantalla (1 rem; `RESIZE_KEY_STEP`),
+    **Mayús+←/→** 64 px (`RESIZE_KEY_STEP_LARGE`); en el último borde, ←
+    agranda la última. Mismo suelo que el ratón y techo de teclado
+    `RESIZE_KEY_MAX` (1600). Se ve en vivo y se guarda al soltar la
     tecla (o al salir del asa), por el mismo `onColumnWidthsChange` que el
     arrastre. **Escape, Supr o Retroceso** devuelven el ancho de serie (como
     el doble clic). Las teclas no ordenan ni mueven la columna. La mitad
@@ -347,17 +347,19 @@ const view = useListView('orders', {
     cabecera vecina (que se arrastra para reordenar). En una tabla a mano,
     pon las dos para el mismo efecto.
   - Técnica (`tableSizing`): `table-fixed` + `<colgroup>` con el ancho de
-    cada columna en px. Con relleno, su `<col>` va **sin** ancho y la tabla
-    lleva `width: 100%; min-width: <suma>px`: table-fixed da al relleno todo
-    lo que sobra (tabla − resto), que nunca es menor que su base porque la
-    tabla no baja de la suma. Sin relleno, `width: <suma>px` exacta (con
-    `100%`, table-fixed repartiría el sobrante entre todas).
+    cada columna en px y la tabla con `width: 100%; min-width: <mínimo>px`.
+    Con relleno libre, su `<col>` va **sin** ancho: table-fixed le da todo lo
+    que sobra. Sin relleno, table-fixed reparte el sobrante en proporción. Si
+    no caben, cada `<col>` lleva su ancho en pantalla calculado por el hook
+    (table-fixed no sabe encoger columnas).
   - Tabla a mano: `useColumnResize({ columnWidths, onColumnWidthsChange,
     columns })` con las columnas visibles en orden; `colWidth(key)` en cada
     `<col>`, `tableStyle(extraPx)` en la `<table>` (con `table-fixed`) y
     `data-column-width-key={key}` en cada `<th>`. Devuelve también
-    `fillKey` y `totalWidth`. Sin `columns`, el hook se comporta como antes
-    (cambia la arrastrada, sin estilo de tabla).
+    `fillKey` y `totalWidth`. Pasa `containerWidth` (y `leadingWidth` si hay
+    columna de selección) para que encojan sin scroll; sin él, cada `<col>`
+    lleva su base y, si no caben, scroll. Sin `columns`, el hook se comporta
+    como antes (cambia la arrastrada, 1:1, sin estilo de tabla).
 - Fondo de la cabecera y del botón del menú de columnas (v0.9.0): el botón no
   tiene color propio (`bg-inherit`, igual que `<th>`, `<tr>` y `<thead>`), así
   que toma el fondo real de su cabecera: el `bg-*` de `headClassName`, el de
